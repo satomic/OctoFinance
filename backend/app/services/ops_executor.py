@@ -12,6 +12,7 @@ from ..config import config
 
 if TYPE_CHECKING:
     from .api_manager import APIManager
+    from .data_collector import DataCollector
 
 
 class OpsExecutor:
@@ -19,10 +20,15 @@ class OpsExecutor:
 
     def __init__(self):
         self._api_manager: APIManager | None = None
+        self._data_collector: DataCollector | None = None
 
     def set_api_manager(self, api_manager: APIManager):
         """Set the API manager for GitHub API calls."""
         self._api_manager = api_manager
+
+    def set_data_collector(self, collector: DataCollector):
+        """Set the data collector for reading seat data."""
+        self._data_collector = collector
 
     async def execute_recommendation(self, recommendation_id: str) -> dict:
         """Execute a pending recommendation by its ID."""
@@ -51,13 +57,41 @@ class OpsExecutor:
             api = self._api_manager.get_api_for_org(target["org"])
             if not api:
                 return {"error": f"No API client for org '{target['org']}'."}
-            api_result = await api.remove_copilot_seats(
-                target["org"], target["affected_users"]
-            )
+
+            org = target["org"]
+            usernames = target["affected_users"]
+
+            # Load seat data to determine org-level vs team-level assignment
+            seat_map: dict[str, dict | None] = {}
+            if self._data_collector:
+                seats_data = self._data_collector.load_latest("seats", org)
+                if seats_data:
+                    for seat in seats_data.get("seats", []):
+                        login = (seat.get("assignee") or {}).get("login", "")
+                        if login:
+                            seat_map[login.lower()] = seat.get("assigning_team")
+
+            org_level_users: list[str] = []
+            team_removals: list[tuple[str, str]] = []
+            for username in usernames:
+                team = seat_map.get(username.lower())
+                if team and team.get("slug"):
+                    team_removals.append((username, team["slug"]))
+                else:
+                    org_level_users.append(username)
+
+            api_results: list[dict] = []
+            if org_level_users:
+                r = await api.remove_copilot_seats(org, org_level_users)
+                api_results.append({"method": "org_level", "usernames": org_level_users, "result": r})
+            for username, team_slug in team_removals:
+                r = await api.remove_team_membership(org, team_slug, username)
+                api_results.append({"method": "team_level", "username": username, "team": team_slug, "result": r})
+
             target["status"] = "executed"
             target["executed_at"] = datetime.now(timezone.utc).isoformat()
-            target["execution_result"] = api_result
-            result["api_result"] = api_result
+            target["execution_result"] = api_results
+            result["api_result"] = api_results
         else:
             target["status"] = "executed"
             target["executed_at"] = datetime.now(timezone.utc).isoformat()

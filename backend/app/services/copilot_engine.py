@@ -1,11 +1,13 @@
 """
 Copilot SDK AI Engine - Core AI-powered FinOps analysis engine.
 Uses the Copilot Python SDK to create sessions with custom FinOps tools.
+Supports resuming persisted sessions across backend restarts.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import AsyncIterator, TYPE_CHECKING
 
@@ -20,6 +22,11 @@ from ..tools.usage_tools import create_usage_tools
 
 if TYPE_CHECKING:
     from .api_manager import APIManager
+
+logger = logging.getLogger(__name__)
+
+# File written inside each session's working_directory to persist the SDK session ID.
+_SDK_SESSION_ID_FILE = ".copilot_session_id"
 
 FINOPS_SYSTEM_PROMPT = """You are OctoFinance AI FinOps Assistant, specialized in helping GitHub Copilot administrators optimize costs and manage seats efficiently.
 
@@ -93,22 +100,71 @@ class CopilotAIEngine:
             create_seat_tools(collector, api_manager=self._api_manager)
             + create_usage_tools(collector)
             + create_billing_tools(collector)
-            + create_action_tools(api_manager=self._api_manager)
+            + create_action_tools(api_manager=self._api_manager, collector=collector)
         )
         return tools
+
+    # ------------------------------------------------------------------
+    # Session lifecycle: get / resume / create
+    # ------------------------------------------------------------------
 
     async def get_or_create_session(
         self, session_id: str = "default", working_directory: str | None = None
     ) -> CopilotSession:
-        """Get an existing session or create a new one."""
+        """Return an in-memory session, try to resume a persisted one, or create new."""
+        # 1. Fast path — already in memory
         if session_id in self._sessions:
             return self._sessions[session_id]
+
+        # 2. Try resuming from the SDK session ID persisted on disk
+        sdk_session_id = self._read_sdk_session_id(working_directory)
+        if sdk_session_id:
+            try:
+                session = await self._resume_session(session_id, sdk_session_id, working_directory)
+                logger.info("Resumed Copilot session %s (SDK %s)", session_id, sdk_session_id)
+                return session
+            except Exception as exc:
+                logger.warning(
+                    "Failed to resume SDK session %s, creating new: %s",
+                    sdk_session_id, exc,
+                )
+
+        # 3. Create brand-new session
         return await self._create_session(session_id, working_directory)
+
+    async def _resume_session(
+        self,
+        session_id: str,
+        sdk_session_id: str,
+        working_directory: str | None = None,
+    ) -> CopilotSession:
+        """Resume a previously persisted Copilot SDK session."""
+        if not self._client:
+            raise RuntimeError("Copilot client not started")
+
+        session_tools = self._build_tools_for_session(working_directory)
+
+        resume_config: dict = {
+            "tools": session_tools,
+            "system_message": {
+                "mode": "append",
+                "content": FINOPS_SYSTEM_PROMPT,
+            },
+            "on_permission_request": self._auto_approve,
+        }
+        if working_directory:
+            resume_config["working_directory"] = working_directory
+
+        session = await self._client.resume_session(sdk_session_id, resume_config)
+        self._sessions[session_id] = session
+        # Update the persisted ID (it should be the same, but be safe)
+        self._write_sdk_session_id(working_directory, session.session_id)
+        return session
 
     async def _create_session(
         self, session_id: str = "default", working_directory: str | None = None
     ) -> CopilotSession:
-        """Create a new Copilot session with FinOps tools scoped to session directory."""
+        """Create a brand-new Copilot session with FinOps tools."""
         if not self._client:
             raise RuntimeError("Copilot client not started")
 
@@ -127,7 +183,44 @@ class CopilotAIEngine:
 
         session = await self._client.create_session(session_config)
         self._sessions[session_id] = session
+
+        # Persist SDK session ID so we can resume after restart
+        self._write_sdk_session_id(working_directory, session.session_id)
+        logger.info("Created new Copilot session %s (SDK %s)", session_id, session.session_id)
         return session
+
+    async def _retry_with_new_session(
+        self, session_id: str, working_directory: str | None = None
+    ) -> CopilotSession:
+        """Discard stale in-memory session and create a fresh one."""
+        old = self._sessions.pop(session_id, None)
+        if old:
+            try:
+                await old.destroy()
+            except Exception:
+                pass
+        return await self._create_session(session_id, working_directory)
+
+    # ------------------------------------------------------------------
+    # SDK session ID persistence helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _read_sdk_session_id(working_directory: str | None) -> str | None:
+        if not working_directory:
+            return None
+        path = Path(working_directory) / _SDK_SESSION_ID_FILE
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip() or None
+        return None
+
+    @staticmethod
+    def _write_sdk_session_id(working_directory: str | None, sdk_session_id: str):
+        if not working_directory:
+            return
+        path = Path(working_directory) / _SDK_SESSION_ID_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(sdk_session_id, encoding="utf-8")
 
     async def chat(
         self, message: str, session_id: str = "default", working_directory: str | None = None
@@ -217,7 +310,18 @@ class CopilotAIEngine:
 
         unsubscribe = session.on(on_event)
         try:
-            await session.send({"prompt": message})
+            try:
+                await session.send({"prompt": message})
+            except Exception as send_err:
+                if "Session not found" in str(send_err):
+                    # Session expired or SDK restarted — create fresh and retry
+                    logger.warning("Session not found for %s, creating new session", session_id)
+                    unsubscribe()
+                    session = await self._retry_with_new_session(session_id, working_directory)
+                    unsubscribe = session.on(on_event)
+                    await session.send({"prompt": message})
+                else:
+                    raise
 
             while True:
                 try:
@@ -236,7 +340,15 @@ class CopilotAIEngine:
     ) -> str:
         """Send a message and return the final response text."""
         session = await self.get_or_create_session(session_id, working_directory)
-        response = await session.send_and_wait({"prompt": message}, timeout=300)
+        try:
+            response = await session.send_and_wait({"prompt": message}, timeout=300)
+        except Exception as e:
+            if "Session not found" in str(e):
+                logger.warning("Session not found for %s, creating new session", session_id)
+                session = await self._retry_with_new_session(session_id, working_directory)
+                response = await session.send_and_wait({"prompt": message}, timeout=300)
+            else:
+                raise
         if response:
             return getattr(response.data, "content", "")
         return ""
