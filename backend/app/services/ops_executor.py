@@ -101,6 +101,24 @@ class OpsExecutor:
         result["status"] = "executed"
         return result
 
+    async def approve_recommendation(self, recommendation_id: str) -> dict:
+        """Mark a recommendation as approved (without executing) and return its data."""
+        rec_file = config.data_dir / "recommendations.json"
+        if not rec_file.exists():
+            return {"error": "No recommendations found"}
+
+        recs = json.loads(rec_file.read_text(encoding="utf-8"))
+        for r in recs:
+            if r.get("id") == recommendation_id:
+                if r.get("status") != "pending":
+                    return {"error": f"Recommendation is already {r.get('status')}"}
+                r["status"] = "approved"
+                r["approved_at"] = datetime.now(timezone.utc).isoformat()
+                rec_file.write_text(json.dumps(recs, indent=2, default=str), encoding="utf-8")
+                return {"recommendation_id": recommendation_id, "status": "approved", "recommendation": r}
+
+        return {"error": f"Recommendation {recommendation_id} not found"}
+
     async def reject_recommendation(self, recommendation_id: str) -> dict:
         """Reject a pending recommendation."""
         rec_file = config.data_dir / "recommendations.json"

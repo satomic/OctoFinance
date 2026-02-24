@@ -11,6 +11,7 @@ import { OverviewPanel } from "./components/OverviewPanel";
 import { OrgSelector } from "./components/OrgSelector";
 import { ActionPanel } from "./components/ActionPanel";
 import { StatusBar } from "./components/StatusBar";
+import type { Recommendation } from "./types";
 import "./styles/index.css";
 
 const MIN_SIDEBAR = 240;
@@ -90,6 +91,7 @@ function AppLayout() {
     const sid = sessions.currentSessionId || "default";
     await chat.sendMessage(content, sid);
     sessions.loadSessions();
+    setRefreshKey((k) => k + 1);
   }, [chat.sendMessage, sessions.currentSessionId, sessions.loadSessions]);
 
   // Switch session: load messages from backend, clear console
@@ -123,6 +125,52 @@ function AppLayout() {
   const handleRenameSession = useCallback(async (sessionId: string, title: string) => {
     await sessions.updateSessionTitle(sessionId, title);
   }, [sessions.updateSessionTitle]);
+
+  // Execute action via Copilot session: approve → create session → send prompt → SSE streaming
+  const handleExecuteAction = useCallback(async (rec: Recommendation) => {
+    // 1. Approve the recommendation on backend (mark as approved)
+    try {
+      const res = await fetch("/api/actions/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recommendation_id: rec.id }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        console.error("Failed to approve:", data.error);
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to approve recommendation:", err);
+      return;
+    }
+
+    // 2. Create a new session for executing this action
+    const session = await sessions.createSession(`Action: ${rec.type.replace(/_/g, " ")}`);
+    if (!session) return;
+
+    // 3. Switch to the new session
+    sessions.switchSession(session.session_id);
+    chat.clearMessages();
+    chat.clearConsole();
+
+    // 4. Expand actions panel to collapsed=false so user sees update
+    setCollapsed((prev) => ({ ...prev, actions: false }));
+
+    // 5. Build execution prompt
+    let prompt = "";
+    if (rec.type === "remove_seats") {
+      prompt = `Please execute the following approved admin action directly without asking for confirmation:\n- Action: Remove Copilot seats\n- Organization: ${rec.org}\n- Users: ${rec.affected_users.join(", ")}\n- Reason: ${rec.description}\nExecute now using the remove_user_seat or batch_remove_seats tool.`;
+    } else {
+      prompt = `Please execute the following approved admin action directly without asking for confirmation:\n- Action: ${rec.type}\n- Organization: ${rec.org}\n- Users: ${rec.affected_users.join(", ")}\n- Description: ${rec.description}\nExecute now.`;
+    }
+
+    // 6. Send the prompt (reuse existing SSE chat mechanism)
+    await handleSendMessage(prompt);
+
+    // 7. Refresh actions panel
+    setRefreshKey((k) => k + 1);
+  }, [sessions.createSession, sessions.switchSession, chat.clearMessages, chat.clearConsole, handleSendMessage]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = true;
@@ -209,7 +257,7 @@ function AppLayout() {
             collapsed={collapsed.actions}
             onToggle={() => togglePanel("actions")}
           >
-            <ActionPanel />
+            <ActionPanel key={refreshKey} onExecute={handleExecuteAction} />
           </SidebarPanel>
         </aside>
         <div className="resizer" onMouseDown={onMouseDown} />
