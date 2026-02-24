@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import type { ConsoleEntry } from "../types";
 
@@ -72,6 +72,10 @@ export function ConsolePanel({ entries, onClose, onClear }: Props) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [height, setHeight] = useState(280);
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
 
   useEffect(() => {
     if (autoScroll) {
@@ -85,8 +89,43 @@ export function ConsolePanel({ entries, onClose, onClear }: Props) {
     setAutoScroll(isAtBottom);
   };
 
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    startY.current = e.clientY;
+    startHeight.current = height;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [height]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      // Dragging up increases height (startY > clientY)
+      const delta = startY.current - e.clientY;
+      const newHeight = Math.min(
+        window.innerHeight * 0.7,
+        Math.max(120, startHeight.current + delta)
+      );
+      setHeight(newHeight);
+    };
+    const onMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
   return (
-    <div className="console-panel">
+    <div className="console-panel" style={{ height }}>
+      <div className="console-resizer" onMouseDown={onResizeMouseDown} />
       <div className="console-header">
         <div className="console-header-left">
           <span className="console-title-text">{t("console.title")}</span>
