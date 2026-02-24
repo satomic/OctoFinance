@@ -54,7 +54,10 @@ $RECYCLE.BIN/
 .env.*.local
 
 # Temp files
+*tmp*
 *.tmp
 *.bak
 *.swp
 *.swo
+
+docs_cn/

@@ -164,10 +164,12 @@ class GitHubAPI:
     # =========================================================================
 
     async def add_copilot_seats(self, org: str, usernames: list[str]) -> dict | None:
-        """Add Copilot seats for specified users."""
+        """Add Copilot seats for specified users.
+        API: POST /orgs/{org}/copilot/billing/selected_users
+        """
         try:
             resp = await self.client.post(
-                f"/orgs/{org}/copilot/billing/seats",
+                f"/orgs/{org}/copilot/billing/selected_users",
                 json={"selected_usernames": usernames},
             )
             resp.raise_for_status()
@@ -176,14 +178,62 @@ class GitHubAPI:
             return {"error": str(e), "status_code": e.response.status_code}
 
     async def remove_copilot_seats(self, org: str, usernames: list[str]) -> dict | None:
-        """Remove Copilot seats for specified users."""
+        """Remove org-level Copilot seats for specified users.
+        Only works for users assigned directly (no assigning_team).
+        API: DELETE /orgs/{org}/copilot/billing/selected_users
+        """
         try:
             resp = await self.client.request(
                 "DELETE",
-                f"/orgs/{org}/copilot/billing/seats",
+                f"/orgs/{org}/copilot/billing/selected_users",
                 json={"selected_usernames": usernames},
             )
             resp.raise_for_status()
             return resp.json()
         except httpx.HTTPStatusError as e:
-            return {"error": str(e), "status_code": e.response.status_code}
+            error_body = {}
+            try:
+                error_body = e.response.json()
+            except Exception:
+                error_body = {"text": e.response.text}
+            return {"error": str(e), "status_code": e.response.status_code, "response": error_body}
+
+    async def add_team_membership(self, org: str, team_slug: str, username: str, role: str = "member") -> dict:
+        """Add or update team membership for a user.
+        API: PUT /orgs/{org}/teams/{team_slug}/memberships/{username}
+        Role can be 'member' (default) or 'maintainer'.
+        """
+        try:
+            resp = await self.client.put(
+                f"/orgs/{org}/teams/{team_slug}/memberships/{username}",
+                json={"role": role},
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            error_body = {}
+            try:
+                error_body = e.response.json()
+            except Exception:
+                error_body = {"text": e.response.text}
+            return {"error": str(e), "status_code": e.response.status_code, "response": error_body}
+
+    async def remove_team_membership(self, org: str, team_slug: str, username: str) -> dict:
+        """Remove a user from a team, which revokes their team-assigned Copilot seat.
+        API: DELETE /orgs/{org}/teams/{team_slug}/memberships/{username}
+        Returns 204 on success.
+        """
+        try:
+            resp = await self.client.request(
+                "DELETE",
+                f"/orgs/{org}/teams/{team_slug}/memberships/{username}",
+            )
+            resp.raise_for_status()
+            return {"success": True, "username": username, "team": team_slug}
+        except httpx.HTTPStatusError as e:
+            error_body = {}
+            try:
+                error_body = e.response.json()
+            except Exception:
+                error_body = {"text": e.response.text}
+            return {"error": str(e), "status_code": e.response.status_code, "response": error_body}

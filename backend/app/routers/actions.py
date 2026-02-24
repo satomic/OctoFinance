@@ -28,6 +28,13 @@ async def execute_action(request: ExecuteRequest):
     return result
 
 
+@router.post("/actions/approve")
+async def approve_action(request: ExecuteRequest):
+    """Approve a pending recommendation (mark as approved without executing)."""
+    result = await ops_executor.approve_recommendation(request.recommendation_id)
+    return result
+
+
 @router.post("/actions/reject")
 async def reject_action(request: ExecuteRequest):
     """Reject a pending recommendation."""

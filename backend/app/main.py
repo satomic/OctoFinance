@@ -26,10 +26,11 @@ async def lifespan(app: FastAPI):
     pats_list = pat_manager.load()
     print(f"[OctoFinance] Loaded {len(pats_list)} PAT(s)")
 
-    # Wire up api_manager to services that need it
+    # Wire up api_manager and data_collector to services that need them
     data_collector.set_api_manager(api_manager)
     copilot_engine.set_api_manager(api_manager)
     ops_executor.set_api_manager(api_manager)
+    ops_executor.set_data_collector(data_collector)
 
     # Discover orgs for all PATs
     if pats_list:

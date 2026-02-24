@@ -1,7 +1,12 @@
 import { usePendingActions } from "../hooks/useData";
 import { useI18n } from "../contexts/I18nContext";
+import type { Recommendation } from "../types";
 
-export function ActionPanel() {
+interface ActionPanelProps {
+  onExecute?: (rec: Recommendation) => void;
+}
+
+export function ActionPanel({ onExecute }: ActionPanelProps) {
   const { recommendations, loading, executeAction, rejectAction } = usePendingActions();
   const { t } = useI18n();
 
@@ -33,7 +38,7 @@ export function ActionPanel() {
               <div className="action-buttons">
                 <button
                   className="btn btn-approve"
-                  onClick={() => executeAction(rec.id)}
+                  onClick={() => onExecute ? onExecute(rec) : executeAction(rec.id)}
                 >
                   {t("actions.approve")}
                 </button>
