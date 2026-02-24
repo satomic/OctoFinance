@@ -9,13 +9,16 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from ..config import config
 
 if TYPE_CHECKING:
     from .api_manager import APIManager
     from .github_api import GitHubAPI
+
+# Type alias for the optional log callback: log_fn(level, message)
+LogFn = Callable[[str, str], None] | None
 
 
 class DataCollector:
@@ -99,13 +102,19 @@ class DataCollector:
 
         return result
 
-    async def sync_org(self, org: str) -> dict:
+    async def sync_org(self, org: str, log_fn: LogFn = None) -> dict:
         """Sync all Copilot data for a single org. Returns summary."""
         summary: dict = {"org": org, "synced": [], "errors": []}
 
+        if log_fn:
+            log_fn("info", f"Syncing {org}...")
+
         api = self._get_api_for_org(org)
         if api is None:
-            summary["errors"].append("No API client available for this org")
+            msg = f"No API client available for {org}"
+            summary["errors"].append(msg)
+            if log_fn:
+                log_fn("error", f"  {org}: {msg}")
             return summary
 
         # Billing
@@ -114,8 +123,12 @@ class DataCollector:
             if billing:
                 self._save_json("billing", org, billing)
                 summary["synced"].append("billing")
+                if log_fn:
+                    log_fn("info", f"  {org}: billing synced")
         except Exception as e:
             summary["errors"].append(f"billing: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: billing error - {e}")
 
         # Seats
         try:
@@ -123,8 +136,12 @@ class DataCollector:
             if seats:
                 self._save_json("seats", org, seats)
                 summary["synced"].append(f"seats ({seats.get('total_seats', 0)} total)")
+                if log_fn:
+                    log_fn("info", f"  {org}: seats synced ({seats.get('total_seats', 0)} total)")
         except Exception as e:
             summary["errors"].append(f"seats: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: seats error - {e}")
 
         # Usage
         try:
@@ -132,8 +149,12 @@ class DataCollector:
             if usage:
                 self._save_json("usage", org, usage)
                 summary["synced"].append(f"usage ({len(usage)} days)")
+                if log_fn:
+                    log_fn("info", f"  {org}: usage synced ({len(usage)} days)")
         except Exception as e:
             summary["errors"].append(f"usage: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: usage error - {e}")
 
         # Metrics
         try:
@@ -141,21 +162,37 @@ class DataCollector:
             if metrics:
                 self._save_json("metrics", org, metrics)
                 summary["synced"].append(f"metrics ({len(metrics)} entries)")
+                if log_fn:
+                    log_fn("info", f"  {org}: metrics synced ({len(metrics)} entries)")
         except Exception as e:
             summary["errors"].append(f"metrics: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: metrics error - {e}")
+
+        if log_fn:
+            log_fn("info", f"  {org}: done ({len(summary['synced'])} synced, {len(summary['errors'])} errors)")
 
         return summary
 
-    async def sync_all(self) -> list[dict]:
+    async def sync_all(self, log_fn: LogFn = None) -> list[dict]:
         """Sync data for all discovered orgs via api_manager."""
         if not self._api_manager:
             return []
 
         org_logins = self._api_manager.get_all_org_logins()
+        if log_fn:
+            log_fn("info", f"Starting sync for {len(org_logins)} org(s): {', '.join(org_logins)}")
+
         results = []
         for org_name in org_logins:
-            result = await self.sync_org(org_name)
+            result = await self.sync_org(org_name, log_fn=log_fn)
             results.append(result)
+
+        if log_fn:
+            total_synced = sum(len(r["synced"]) for r in results)
+            total_errors = sum(len(r["errors"]) for r in results)
+            log_fn("info", f"Sync complete: {total_synced} datasets synced, {total_errors} errors")
+
         return results
 
 

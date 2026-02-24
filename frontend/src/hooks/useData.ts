@@ -94,16 +94,9 @@ export function usePendingActions() {
 }
 
 export function useSync() {
-  const [syncing, setSyncing] = useState(false);
-
   const sync = useCallback(async () => {
-    setSyncing(true);
-    try {
-      await fetch("/api/sync", { method: "POST" });
-    } finally {
-      setSyncing(false);
-    }
+    await fetch("/api/sync", { method: "POST" });
   }, []);
 
-  return { syncing, sync };
+  return { sync };
 }

@@ -8,10 +8,11 @@ interface Props {
   consoleOpen: boolean;
   onToggleConsole: () => void;
   onPATChange?: () => void;
+  syncing?: boolean;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange }: Props) {
-  const { syncing, sync } = useSync();
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false }: Props) {
+  const { sync } = useSync();
   const { theme, toggleTheme } = useTheme();
   const { lang, toggleLang, t } = useI18n();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -38,6 +39,12 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange }: Props) 
   const handlePATChange = () => {
     fetchHealth();
     onPATChange?.();
+  };
+
+  const handleSync = () => {
+    if (!syncing) {
+      sync();
+    }
   };
 
   return (
@@ -80,7 +87,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange }: Props) 
         <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
           {theme === "dark" ? "Light" : "Dark"}
         </button>
-        <button className="btn btn-small" onClick={sync} disabled={syncing}>
+        <button className="btn btn-small" onClick={handleSync} disabled={syncing}>
           {syncing ? t("status.syncing") : t("status.syncData")}
         </button>
       </div>
