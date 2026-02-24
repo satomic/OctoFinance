@@ -16,6 +16,7 @@ const TYPE_LABELS: Record<ConsoleEntry["type"], string> = {
   error: "ERROR",
   user: "USER",
   assistant: "AI",
+  sync: "SYNC",
 };
 
 const TYPE_COLORS: Record<ConsoleEntry["type"], string> = {
@@ -26,6 +27,7 @@ const TYPE_COLORS: Record<ConsoleEntry["type"], string> = {
   error: "var(--danger)",
   user: "var(--text-secondary)",
   assistant: "var(--accent)",
+  sync: "var(--info, #2196f3)",
 };
 
 function formatTime(ts: number) {

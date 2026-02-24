@@ -1,12 +1,18 @@
 """
 Data sync router - triggers data collection from GitHub API.
+Supports background sync with real-time SSE log streaming.
 """
 
+import asyncio
+import json
+
 from fastapi import APIRouter, Query
+from starlette.responses import StreamingResponse
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import DataCollector, data_collector, create_session_collector
 from ..services.session_manager import SESSIONS_DIR
+from ..services.sync_manager import sync_manager
 
 router = APIRouter(tags=["sync"])
 
@@ -22,30 +28,70 @@ def _get_collectors(session_id: str | None) -> list[DataCollector]:
     return collectors
 
 
+@router.get("/sync-stream")
+async def sync_stream():
+    """SSE endpoint for real-time sync log streaming.
+    Stays open and pushes events as syncs occur.
+    Note: Uses /sync-stream (not /sync/stream) to avoid route conflict with POST /sync/{org}."""
+
+    async def event_generator():
+        queue = sync_manager.subscribe()
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keepalive ping to prevent connection timeout
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            sync_manager.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/sync")
 async def sync_all(session_id: str | None = Query(default=None)):
     """Trigger a full data sync for all discovered organizations.
-    If session_id is provided, also sync into that session's directory."""
+    Returns immediately; sync runs in background with logs streamed via /sync/stream."""
+    if sync_manager.is_syncing:
+        return {"status": "already_syncing"}
+
     collectors = _get_collectors(session_id)
-    results = []
-    for collector in collectors:
-        result = await collector.sync_all()
-        if not results:
-            results = result  # Return the first (global) result
-    return {"status": "completed", "results": results}
+
+    async def _do_sync(log_fn):
+        for collector in collectors:
+            await collector.sync_all(log_fn=log_fn)
+
+    sync_manager.run_in_background(_do_sync)
+    return {"status": "started"}
 
 
 @router.post("/sync/{org}")
 async def sync_org(org: str, session_id: str | None = Query(default=None)):
     """Trigger data sync for a specific organization.
-    If session_id is provided, also sync into that session's directory."""
+    Returns immediately; sync runs in background."""
+    if sync_manager.is_syncing:
+        return {"status": "already_syncing"}
+
     collectors = _get_collectors(session_id)
-    result = None
-    for collector in collectors:
-        r = await collector.sync_org(org)
-        if result is None:
-            result = r  # Return the first (global) result
-    return {"status": "completed", "result": result}
+
+    async def _do_sync(log_fn):
+        for collector in collectors:
+            await collector.sync_org(org, log_fn=log_fn)
+
+    sync_manager.run_in_background(_do_sync)
+    return {"status": "started"}
 
 
 @router.get("/sync/status")
@@ -74,4 +120,5 @@ async def sync_status():
         "users": user_logins,
         "total_orgs": len(all_orgs),
         "orgs": orgs_with_data,
+        "is_syncing": sync_manager.is_syncing,
     }

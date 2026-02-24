@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
 from ..services.pat_manager import pat_manager
+from ..services.sync_manager import sync_manager
 
 router = APIRouter(tags=["pats"])
 
@@ -29,7 +30,7 @@ async def list_pats():
 
 @router.post("/pats")
 async def add_pat(request: AddPATRequest):
-    """Add a new PAT, validate it, discover orgs, and sync data."""
+    """Add a new PAT, validate it, discover orgs. Data sync runs in background."""
     token = request.token.strip()
     label = request.label.strip()
 
@@ -50,22 +51,24 @@ async def add_pat(request: AddPATRequest):
         pat_manager.remove(pat["id"])
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Sync data for newly discovered orgs
-    sync_results = []
+    # Kick off background sync for newly discovered orgs
     updated_pat = pat_manager.find_by_id(pat["id"])
-    if updated_pat:
-        for org in updated_pat.get("orgs", []):
-            result = await data_collector.sync_org(org)
-            sync_results.append(result)
+    if updated_pat and updated_pat.get("orgs"):
+        orgs_to_sync = list(updated_pat["orgs"])
 
-    # Return masked PAT info
+        async def _sync_new_orgs(log_fn):
+            for org in orgs_to_sync:
+                await data_collector.sync_org(org, log_fn=log_fn)
+
+        sync_manager.run_in_background(_sync_new_orgs)
+
+    # Return masked PAT info immediately (sync continues in background)
     masked = pat_manager.get_all_masked()
     new_masked = next((p for p in masked if p["id"] == pat["id"]), None)
 
     return {
         "pat": new_masked,
         "user": user.get("login", ""),
-        "sync_results": sync_results,
     }
 
 

@@ -14,6 +14,7 @@ from .services.copilot_engine import copilot_engine
 from .services.data_collector import data_collector
 from .services.ops_executor import ops_executor
 from .services.pat_manager import pat_manager
+from .services.sync_manager import sync_manager
 
 
 @asynccontextmanager
@@ -39,10 +40,11 @@ async def lifespan(app: FastAPI):
             org_names = [o["login"] for o in all_orgs]
             print(f"[OctoFinance] Discovered {len(all_orgs)} organizations: {org_names}")
 
-            # Initial data collection
-            print("[OctoFinance] Running initial data sync...")
-            await data_collector.sync_all()
-            print("[OctoFinance] Initial data sync complete.")
+            # Initial data collection (runs in background)
+            print("[OctoFinance] Starting initial data sync (background)...")
+            sync_manager.run_in_background(
+                lambda log_fn: data_collector.sync_all(log_fn=log_fn)
+            )
         except Exception as e:
             print(f"[OctoFinance] Startup discovery warning: {e}")
     else:
@@ -102,4 +104,5 @@ async def health():
         "orgs": [o["login"] for o in all_orgs],
         "pat_count": pat_count,
         "copilot_engine": copilot_engine.is_ready(),
+        "is_syncing": sync_manager.is_syncing,
     }

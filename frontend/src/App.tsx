@@ -3,6 +3,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider, useI18n } from "./contexts/I18nContext";
 import { useChat } from "./hooks/useChat";
 import { useSessions } from "./hooks/useSessions";
+import { useSyncStream } from "./hooks/useSyncStream";
 import { ChatInterface } from "./components/ChatInterface";
 import { ConsolePanel } from "./components/ConsolePanel";
 import { SessionSelector } from "./components/SessionSelector";
@@ -62,6 +63,23 @@ function AppLayout() {
 
   const chat = useChat();
   const sessions = useSessions();
+
+  // Connect to sync SSE stream — push sync logs into console, track syncing state
+  const { syncing, setOnSyncComplete } = useSyncStream(chat.addConsoleLog);
+
+  // When sync completes, refresh sidebar data
+  useEffect(() => {
+    setOnSyncComplete(() => {
+      setRefreshKey((k) => k + 1);
+    });
+  }, [setOnSyncComplete]);
+
+  // Auto-open console when sync starts
+  useEffect(() => {
+    if (syncing) {
+      setConsoleOpen(true);
+    }
+  }, [syncing]);
 
   const togglePanel = useCallback((key: keyof typeof collapsed) => {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -145,7 +163,12 @@ function AppLayout() {
 
   return (
     <div className="app">
-      <StatusBar consoleOpen={consoleOpen} onToggleConsole={toggleConsole} onPATChange={handlePATChange} />
+      <StatusBar
+        consoleOpen={consoleOpen}
+        onToggleConsole={toggleConsole}
+        onPATChange={handlePATChange}
+        syncing={syncing}
+      />
       <div className="app-body">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
           <SidebarPanel

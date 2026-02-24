@@ -258,5 +258,9 @@ export function useChat() {
     setMessages(msgs);
   }, []);
 
-  return { messages, isLoading, activeTools, consoleLogs, sendMessage, abort, clearMessages, clearConsole, loadMessages, setMessagesDirectly };
+  const addConsoleLog = useCallback((entry: ConsoleEntry) => {
+    setConsoleLogs((prev) => [...prev, entry]);
+  }, []);
+
+  return { messages, isLoading, activeTools, consoleLogs, sendMessage, abort, clearMessages, clearConsole, loadMessages, setMessagesDirectly, addConsoleLog };
 }
