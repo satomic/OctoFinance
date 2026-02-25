@@ -1814,6 +1814,114 @@ body {
   }
 }
 
+/* ============================
+   Dashboard Collapsible Sections
+   ============================ */
+
+.dash-section {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.dash-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.dash-section-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.dash-section-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.dash-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 0;
+}
+
+.dash-section-body {
+  padding: 0 16px 16px;
+}
+
+.dash-section-body .dashboard-charts {
+  margin-bottom: 0;
+}
+
+/* Seat summary badges */
+.dash-seat-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dash-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--accent);
+  color: white;
+  white-space: nowrap;
+}
+
+.dash-badge-muted {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+/* Seat avatar inline */
+.dash-seat-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* Status badges */
+.dash-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dash-status-badge.success {
+  background: #3fb95022;
+  color: var(--success);
+}
+
+.dash-status-badge.warning {
+  background: #d2992222;
+  color: var(--warning);
+}
+
+.dash-status-badge.danger {
+  background: #f8514922;
+  color: var(--danger);
+}
+
 /* Enterprise Group Header */
 
 .enterprise-group-header {

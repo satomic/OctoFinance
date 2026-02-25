@@ -92,13 +92,42 @@ export interface DashboardKPI {
   monthly_waste: number;
 }
 
+export interface SeatRecord {
+  user: string;
+  avatar: string;
+  org: string;
+  plan_type: string;
+  created_at: string;
+  last_activity_at: string | null;
+  last_activity_editor: string | null;
+  pending_cancellation_date: string | null;
+  team: string;
+}
+
+export interface SeatInfo {
+  breakdown: { pending_invitation: number; pending_cancellation: number; added_this_cycle: number };
+  plans: Record<string, number>;
+  features: Record<string, string>;
+  seats: SeatRecord[];
+}
+
 export interface DashboardData {
   kpi: DashboardKPI;
-  daily_trend: { day: string; dau: number; wau: number; mau: number; interactions: number }[];
-  feature_usage: { feature: string; interactions: number; code_gen: number; code_accept: number }[];
-  model_usage: { model: string; interactions: number; code_gen: number; premium_requests: number }[];
-  ide_usage: { ide: string; interactions: number; code_gen: number }[];
-  top_users: { user: string; interactions: number; code_gen: number; days_active: number }[];
+  seat_info: SeatInfo;
+  daily_trend: {
+    day: string; dau: number; wau: number; mau: number;
+    chat_users: number; agent_users: number;
+    interactions: number; code_gen: number; code_accept: number;
+    loc_suggested: number; loc_accepted: number;
+  }[];
+  feature_usage: { feature: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
+  model_usage: { model: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; premium_requests: number }[];
+  ide_usage: { ide: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
+  language_usage: { language: string; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
+  code_completions: { language: string; suggestions: number; acceptances: number; lines_suggested: number; lines_accepted: number; engaged_users: number }[];
+  premium_detail: { model: string; gross_qty: number; discount_qty: number; net_qty: number; gross_amount: number; net_amount: number }[];
+  chat_stats: { ide_chats: number; ide_copy_events: number; ide_insertion_events: number; dotcom_chats: number; pr_summaries: number };
+  top_users: { user: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; days_active: number; used_agent: boolean; used_chat: boolean }[];
   orgs: string[];
   date_range: { start: string; end: string };
 }
