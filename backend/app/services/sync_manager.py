@@ -1,22 +1,82 @@
 """
 Sync manager - tracks global sync state and broadcasts log events via async queues.
 Enables real-time sync progress streaming to frontend via SSE.
+Supports scheduled (cron-based) periodic sync.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Any, Callable, Coroutine
 
 
+def _parse_cron_interval(cron_expr: str) -> int | None:
+    """Parse a simple cron expression into an interval in seconds.
+
+    Supports common patterns:
+        ``*/N * * * *``   → every N minutes
+        ``0 */N * * *``   → every N hours
+        ``0 0 * * *``     → every 24 hours (daily)
+        ``0 0 */N * *``   → every N days
+
+    Returns None if the expression cannot be parsed.
+    """
+    parts = cron_expr.strip().split()
+    if len(parts) != 5:
+        return None
+
+    minute, hour, dom, month, dow = parts
+
+    # Every N minutes: */N * * * *
+    m = re.fullmatch(r"\*/(\d+)", minute)
+    if m and hour == "*" and dom == "*" and month == "*" and dow == "*":
+        return int(m.group(1)) * 60
+
+    # Every N hours: 0 */N * * *
+    m = re.fullmatch(r"\*/(\d+)", hour)
+    if minute == "0" and m and dom == "*" and month == "*" and dow == "*":
+        return int(m.group(1)) * 3600
+
+    # Daily: 0 0 * * *
+    if minute == "0" and hour == "0" and dom == "*" and month == "*" and dow == "*":
+        return 86400
+
+    # Every N days: 0 0 */N * *
+    m = re.fullmatch(r"\*/(\d+)", dom)
+    if minute == "0" and hour == "0" and m and month == "*" and dow == "*":
+        return int(m.group(1)) * 86400
+
+    return None
+
+
+def describe_cron(cron_expr: str) -> str:
+    """Return a human-readable description of a cron expression, or empty string."""
+    interval = _parse_cron_interval(cron_expr)
+    if interval is None:
+        return ""
+    if interval < 3600:
+        mins = interval // 60
+        return f"Every {mins} minute{'s' if mins != 1 else ''}"
+    if interval < 86400:
+        hrs = interval // 3600
+        return f"Every {hrs} hour{'s' if hrs != 1 else ''}"
+    days = interval // 86400
+    if days == 1:
+        return "Daily"
+    return f"Every {days} days"
+
+
 class SyncManager:
-    """Manages global sync state and broadcasts real-time log events to SSE subscribers."""
+    """Manages global sync state, cron scheduling, and broadcasts real-time log events."""
 
     def __init__(self):
         self._syncing = False
         self._listeners: list[asyncio.Queue] = []
         self._current_task: asyncio.Task | None = None
+        self._cron_task: asyncio.Task | None = None
+        self._cron_expr: str = ""
 
     @property
     def is_syncing(self) -> bool:
@@ -104,6 +164,56 @@ class SyncManager:
 
         self._current_task = asyncio.create_task(_run())
         return True
+
+    # ------------------------------------------------------------------
+    # Cron-based periodic sync
+    # ------------------------------------------------------------------
+
+    def start_cron_scheduler(
+        self,
+        cron_expr: str,
+        sync_fn: Callable[[Callable[[str, str], None]], Coroutine[Any, Any, Any]],
+    ) -> bool:
+        """Start a periodic sync based on a cron expression.
+
+        Returns True if the scheduler was started, False if the cron expression
+        could not be parsed.
+        """
+        interval = _parse_cron_interval(cron_expr)
+        if interval is None:
+            self.log("warn", f"Cannot parse cron expression: {cron_expr}")
+            return False
+
+        self.stop_cron_scheduler()
+        self._cron_expr = cron_expr
+
+        desc = describe_cron(cron_expr)
+        self.log("info", f"Cron scheduler started: {desc} ({cron_expr})")
+
+        async def _cron_loop():
+            try:
+                while True:
+                    await asyncio.sleep(interval)
+                    self.log("info", f"Cron triggered sync ({desc})")
+                    self.run_in_background(sync_fn)
+            except asyncio.CancelledError:
+                pass
+
+        self._cron_task = asyncio.create_task(_cron_loop())
+        return True
+
+    def stop_cron_scheduler(self):
+        """Stop the periodic sync scheduler if running."""
+        if self._cron_task and not self._cron_task.done():
+            self._cron_task.cancel()
+            self.log("info", "Cron scheduler stopped")
+        self._cron_task = None
+        self._cron_expr = ""
+
+    @property
+    def cron_expr(self) -> str:
+        """Return the currently active cron expression, or empty string."""
+        return self._cron_expr
 
 
 sync_manager = SyncManager()

@@ -1,6 +1,6 @@
 """
 PAT Manager - handles persistence and CRUD for GitHub Personal Access Tokens.
-PATs are stored in data/pats.json.
+PATs and app settings are stored in data/pats.json.
 """
 
 import json
@@ -14,22 +14,52 @@ from ..config import DATA_DIR
 
 PATS_FILE = DATA_DIR / "pats.json"
 
+DEFAULT_SETTINGS = {
+    "auto_sync_on_startup": True,
+    "sync_cron": "",
+}
+
 
 class PATManager:
-    """Manages GitHub PAT persistence in data/pats.json."""
+    """Manages GitHub PAT persistence and app settings in data/pats.json."""
 
     def __init__(self):
         self._pats: list[dict] = []
+        self._settings: dict = {**DEFAULT_SETTINGS}
 
     def load(self) -> list[dict]:
-        """Load PATs from file. Auto-migrates GITHUB_PAT env var if file is empty."""
+        """Load PATs and settings from file.
+
+        Supports two formats:
+        - Legacy: a plain JSON array of PATs
+        - Current: ``{"pats": [...], "settings": {...}}``
+
+        Auto-migrates legacy format on first load.
+        """
         if PATS_FILE.exists():
             try:
-                self._pats = json.loads(PATS_FILE.read_text(encoding="utf-8"))
+                raw = json.loads(PATS_FILE.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
-                self._pats = []
+                raw = []
+        else:
+            raw = []
+
+        # Detect format and normalise
+        if isinstance(raw, list):
+            # Legacy format – plain array of PATs
+            self._pats = raw
+            self._settings = {**DEFAULT_SETTINGS}
+            if raw:
+                # Migrate to new format on disk
+                self._save()
+                print("[PATManager] Migrated pats.json from legacy array to {pats, settings} format")
+        elif isinstance(raw, dict):
+            self._pats = raw.get("pats", [])
+            saved_settings = raw.get("settings", {})
+            self._settings = {**DEFAULT_SETTINGS, **saved_settings}
         else:
             self._pats = []
+            self._settings = {**DEFAULT_SETTINGS}
 
         # Auto-migrate GITHUB_PAT env var if no PATs configured
         env_pat = os.environ.get("GITHUB_PAT", "").strip()
@@ -51,12 +81,32 @@ class PATManager:
         return self._pats
 
     def _save(self):
-        """Write PATs to file."""
+        """Write PATs and settings to file."""
         PATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "pats": self._pats,
+            "settings": self._settings,
+        }
         PATS_FILE.write_text(
-            json.dumps(self._pats, indent=2, default=str),
+            json.dumps(data, indent=2, default=str),
             encoding="utf-8",
         )
+
+    # ------------------------------------------------------------------
+    # Settings
+    # ------------------------------------------------------------------
+
+    def get_settings(self) -> dict:
+        """Return a copy of the current settings."""
+        return {**self._settings}
+
+    def update_settings(self, **kwargs) -> dict:
+        """Update settings and persist. Returns the updated settings."""
+        for key in DEFAULT_SETTINGS:
+            if key in kwargs:
+                self._settings[key] = kwargs[key]
+        self._save()
+        return {**self._settings}
 
     def get_all(self) -> list[dict]:
         """Return all PATs (raw, with tokens)."""

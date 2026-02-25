@@ -83,6 +83,10 @@ const translations = {
     "settings.noPats": "No PATs configured. Add one to get started.",
     "settings.patHint": "Adding a PAT will auto-discover orgs and sync data.",
     "settings.patError": "Error",
+    "settings.syncSettings": "Sync Settings",
+    "settings.autoSync": "Auto sync on startup",
+    "settings.syncCron": "Scheduled sync",
+    "settings.cronHint": "Use cron syntax: */30 * * * * (every 30min), 0 */6 * * * (every 6h), 0 0 * * * (daily). Leave empty to disable.",
 
     // Loading
     "loading": "Loading...",
@@ -168,6 +172,10 @@ const translations = {
     "settings.noPats": "\u672a\u914d\u7f6e\u4ee4\u724c\u3002\u8bf7\u6dfb\u52a0\u4e00\u4e2a\u4ee5\u5f00\u59cb\u4f7f\u7528\u3002",
     "settings.patHint": "\u6dfb\u52a0\u4ee4\u724c\u540e\u5c06\u81ea\u52a8\u53d1\u73b0\u7ec4\u7ec7\u5e76\u540c\u6b65\u6570\u636e\u3002",
     "settings.patError": "\u9519\u8bef",
+    "settings.syncSettings": "\u540c\u6b65\u8bbe\u7f6e",
+    "settings.autoSync": "\u542f\u52a8\u65f6\u81ea\u52a8\u540c\u6b65",
+    "settings.syncCron": "\u5b9a\u65f6\u540c\u6b65",
+    "settings.cronHint": "Cron \u8bed\u6cd5\uff1a*/30 * * * *\uff08\u6bcf30\u5206\u949f\uff09\u3001 0 */6 * * *\uff08\u6bcf6\u5c0f\u65f6\uff09\u3001 0 0 * * *\uff08\u6bcf\u5929\uff09\u3002\u7559\u7a7a\u5219\u7981\u7528\u3002",
 
     // Loading
     "loading": "\u52a0\u8f7d\u4e2d...",
