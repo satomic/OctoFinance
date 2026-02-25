@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
     ops_executor.set_api_manager(api_manager)
     ops_executor.set_data_collector(data_collector)
 
+    # Read settings
+    settings = pat_manager.get_settings()
+
     # Discover orgs for all PATs
     if pats_list:
         print("[OctoFinance] Auto-discovering GitHub resources...")
@@ -41,11 +44,22 @@ async def lifespan(app: FastAPI):
             org_names = [o["login"] for o in all_orgs]
             print(f"[OctoFinance] Discovered {len(all_orgs)} organizations: {org_names}")
 
-            # Initial data collection (runs in background)
-            print("[OctoFinance] Starting initial data sync (background)...")
-            sync_manager.run_in_background(
-                lambda log_fn: data_collector.sync_all(log_fn=log_fn)
-            )
+            # Initial data collection (controlled by settings)
+            if settings.get("auto_sync_on_startup", True):
+                print("[OctoFinance] Starting initial data sync (background)...")
+                sync_manager.run_in_background(
+                    lambda log_fn: data_collector.sync_all(log_fn=log_fn)
+                )
+            else:
+                print("[OctoFinance] Auto sync on startup is disabled, skipping initial sync.")
+
+            # Start cron scheduler if configured
+            cron_expr = settings.get("sync_cron", "").strip()
+            if cron_expr:
+                sync_manager.start_cron_scheduler(
+                    cron_expr,
+                    lambda log_fn: data_collector.sync_all(log_fn=log_fn),
+                )
         except Exception as e:
             print(f"[OctoFinance] Startup discovery warning: {e}")
     else:
@@ -64,6 +78,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("[OctoFinance] Shutting down...")
+    sync_manager.stop_cron_scheduler()
     await copilot_engine.stop()
     await api_manager.close_all()
 

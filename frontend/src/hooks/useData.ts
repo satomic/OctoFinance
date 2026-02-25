@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -99,4 +99,29 @@ export function useSync() {
   }, []);
 
   return { sync };
+}
+
+export function useDashboard(selectedOrgs: string[]) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = selectedOrgs.length > 0 ? `?orgs=${selectedOrgs.join(",")}` : "";
+      const res = await fetch(`/api/data/dashboard${params}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedOrgs.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  return { data, loading, refetch: fetchDashboard };
 }

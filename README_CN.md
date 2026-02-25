@@ -1,6 +1,6 @@
 [English](README.md) | **简体中文**
 
-# OctoFinance V2 - GitHub Copilot AI FinOps Platform
+# OctoFinance - GitHub Copilot AI FinOps Platform
 
 基于 AI 的 GitHub Copilot 财务运维平台，通过 Copilot SDK 实现智能化席位管理和成本优化。
 

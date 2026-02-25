@@ -7,9 +7,40 @@ interface Props {
   onPATChange?: () => void;
 }
 
+const CRON_PRESETS = [
+  { label: "30min", cron: "*/30 * * * *" },
+  { label: "1h", cron: "0 */1 * * *" },
+  { label: "6h", cron: "0 */6 * * *" },
+  { label: "24h", cron: "0 0 * * *" },
+  { label: "Off", cron: "" },
+];
+
+function describeCron(cron: string): string {
+  if (!cron.trim()) return "";
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return "";
+  const [minute, hour, dom, , ] = parts;
+  const stepMin = minute.match(/^\*\/(\d+)$/);
+  if (stepMin && hour === "*" && dom === "*") {
+    const n = parseInt(stepMin[1]);
+    return n === 1 ? "Every minute" : `Every ${n} minutes`;
+  }
+  const stepHr = hour.match(/^\*\/(\d+)$/);
+  if (minute === "0" && stepHr && dom === "*") {
+    const n = parseInt(stepHr[1]);
+    return n === 1 ? "Every hour" : `Every ${n} hours`;
+  }
+  if (minute === "0" && hour === "0" && dom === "*") return "Daily";
+  const stepDay = dom.match(/^\*\/(\d+)$/);
+  if (minute === "0" && hour === "0" && stepDay) {
+    return `Every ${stepDay[1]} days`;
+  }
+  return "";
+}
+
 export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const { t } = useI18n();
-  const { pats, loading, error, addPAT, removePAT, clearError } = usePATs();
+  const { pats, loading, error, addPAT, removePAT, clearError, settings, updateSettings } = usePATs();
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -125,6 +156,52 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
               {loading ? t("settings.patAdding") : t("settings.addPat")}
             </button>
             <p className="pat-form-hint">{t("settings.patHint")}</p>
+          </div>
+
+          {/* Sync Settings */}
+          <div className="sync-settings">
+            <h3>{t("settings.syncSettings")}</h3>
+
+            <div className="sync-setting-row">
+              <span className="sync-setting-label">{t("settings.autoSync")}</span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={settings.auto_sync_on_startup}
+                  onChange={(e) => updateSettings({ auto_sync_on_startup: e.target.checked })}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            <div className="sync-setting-row">
+              <span className="sync-setting-label">{t("settings.syncCron")}</span>
+              <div className="sync-cron-input-group">
+                <input
+                  type="text"
+                  className="sync-cron-input"
+                  value={settings.sync_cron}
+                  onChange={(e) => updateSettings({ sync_cron: e.target.value })}
+                  placeholder="e.g. 0 */6 * * *"
+                />
+                {describeCron(settings.sync_cron) && (
+                  <span className="sync-cron-desc">{describeCron(settings.sync_cron)}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="sync-cron-presets">
+              {CRON_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  className={`btn btn-small btn-preset ${settings.sync_cron === p.cron ? "btn-preset-active" : ""}`}
+                  onClick={() => updateSettings({ sync_cron: p.cron })}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="pat-form-hint">{t("settings.cronHint")}</p>
           </div>
         </div>
       </div>

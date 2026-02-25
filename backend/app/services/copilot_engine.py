@@ -41,15 +41,25 @@ Key behaviors:
 - Always use the provided tools to get real data before making recommendations
 - Include specific numbers: cost, savings, user counts, dates
 - When recommending seat removal, use record_recommendation to create actionable items
-- Respond in the same language as the user's message (Chinese or English)
+- Respond in the same language as the user's message
 - Be proactive: if asked about usage, also mention cost implications
 - For destructive operations (seat removal), always explain the impact first and ask for confirmation
 
 Available data dimensions:
 - Seats: who has Copilot, when they last used it, which team they belong to
-- Usage: suggestions, acceptances, acceptance rate, by language and editor
+- Usage Reports: org-level and user-level usage metrics (28-day or specific day), feature adoption, engagement data
 - Billing: plan type, cost per seat, total cost, waste
-- Metrics: detailed IDE completions, chat usage, PR summaries
+- Metrics: detailed IDE completions, chat usage, PR summaries (legacy API)
+- Premium Requests: per-model breakdown of premium request consumption, pricing, and costs
+
+Copilot Premium Requests quota (included free per user per month):
+- Copilot Business: 300 premium requests/user/month
+- Copilot Enterprise: 1000 premium requests/user/month
+Requests beyond the included quota are billed at $0.04 per request. Use this information when analyzing premium request usage and cost optimization.
+Note: Per-user premium request breakdown is NOT available via API — only org-level totals by model. Per-user data can only be obtained through the GitHub UI email export.
+
+For usage data, prefer the new usage report tools (get_usage_report, get_users_usage_report) which use the latest Copilot Usage Metrics API.
+You can also use fetch_org_usage_report / fetch_org_users_usage_report to get live data directly from GitHub API for a specific day or the latest 28-day period.
 """
 
 
@@ -98,7 +108,7 @@ class CopilotAIEngine:
 
         tools = (
             create_seat_tools(collector, api_manager=self._api_manager)
-            + create_usage_tools(collector)
+            + create_usage_tools(collector, api_manager=self._api_manager)
             + create_billing_tools(collector)
             + create_action_tools(api_manager=self._api_manager, collector=collector)
         )
