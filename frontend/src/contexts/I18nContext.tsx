@@ -88,6 +88,21 @@ const translations = {
     "settings.syncCron": "Scheduled sync",
     "settings.cronHint": "Use cron syntax: */30 * * * * (every 30min), 0 */6 * * * (every 6h), 0 0 * * * (daily). Leave empty to disable.",
 
+    // Navigation
+    "nav.chat": "Chat",
+    "nav.dashboard": "Dashboard",
+
+    // Dashboard
+    "dashboard.title": "Copilot Usage Dashboard",
+    "dashboard.filters": "Filters",
+    "dashboard.allOrgs": "All Organizations",
+    "dashboard.dailyTrend": "Daily Active Trend",
+    "dashboard.featureUsage": "Feature Usage",
+    "dashboard.modelUsage": "Model Usage",
+    "dashboard.ideUsage": "IDE Distribution",
+    "dashboard.topUsers": "Top Active Users",
+    "dashboard.noData": "No data available. Please sync data first.",
+
     // Loading
     "loading": "Loading...",
     "loading.actions": "Loading actions...",
@@ -177,6 +192,21 @@ const translations = {
     "settings.syncCron": "\u5b9a\u65f6\u540c\u6b65",
     "settings.cronHint": "Cron \u8bed\u6cd5\uff1a*/30 * * * *\uff08\u6bcf30\u5206\u949f\uff09\u3001 0 */6 * * *\uff08\u6bcf6\u5c0f\u65f6\uff09\u3001 0 0 * * *\uff08\u6bcf\u5929\uff09\u3002\u7559\u7a7a\u5219\u7981\u7528\u3002",
 
+    // Navigation
+    "nav.chat": "\u5bf9\u8bdd",
+    "nav.dashboard": "\u6570\u636e\u9762\u677f",
+
+    // Dashboard
+    "dashboard.title": "Copilot \u4f7f\u7528\u6982\u89c8",
+    "dashboard.filters": "\u7b5b\u9009",
+    "dashboard.allOrgs": "\u5168\u90e8\u7ec4\u7ec7",
+    "dashboard.dailyTrend": "\u6bcf\u65e5\u6d3b\u8dc3\u8d8b\u52bf",
+    "dashboard.featureUsage": "\u529f\u80fd\u4f7f\u7528\u5206\u5e03",
+    "dashboard.modelUsage": "\u6a21\u578b\u4f7f\u7528\u5206\u5e03",
+    "dashboard.ideUsage": "IDE \u5206\u5e03",
+    "dashboard.topUsers": "\u6d3b\u8dc3\u7528\u6237\u6392\u540d",
+    "dashboard.noData": "\u6682\u65e0\u6570\u636e\uff0c\u8bf7\u5148\u540c\u6b65\u6570\u636e\u3002",
+
     // Loading
     "loading": "\u52a0\u8f7d\u4e2d...",
     "loading.actions": "\u52a0\u8f7d\u64cd\u4f5c\u4e2d...",
@@ -213,7 +243,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: TranslationKey): string => {
-      return translations[lang][key] || key;
+      return (translations[lang] as Record<string, string>)[key] || key;
     },
     [lang]
   );

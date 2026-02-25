@@ -5,6 +5,7 @@ import { useChat } from "./hooks/useChat";
 import { useSessions } from "./hooks/useSessions";
 import { useSyncStream } from "./hooks/useSyncStream";
 import { ChatInterface } from "./components/ChatInterface";
+import { Dashboard } from "./components/Dashboard";
 import { ConsolePanel } from "./components/ConsolePanel";
 import { SessionSelector } from "./components/SessionSelector";
 import { OverviewPanel } from "./components/OverviewPanel";
@@ -51,6 +52,7 @@ function AppLayout() {
   const { t } = useI18n();
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<"chat" | "dashboard">("chat");
   const [refreshKey, setRefreshKey] = useState(0);
   const [collapsed, setCollapsed] = useState({
     overview: false,
@@ -216,6 +218,8 @@ function AppLayout() {
         onToggleConsole={toggleConsole}
         onPATChange={handlePATChange}
         syncing={syncing}
+        currentView={currentView}
+        onViewChange={setCurrentView}
       />
       <div className="app-body">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
@@ -262,13 +266,17 @@ function AppLayout() {
         </aside>
         <div className="resizer" onMouseDown={onMouseDown} />
         <main className="main-content">
-          <ChatInterface
-            messages={chat.messages}
-            isLoading={chat.isLoading}
-            sendMessage={handleSendMessage}
-            abort={chat.abort}
-            clearMessages={chat.clearMessages}
-          />
+          {currentView === "chat" ? (
+            <ChatInterface
+              messages={chat.messages}
+              isLoading={chat.isLoading}
+              sendMessage={handleSendMessage}
+              abort={chat.abort}
+              clearMessages={chat.clearMessages}
+            />
+          ) : (
+            <Dashboard refreshKey={refreshKey} />
+          )}
           {consoleOpen && (
             <ConsolePanel
               entries={chat.consoleLogs}

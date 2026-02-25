@@ -81,3 +81,24 @@ export interface ConsoleEntry {
   title: string;
   detail?: string;
 }
+
+// Dashboard types
+export interface DashboardKPI {
+  total_seats: number;
+  active_seats: number;
+  inactive_seats: number;
+  utilization_pct: number;
+  monthly_cost: number;
+  monthly_waste: number;
+}
+
+export interface DashboardData {
+  kpi: DashboardKPI;
+  daily_trend: { day: string; dau: number; wau: number; mau: number; interactions: number }[];
+  feature_usage: { feature: string; interactions: number; code_gen: number; code_accept: number }[];
+  model_usage: { model: string; interactions: number; code_gen: number; premium_requests: number }[];
+  ide_usage: { ide: string; interactions: number; code_gen: number }[];
+  top_users: { user: string; interactions: number; code_gen: number; days_active: number }[];
+  orgs: string[];
+  date_range: { start: string; end: string };
+}

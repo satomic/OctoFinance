@@ -9,9 +9,11 @@ interface Props {
   onToggleConsole: () => void;
   onPATChange?: () => void;
   syncing?: boolean;
+  currentView: "chat" | "dashboard";
+  onViewChange: (view: "chat" | "dashboard") => void;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange }: Props) {
   const { sync } = useSync();
   const { theme, toggleTheme } = useTheme();
   const { lang, toggleLang, t } = useI18n();
@@ -67,6 +69,20 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         )}
       </div>
       <div className="status-right">
+        <div className="view-toggle">
+          <button
+            className={`btn btn-small btn-toggle ${currentView === "chat" ? "btn-toggle-active" : ""}`}
+            onClick={() => onViewChange("chat")}
+          >
+            {t("nav.chat")}
+          </button>
+          <button
+            className={`btn btn-small btn-toggle ${currentView === "dashboard" ? "btn-toggle-active" : ""}`}
+            onClick={() => onViewChange("dashboard")}
+          >
+            {t("nav.dashboard")}
+          </button>
+        </div>
         <button
           className="btn btn-small btn-toggle"
           onClick={() => setSettingsOpen(true)}
