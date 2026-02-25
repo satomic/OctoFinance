@@ -143,18 +143,33 @@ class DataCollector:
             if log_fn:
                 log_fn("error", f"  {org}: seats error - {e}")
 
-        # Usage
+        # Usage Report (org-level 28-day)
         try:
-            usage = await api.get_copilot_usage(org)
-            if usage:
-                self._save_json("usage", org, usage)
-                summary["synced"].append(f"usage ({len(usage)} days)")
+            usage_report = await api.get_org_usage_report_28day(org)
+            if usage_report:
+                self._save_json("usage", org, usage_report)
+                n = usage_report.get("total_records", 0)
+                summary["synced"].append(f"usage ({n} records)")
                 if log_fn:
-                    log_fn("info", f"  {org}: usage synced ({len(usage)} days)")
+                    log_fn("info", f"  {org}: usage report synced ({n} records)")
         except Exception as e:
             summary["errors"].append(f"usage: {e}")
             if log_fn:
-                log_fn("error", f"  {org}: usage error - {e}")
+                log_fn("error", f"  {org}: usage report error - {e}")
+
+        # Usage Users Report (org user-level 28-day)
+        try:
+            users_report = await api.get_org_users_usage_report_28day(org)
+            if users_report:
+                self._save_json("usage_users", org, users_report)
+                n = users_report.get("total_records", 0)
+                summary["synced"].append(f"usage_users ({n} records)")
+                if log_fn:
+                    log_fn("info", f"  {org}: usage users report synced ({n} records)")
+        except Exception as e:
+            summary["errors"].append(f"usage_users: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: usage users report error - {e}")
 
         # Metrics
         try:
@@ -168,6 +183,20 @@ class DataCollector:
             summary["errors"].append(f"metrics: {e}")
             if log_fn:
                 log_fn("error", f"  {org}: metrics error - {e}")
+
+        # Premium Request Usage (current month)
+        try:
+            premium = await api.get_premium_request_usage(org)
+            if premium:
+                self._save_json("premium_requests", org, premium)
+                n = len(premium.get("usageItems", []))
+                summary["synced"].append(f"premium_requests ({n} items)")
+                if log_fn:
+                    log_fn("info", f"  {org}: premium requests synced ({n} items)")
+        except Exception as e:
+            summary["errors"].append(f"premium_requests: {e}")
+            if log_fn:
+                log_fn("error", f"  {org}: premium requests error - {e}")
 
         if log_fn:
             log_fn("info", f"  {org}: done ({len(summary['synced'])} synced, {len(summary['errors'])} errors)")

@@ -104,13 +104,17 @@ async def sync_status():
         has_seats = data_collector.load_latest("seats", org_name) is not None
         has_billing = data_collector.load_latest("billing", org_name) is not None
         has_usage = data_collector.load_latest("usage", org_name) is not None
+        has_usage_users = data_collector.load_latest("usage_users", org_name) is not None
         has_metrics = data_collector.load_latest("metrics", org_name) is not None
+        has_premium_requests = data_collector.load_latest("premium_requests", org_name) is not None
         orgs_with_data.append({
             "org": org_name,
             "has_seats": has_seats,
             "has_billing": has_billing,
             "has_usage": has_usage,
+            "has_usage_users": has_usage_users,
             "has_metrics": has_metrics,
+            "has_premium_requests": has_premium_requests,
         })
 
     users = api_manager.get_discovered_users()
