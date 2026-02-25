@@ -25,7 +25,7 @@ function formatDate(iso: string) {
   return d.toLocaleDateString();
 }
 
-export function SessionSelector({ sessions, currentSessionId, onSwitch, onCreate, onDelete, onRename }: Props) {
+export function SessionSelector({ sessions, currentSessionId, onSwitch, onDelete, onRename }: Props) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
