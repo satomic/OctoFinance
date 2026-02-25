@@ -102,6 +102,7 @@ const translations = {
     "dashboard.ideUsage": "IDE Distribution",
     "dashboard.topUsers": "Top Active Users",
     "dashboard.noData": "No data available. Please sync data first.",
+    "dashboard.noSelection": "No org selected",
 
     // Loading
     "loading": "Loading...",
@@ -206,6 +207,7 @@ const translations = {
     "dashboard.ideUsage": "IDE \u5206\u5e03",
     "dashboard.topUsers": "\u6d3b\u8dc3\u7528\u6237\u6392\u540d",
     "dashboard.noData": "\u6682\u65e0\u6570\u636e\uff0c\u8bf7\u5148\u540c\u6b65\u6570\u636e\u3002",
+    "dashboard.noSelection": "\u672a\u9009\u62e9\u7ec4\u7ec7",
 
     // Loading
     "loading": "\u52a0\u8f7d\u4e2d...",
