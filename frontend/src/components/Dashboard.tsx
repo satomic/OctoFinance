@@ -4,6 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, LineChart, Line,
 } from "recharts";
 import { useI18n } from "../contexts/I18nContext";
+import { useUIState } from "../contexts/UIStateContext";
 import { useDashboard } from "../hooks/useData";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
@@ -14,11 +15,15 @@ interface Props {
 }
 
 /* ---------- Collapsible Section ---------- */
-function Section({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
+function Section({ sectionKey, title, defaultOpen = true, children }: { sectionKey: string; title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const { dashboardSections, patch } = useUIState();
+  const open = dashboardSections[sectionKey] ?? defaultOpen;
+  const toggle = useCallback(() => {
+    patch({ dashboardSections: { ...dashboardSections, [sectionKey]: !open } });
+  }, [patch, dashboardSections, sectionKey, open]);
   return (
     <div className="dash-section">
-      <div className="dash-section-header" onClick={() => setOpen((v) => !v)}>
+      <div className="dash-section-header" onClick={toggle}>
         <span className="dash-section-chevron">{open ? "\u25BC" : "\u25B6"}</span>
         <h3 className="dash-section-title">{title}</h3>
       </div>
@@ -30,11 +35,18 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
 /* ---------- Main Dashboard ---------- */
 export function Dashboard({ refreshKey }: Props) {
   const { t } = useI18n();
-  const [selectedOrgs, setSelectedOrgs] = useState<string[] | null>(null);
+  const ui = useUIState();
+  const selectedOrgs = ui.dashboardSelectedOrgs;
+  const setSelectedOrgs = useCallback((v: string[] | null | ((prev: string[] | null) => string[] | null)) => {
+    const next = typeof v === "function" ? v(ui.dashboardSelectedOrgs) : v;
+    ui.patch({ dashboardSelectedOrgs: next });
+  }, [ui.patch, ui.dashboardSelectedOrgs]);
   const { data, loading } = useDashboard(selectedOrgs ?? []);
 
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const dateFrom = ui.dashboardDateFrom;
+  const setDateFrom = useCallback((v: string) => ui.patch({ dashboardDateFrom: v }), [ui.patch]);
+  const dateTo = ui.dashboardDateTo;
+  const setDateTo = useCallback((v: string) => ui.patch({ dashboardDateTo: v }), [ui.patch]);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -175,7 +187,7 @@ export function Dashboard({ refreshKey }: Props) {
           </div>
 
           {/* ===== Section: Active User Trends ===== */}
-          <Section title={t("dashboard.activeUserTrends")}>
+          <Section sectionKey="activeUserTrends" title={t("dashboard.activeUserTrends")}>
             <div className="dashboard-charts">
               <div className="chart-card chart-card-wide">
                 <h4>{t("dashboard.dailyTrend")}</h4>
@@ -202,7 +214,7 @@ export function Dashboard({ refreshKey }: Props) {
           </Section>
 
           {/* ===== Section: Code Productivity ===== */}
-          <Section title={t("dashboard.codeProductivity")}>
+          <Section sectionKey="codeProductivity" title={t("dashboard.codeProductivity")}>
             <div className="dashboard-charts">
               <div className="chart-card">
                 <h4>{t("dashboard.locTrend")}</h4>
@@ -244,7 +256,7 @@ export function Dashboard({ refreshKey }: Props) {
           </Section>
 
           {/* ===== Section: Feature Usage ===== */}
-          <Section title={t("dashboard.featureUsage")}>
+          <Section sectionKey="featureUsage" title={t("dashboard.featureUsage")}>
             <div className="dashboard-charts">
               <div className="chart-card chart-card-wide">
                 {data.feature_usage.length > 0 ? (
@@ -285,7 +297,7 @@ export function Dashboard({ refreshKey }: Props) {
 
           {/* ===== Section: Language Distribution ===== */}
           {(data.language_usage.length > 0 || data.code_completions.length > 0) && (
-            <Section title={t("dashboard.langDist")}>
+            <Section sectionKey="langDist" title={t("dashboard.langDist")}>
               <div className="dashboard-charts">
                 {data.language_usage.length > 0 && (
                   <div className="chart-card">
@@ -338,7 +350,7 @@ export function Dashboard({ refreshKey }: Props) {
           )}
 
           {/* ===== Section: Model & Premium Requests ===== */}
-          <Section title={t("dashboard.modelPremium")}>
+          <Section sectionKey="modelPremium" title={t("dashboard.modelPremium")}>
             <div className="dashboard-charts">
               <div className="chart-card">
                 <h4>{t("dashboard.modelUsage")}</h4>
@@ -400,7 +412,7 @@ export function Dashboard({ refreshKey }: Props) {
 
           {/* ===== Section: Per-User Premium Requests (from CSV) ===== */}
           {data.user_premium_usage?.has_data && (
-            <Section title={t("dashboard.userPremium")}>
+            <Section sectionKey="userPremium" title={t("dashboard.userPremium")}>
               <div className="dashboard-charts">
                 {/* Daily trend chart */}
                 <div className="chart-card">
@@ -504,7 +516,7 @@ export function Dashboard({ refreshKey }: Props) {
           )}
 
           {/* ===== Section: IDE Distribution ===== */}
-          <Section title={t("dashboard.ideUsage")}>
+          <Section sectionKey="ideUsage" title={t("dashboard.ideUsage")}>
             <div className="dashboard-charts">
               <div className="chart-card">
                 <h4>{t("dashboard.ideChart")}</h4>
@@ -561,7 +573,7 @@ export function Dashboard({ refreshKey }: Props) {
 
           {/* ===== Section: Seat Management ===== */}
           {data.seat_info && data.seat_info.seats.length > 0 && (
-            <Section title={t("dashboard.seatMgmt")} defaultOpen={false}>
+            <Section sectionKey="seatMgmt" title={t("dashboard.seatMgmt")} defaultOpen={false}>
               <div className="dashboard-charts">
                 <div className="chart-card chart-card-wide">
                   <div className="dash-seat-summary">
@@ -618,7 +630,7 @@ export function Dashboard({ refreshKey }: Props) {
           )}
 
           {/* ===== Section: Top Active Users ===== */}
-          <Section title={t("dashboard.topUsers")}>
+          <Section sectionKey="topUsers" title={t("dashboard.topUsers")}>
             <div className="dashboard-charts">
               <div className="chart-card chart-card-wide">
                 {data.top_users.length > 0 ? (

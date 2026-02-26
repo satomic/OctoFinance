@@ -1,9 +1,18 @@
 import { useState, useCallback, useEffect } from "react";
+import { useUIState } from "../contexts/UIStateContext";
 import type { SessionInfo } from "../types";
 
 export function useSessions() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const ui = useUIState();
+  const currentSessionId = ui.currentSessionId;
+  const setCurrentSessionId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      const next = typeof v === "function" ? v(ui.currentSessionId) : v;
+      ui.patch({ currentSessionId: next });
+    },
+    [ui.patch, ui.currentSessionId],
+  );
 
   const loadSessions = useCallback(async () => {
     try {
@@ -41,12 +50,14 @@ export function useSessions() {
       if (res.ok) {
         setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
         // If we deleted the current session, clear it
-        setCurrentSessionId((cur) => (cur === sessionId ? null : cur));
+        if (ui.currentSessionId === sessionId) {
+          ui.patch({ currentSessionId: null });
+        }
       }
     } catch {
       // Silently fail
     }
-  }, []);
+  }, [ui.currentSessionId, ui.patch]);
 
   const updateSessionTitle = useCallback(async (sessionId: string, title: string) => {
     try {
@@ -66,8 +77,8 @@ export function useSessions() {
   }, []);
 
   const switchSession = useCallback((sessionId: string) => {
-    setCurrentSessionId(sessionId);
-  }, []);
+    ui.patch({ currentSessionId: sessionId });
+  }, [ui.patch]);
 
   // Load sessions on mount
   useEffect(() => {
