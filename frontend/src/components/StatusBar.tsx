@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { useSync } from "../hooks/useData";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSync, usePremiumCsvInfo } from "../hooks/useData";
 import { useTheme } from "../contexts/ThemeContext";
 import { useI18n } from "../contexts/I18nContext";
 import { PATSettingsModal } from "./PATSettingsModal";
@@ -11,13 +11,18 @@ interface Props {
   syncing?: boolean;
   currentView: "chat" | "dashboard";
   onViewChange: (view: "chat" | "dashboard") => void;
+  onLogout: () => void;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout }: Props) {
   const { sync } = useSync();
   const { theme, toggleTheme } = useTheme();
   const { lang, toggleLang, t } = useI18n();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { info: csvInfo, uploadCsv } = usePremiumCsvInfo();
+  const [csvUploading, setCsvUploading] = useState(false);
+  const [csvMessage, setCsvMessage] = useState("");
   const [health, setHealth] = useState<{
     status: string;
     user: string | null;
@@ -48,6 +53,31 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
       sync();
     }
   };
+
+  const handleCsvUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvUploading(true);
+    setCsvMessage("");
+    try {
+      const result = await uploadCsv(file);
+      if (result.error) {
+        setCsvMessage(result.error);
+      } else if (result.status === "no_new_data") {
+        setCsvMessage(t("dashboard.csvNoDuplicate"));
+      } else {
+        setCsvMessage(`${t("dashboard.csvUploadSuccess")}: ${result.new_rows}`);
+      }
+      // Auto-clear message after 5 seconds
+      setTimeout(() => setCsvMessage(""), 5000);
+    } catch {
+      setCsvMessage("Upload failed");
+      setTimeout(() => setCsvMessage(""), 5000);
+    } finally {
+      setCsvUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }, [uploadCsv, t]);
 
   return (
     <div className="status-bar">
@@ -103,8 +133,31 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
           {theme === "dark" ? "Light" : "Dark"}
         </button>
+        <div className="csv-upload-group">
+          <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} style={{ display: "none" }} />
+          <button
+            className="btn btn-small"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={csvUploading}
+            title={t("dashboard.uploadCsvHint")}
+          >
+            {csvUploading ? t("dashboard.csvUploading") : t("dashboard.uploadCsv")}
+          </button>
+          {csvInfo?.has_data && <span className="csv-date-hint" title={`${csvInfo.earliest_date} ~ ${csvInfo.latest_date}`}>{csvInfo.latest_date}</span>}
+          {csvMessage && <span className="csv-upload-msg">{csvMessage}</span>}
+        </div>
         <button className="btn btn-small" onClick={handleSync} disabled={syncing}>
           {syncing ? t("status.syncing") : t("status.syncData")}
+        </button>
+        <button
+          className="btn btn-small btn-ghost"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            onLogout();
+          }}
+          title={t("auth.logout")}
+        >
+          {t("auth.logout")}
         </button>
       </div>
       {settingsOpen && (

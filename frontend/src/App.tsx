@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider, useI18n } from "./contexts/I18nContext";
+import { UIStateProvider, useUIState } from "./contexts/UIStateContext";
 import { useChat } from "./hooks/useChat";
 import { useSessions } from "./hooks/useSessions";
 import { useSyncStream } from "./hooks/useSyncStream";
@@ -12,12 +13,12 @@ import { OverviewPanel } from "./components/OverviewPanel";
 import { OrgSelector } from "./components/OrgSelector";
 import { ActionPanel } from "./components/ActionPanel";
 import { StatusBar } from "./components/StatusBar";
+import { LoginPage } from "./components/LoginPage";
 import type { Recommendation } from "./types";
 import "./styles/index.css";
 
 const MIN_SIDEBAR = 240;
 const MAX_SIDEBAR = 600;
-const DEFAULT_SIDEBAR = 320;
 
 interface SidebarPanelProps {
   title: string;
@@ -48,24 +49,35 @@ function SidebarPanel({ title, collapsed, onToggle, extra, children }: SidebarPa
   );
 }
 
-function AppLayout() {
+function AppLayout({ onLogout }: { onLogout: () => void }) {
   const { t } = useI18n();
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
-  const [consoleOpen, setConsoleOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<"chat" | "dashboard">("chat");
+  const ui = useUIState();
+  const sidebarWidth = ui.sidebarWidth;
+  const setSidebarWidth = useCallback((w: number) => ui.patch({ sidebarWidth: w }), [ui.patch]);
+  const consoleOpen = ui.consoleOpen;
+  const setConsoleOpen = useCallback((v: boolean) => ui.patch({ consoleOpen: v }), [ui.patch]);
+  const currentView = ui.currentView;
+  const setCurrentView = useCallback((v: "chat" | "dashboard") => ui.patch({ currentView: v }), [ui.patch]);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [collapsed, setCollapsed] = useState({
-    overview: false,
-    organizations: false,
-    sessions: false,
-    actions: true,
-  });
+  const collapsed = ui.sidebarCollapsed;
   const isDragging = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
 
   const chat = useChat();
   const sessions = useSessions();
+  const initialLoadRef = useRef(false);
+
+  // On mount, load messages for persisted session
+  useEffect(() => {
+    if (!initialLoadRef.current && sessions.currentSessionId && sessions.sessions.length > 0) {
+      initialLoadRef.current = true;
+      const exists = sessions.sessions.some((s) => s.session_id === sessions.currentSessionId);
+      if (exists) {
+        chat.loadMessages(sessions.currentSessionId);
+      }
+    }
+  }, [sessions.currentSessionId, sessions.sessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Connect to sync SSE stream — push sync logs into console, track syncing state
   const { syncing, setOnSyncComplete } = useSyncStream(chat.addConsoleLog);
@@ -84,9 +96,9 @@ function AppLayout() {
     }
   }, [syncing]);
 
-  const togglePanel = useCallback((key: keyof typeof collapsed) => {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  const togglePanel = useCallback((key: string) => {
+    ui.patch({ sidebarCollapsed: { ...ui.sidebarCollapsed, [key]: !ui.sidebarCollapsed[key] } });
+  }, [ui.patch, ui.sidebarCollapsed]);
 
   // Wrap sendMessage to pass current session id and refresh session list after
   const handleSendMessage = useCallback(async (content: string) => {
@@ -157,7 +169,7 @@ function AppLayout() {
     chat.clearConsole();
 
     // 4. Expand actions panel to collapsed=false so user sees update
-    setCollapsed((prev) => ({ ...prev, actions: false }));
+    ui.patch({ sidebarCollapsed: { ...ui.sidebarCollapsed, actions: false } });
 
     // 5. Build execution prompt
     let prompt = "";
@@ -172,7 +184,7 @@ function AppLayout() {
 
     // 7. Refresh actions panel
     setRefreshKey((k) => k + 1);
-  }, [sessions.createSession, sessions.switchSession, chat.clearMessages, chat.clearConsole, handleSendMessage]);
+  }, [sessions.createSession, sessions.switchSession, chat.clearMessages, chat.clearConsole, handleSendMessage, ui.patch, ui.sidebarCollapsed]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = true;
@@ -205,7 +217,7 @@ function AppLayout() {
     };
   }, []);
 
-  const toggleConsole = useCallback(() => setConsoleOpen((v) => !v), []);
+  const toggleConsole = useCallback(() => ui.patch({ consoleOpen: !ui.consoleOpen }), [ui.patch, ui.consoleOpen]);
 
   const handlePATChange = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -220,6 +232,7 @@ function AppLayout() {
         syncing={syncing}
         currentView={currentView}
         onViewChange={setCurrentView}
+        onLogout={onLogout}
       />
       <div className="app-body">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
@@ -290,11 +303,41 @@ function AppLayout() {
   );
 }
 
+function AuthGate() {
+  const [authStatus, setAuthStatus] = useState<{
+    setup_required: boolean;
+    authenticated: boolean;
+  } | null>(null);
+
+  const checkAuth = useCallback(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then(setAuthStatus)
+      .catch(() => setAuthStatus({ setup_required: false, authenticated: false }));
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  if (!authStatus) {
+    return null; // loading
+  }
+
+  if (!authStatus.authenticated) {
+    return <LoginPage setupRequired={authStatus.setup_required} onLogin={checkAuth} />;
+  }
+
+  return <AppLayout onLogout={checkAuth} />;
+}
+
 function App() {
   return (
     <ThemeProvider>
       <I18nProvider>
-        <AppLayout />
+        <UIStateProvider>
+          <AuthGate />
+        </UIStateProvider>
       </I18nProvider>
     </ThemeProvider>
   );

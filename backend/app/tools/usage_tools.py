@@ -51,6 +51,11 @@ class FetchOrgUsersUsageReportParams(BaseModel):
     )
 
 
+class GetUserPremiumUsageParams(BaseModel):
+    user: str = Field(default="", description="Username to filter. Leave empty for all users.")
+    org: str = Field(default="", description="Organization name to filter. Leave empty for all orgs.")
+
+
 class GetPremiumRequestUsageParams(BaseModel):
     org: str = Field(default="", description="Organization name. Leave empty for all orgs.")
 
@@ -148,7 +153,84 @@ def create_usage_tools(
                 return json.dumps({"error": "No premium request data found. Try fetch_premium_request_usage to get live data."})
             return json.dumps(all_data, default=str)
 
-    tools = [get_usage_report, get_users_usage_report, get_metrics_detail, get_premium_request_usage]
+    @define_tool(
+        description=(
+            "Get per-user premium request usage from uploaded CSV data. "
+            "This data comes from CSV files manually exported from GitHub UI and uploaded by the admin. "
+            "Shows each user's daily premium request consumption broken down by AI model, "
+            "including request counts, costs, quota usage percentage, and active days. "
+            "Can filter by username or organization. Use this to answer questions about "
+            "individual user's premium request spending and model preferences."
+        )
+    )
+    def get_user_premium_usage(params: GetUserPremiumUsageParams) -> str:
+        import csv as csv_mod
+        # Check both primary and fallback (global) data dirs for CSV files
+        csv_dirs = [collector.data_dir / "premium_usage_csv"]
+        if collector._fallback_dir:
+            csv_dirs.append(collector._fallback_dir / "premium_usage_csv")
+        records: list[dict] = []
+        seen_files: set[str] = set()
+        for csv_dir in csv_dirs:
+            if not csv_dir.exists():
+                continue
+            for f in sorted(csv_dir.glob("*.csv")):
+                if f.name in seen_files:
+                    continue
+                seen_files.add(f.name)
+                with open(f, encoding="utf-8") as fh:
+                    for row in csv_mod.DictReader(fh):
+                        records.append(row)
+
+        if not records:
+            return json.dumps({"error": "No per-user premium usage CSV data found. Please upload a premium request usage CSV from the Dashboard page."})
+
+        # Filter
+        if params.org:
+            records = [r for r in records if r.get("organization", "") == params.org]
+        if params.user:
+            records = [r for r in records if r.get("username", "") == params.user]
+
+        if not records:
+            return json.dumps({"error": f"No records found matching user='{params.user}', org='{params.org}'."})
+
+        # Aggregate per user
+        from collections import defaultdict as dd
+        user_map: dict[str, dict] = dd(lambda: {
+            "total_requests": 0, "total_cost": 0.0,
+            "models": dd(float), "days": set(), "org": "", "quota": 0,
+        })
+        for r in records:
+            user = r.get("username", "")
+            u = user_map[user]
+            qty = float(r.get("quantity", 0))
+            u["total_requests"] += qty
+            u["total_cost"] += float(r.get("gross_amount", 0))
+            u["models"][r.get("model", "unknown")] += qty
+            u["days"].add(r.get("date", ""))
+            u["org"] = r.get("organization", "")
+            try:
+                u["quota"] = int(r.get("total_monthly_quota", 0))
+            except (ValueError, TypeError):
+                pass
+
+        result = []
+        for username, info in sorted(user_map.items(), key=lambda x: -x[1]["total_requests"]):
+            result.append({
+                "user": username,
+                "org": info["org"],
+                "total_requests": round(info["total_requests"], 2),
+                "total_cost": round(info["total_cost"], 4),
+                "quota": info["quota"],
+                "usage_pct": round(info["total_requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
+                "days_active": len(info["days"]),
+                "date_range": {"start": min(info["days"]), "end": max(info["days"])} if info["days"] else None,
+                "models": {m: round(q, 2) for m, q in sorted(info["models"].items(), key=lambda x: -x[1])},
+            })
+
+        return json.dumps({"users": result, "total_records": len(records)}, default=str)
+
+    tools = [get_usage_report, get_users_usage_report, get_metrics_detail, get_premium_request_usage, get_user_premium_usage]
 
     # --- Live fetch tools (require api_manager) ---
 
