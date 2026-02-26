@@ -13,6 +13,7 @@ import { OverviewPanel } from "./components/OverviewPanel";
 import { OrgSelector } from "./components/OrgSelector";
 import { ActionPanel } from "./components/ActionPanel";
 import { StatusBar } from "./components/StatusBar";
+import { LoginPage } from "./components/LoginPage";
 import type { Recommendation } from "./types";
 import "./styles/index.css";
 
@@ -48,7 +49,7 @@ function SidebarPanel({ title, collapsed, onToggle, extra, children }: SidebarPa
   );
 }
 
-function AppLayout() {
+function AppLayout({ onLogout }: { onLogout: () => void }) {
   const { t } = useI18n();
   const ui = useUIState();
   const sidebarWidth = ui.sidebarWidth;
@@ -231,6 +232,7 @@ function AppLayout() {
         syncing={syncing}
         currentView={currentView}
         onViewChange={setCurrentView}
+        onLogout={onLogout}
       />
       <div className="app-body">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
@@ -301,12 +303,40 @@ function AppLayout() {
   );
 }
 
+function AuthGate() {
+  const [authStatus, setAuthStatus] = useState<{
+    setup_required: boolean;
+    authenticated: boolean;
+  } | null>(null);
+
+  const checkAuth = useCallback(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then(setAuthStatus)
+      .catch(() => setAuthStatus({ setup_required: false, authenticated: false }));
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  if (!authStatus) {
+    return null; // loading
+  }
+
+  if (!authStatus.authenticated) {
+    return <LoginPage setupRequired={authStatus.setup_required} onLogin={checkAuth} />;
+  }
+
+  return <AppLayout onLogout={checkAuth} />;
+}
+
 function App() {
   return (
     <ThemeProvider>
       <I18nProvider>
         <UIStateProvider>
-          <AppLayout />
+          <AuthGate />
         </UIStateProvider>
       </I18nProvider>
     </ThemeProvider>

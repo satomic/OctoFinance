@@ -130,6 +130,18 @@ const translations = {
     "dashboard.csvNoDuplicate": "No new data (all records already exist)",
     "dashboard.quotaUsage": "Quota Usage",
 
+    // Auth
+    "auth.welcome": "Login to OctoFinance",
+    "auth.createAccount": "Create your account to get started",
+    "auth.username": "Username",
+    "auth.password": "Password",
+    "auth.confirmPassword": "Confirm Password",
+    "auth.passwordMismatch": "Passwords do not match",
+    "auth.setup": "Create Account",
+    "auth.loginBtn": "Login",
+    "auth.logout": "Logout",
+    "auth.error": "Username and password are required",
+
     // Loading
     "loading": "Loading...",
     "loading.actions": "Loading actions...",
@@ -260,6 +272,18 @@ const translations = {
     "dashboard.csvUploadSuccess": "\u4e0a\u4f20\u6210\u529f",
     "dashboard.csvNoDuplicate": "\u65e0\u65b0\u6570\u636e\uff08\u6240\u6709\u8bb0\u5f55\u5df2\u5b58\u5728\uff09",
     "dashboard.quotaUsage": "\u914d\u989d\u4f7f\u7528",
+
+    // Auth
+    "auth.welcome": "\u767b\u5f55 OctoFinance",
+    "auth.createAccount": "\u521b\u5efa\u8d26\u6237\u4ee5\u5f00\u59cb\u4f7f\u7528",
+    "auth.username": "\u7528\u6237\u540d",
+    "auth.password": "\u5bc6\u7801",
+    "auth.confirmPassword": "\u786e\u8ba4\u5bc6\u7801",
+    "auth.passwordMismatch": "\u4e24\u6b21\u5bc6\u7801\u4e0d\u4e00\u81f4",
+    "auth.setup": "\u521b\u5efa\u8d26\u6237",
+    "auth.loginBtn": "\u767b\u5f55",
+    "auth.logout": "\u9000\u51fa",
+    "auth.error": "\u7528\u6237\u540d\u548c\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a",
 
     // Loading
     "loading": "\u52a0\u8f7d\u4e2d...",

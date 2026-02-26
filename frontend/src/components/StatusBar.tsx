@@ -11,9 +11,10 @@ interface Props {
   syncing?: boolean;
   currentView: "chat" | "dashboard";
   onViewChange: (view: "chat" | "dashboard") => void;
+  onLogout: () => void;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout }: Props) {
   const { sync } = useSync();
   const { theme, toggleTheme } = useTheme();
   const { lang, toggleLang, t } = useI18n();
@@ -147,6 +148,16 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         </div>
         <button className="btn btn-small" onClick={handleSync} disabled={syncing}>
           {syncing ? t("status.syncing") : t("status.syncData")}
+        </button>
+        <button
+          className="btn btn-small btn-ghost"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            onLogout();
+          }}
+          title={t("auth.logout")}
+        >
+          {t("auth.logout")}
         </button>
       </div>
       {settingsOpen && (

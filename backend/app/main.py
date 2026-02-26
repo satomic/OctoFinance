@@ -5,10 +5,12 @@ FastAPI application entry point.
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .routers import actions, chat, data, pats, sessions, sync
+from .routers import actions, auth, chat, data, pats, sessions, sync
+from .routers.auth import AUTH_PUBLIC_PATHS, is_authenticated
 from .services.api_manager import api_manager
 from .services.copilot_engine import copilot_engine
 from .services.data_collector import data_collector
@@ -98,12 +100,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
 app.include_router(actions.router, prefix="/api")
 app.include_router(pats.router, prefix="/api")
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """Require authentication for all /api/* routes except public auth endpoints."""
+    path = request.url.path
+    if path.startswith("/api") and path not in AUTH_PUBLIC_PATHS:
+        token = request.cookies.get("octofinance_session")
+        if not is_authenticated(token):
+            return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    return await call_next(request)
 
 
 @app.get("/api/health")
