@@ -130,4 +130,38 @@ export interface DashboardData {
   top_users: { user: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; days_active: number; used_agent: boolean; used_chat: boolean }[];
   orgs: string[];
   date_range: { start: string; end: string };
+  user_premium_usage: UserPremiumUsage;
+}
+
+export interface UserPremiumRecord {
+  user: string;
+  org: string;
+  requests: number;
+  gross_amount: number;
+  net_amount: number;
+  days_active: number;
+  quota: number;
+  usage_pct: number;
+  models: { model: string; requests: number }[];
+}
+
+export interface UserPremiumUsage {
+  has_data: boolean;
+  latest_date: string | null;
+  users: UserPremiumRecord[];
+  daily_trend: { day: string; requests: number; amount: number; active_users: number }[];
+  model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
+  org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
+  total_requests: number;
+  total_cost: number;
+}
+
+export interface PremiumCsvInfo {
+  has_data: boolean;
+  latest_date: string | null;
+  earliest_date: string | null;
+  file_count: number;
+  total_records: number;
+  orgs: string[];
+  user_count: number;
 }

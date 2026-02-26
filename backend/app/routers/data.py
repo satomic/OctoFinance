@@ -3,9 +3,15 @@ Data query router - provides read access to collected data.
 Supports enterprise grouping for org display.
 """
 
+import csv
+import io
+import json
+import shutil
 from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, UploadFile, File
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
@@ -408,4 +414,255 @@ async def get_dashboard(orgs: str = Query(default="")):
         "top_users": top_users,
         "orgs": all_org_names,
         "date_range": {"start": date_start, "end": date_end},
+        "user_premium_usage": _aggregate_user_premium_csv(selected),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Premium Usage CSV helpers
+# ---------------------------------------------------------------------------
+
+def _get_csv_dir() -> Path:
+    return data_collector.data_dir / "premium_usage_csv"
+
+
+def _load_all_csv_records() -> list[dict]:
+    """Load all CSV records from the premium_usage_csv directory."""
+    csv_dir = _get_csv_dir()
+    records: list[dict] = []
+    for f in sorted(csv_dir.glob("*.csv")):
+        with open(f, encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                records.append(row)
+    return records
+
+
+def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
+    """Aggregate per-user premium usage from uploaded CSV files.
+
+    Returns structure with per-user breakdown, daily trend, model breakdown, etc.
+    """
+    records = _load_all_csv_records()
+    if not records:
+        return {"has_data": False, "latest_date": None, "users": [], "daily_trend": [],
+                "model_breakdown": [], "org_breakdown": [], "total_requests": 0, "total_cost": 0}
+
+    # Filter by selected orgs
+    filtered = [r for r in records if r.get("organization", "") in selected_orgs]
+    if not filtered:
+        return {"has_data": False, "latest_date": None, "users": [], "daily_trend": [],
+                "model_breakdown": [], "org_breakdown": [], "total_requests": 0, "total_cost": 0}
+
+    latest_date = max(r.get("date", "") for r in filtered)
+
+    # Per-user aggregation
+    user_map: dict[str, dict] = defaultdict(lambda: {
+        "requests": 0, "gross_amount": 0.0, "net_amount": 0.0,
+        "models": defaultdict(float), "days_active": set(), "org": "",
+        "quota": 0,
+    })
+    for r in filtered:
+        user = r.get("username", "")
+        qty = float(r.get("quantity", 0))
+        gross = float(r.get("gross_amount", 0))
+        net = float(r.get("net_amount", 0))
+        model = r.get("model", "unknown")
+        u = user_map[user]
+        u["requests"] += qty
+        u["gross_amount"] += gross
+        u["net_amount"] += net
+        u["models"][model] += qty
+        u["days_active"].add(r.get("date", ""))
+        u["org"] = r.get("organization", "")
+        try:
+            u["quota"] = int(r.get("total_monthly_quota", 0))
+        except (ValueError, TypeError):
+            pass
+
+    users = []
+    for username, info in sorted(user_map.items(), key=lambda x: -x[1]["requests"]):
+        models = [{"model": m, "requests": q} for m, q in sorted(info["models"].items(), key=lambda x: -x[1])]
+        users.append({
+            "user": username,
+            "org": info["org"],
+            "requests": round(info["requests"], 2),
+            "gross_amount": round(info["gross_amount"], 4),
+            "net_amount": round(info["net_amount"], 4),
+            "days_active": len(info["days_active"]),
+            "quota": info["quota"],
+            "usage_pct": round(info["requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
+            "models": models,
+        })
+
+    # Daily trend
+    day_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        day = r.get("date", "")
+        qty = float(r.get("quantity", 0))
+        gross = float(r.get("gross_amount", 0))
+        dm = day_map[day]
+        dm["requests"] += qty
+        dm["amount"] += gross
+        dm["users"].add(r.get("username", ""))
+
+    daily_trend = [
+        {"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "active_users": len(v["users"])}
+        for d, v in sorted(day_map.items())
+    ]
+
+    # Model breakdown
+    model_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        model = r.get("model", "unknown")
+        mm = model_map[model]
+        mm["requests"] += float(r.get("quantity", 0))
+        mm["amount"] += float(r.get("gross_amount", 0))
+        mm["users"].add(r.get("username", ""))
+
+    model_breakdown = [
+        {"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
+        for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])
+    ]
+
+    # Org breakdown
+    org_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        org = r.get("organization", "")
+        om = org_map[org]
+        om["requests"] += float(r.get("quantity", 0))
+        om["amount"] += float(r.get("gross_amount", 0))
+        om["users"].add(r.get("username", ""))
+
+    org_breakdown = [
+        {"org": o, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
+        for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])
+    ]
+
+    total_requests = sum(u["requests"] for u in users)
+    total_cost = sum(u["gross_amount"] for u in users)
+
+    return {
+        "has_data": True,
+        "latest_date": latest_date,
+        "users": users,
+        "daily_trend": daily_trend,
+        "model_breakdown": model_breakdown,
+        "org_breakdown": org_breakdown,
+        "total_requests": round(total_requests, 2),
+        "total_cost": round(total_cost, 4),
+    }
+
+
+# ---------------------------------------------------------------------------
+# CSV upload endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/data/upload-premium-csv")
+async def upload_premium_csv(file: UploadFile = File(...)):
+    """Upload a premium request usage CSV file (exported from GitHub UI).
+
+    The CSV is validated, deduplicated against existing data, and saved.
+    """
+    if not file.filename or not file.filename.endswith(".csv"):
+        return {"error": "Only CSV files are accepted."}
+
+    content = await file.read()
+    text = content.decode("utf-8-sig")  # handle BOM
+
+    # Validate CSV structure
+    reader = csv.DictReader(io.StringIO(text))
+    required_cols = {"date", "username", "model", "quantity", "gross_amount", "organization"}
+    if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+        return {"error": f"CSV must contain columns: {', '.join(sorted(required_cols))}"}
+
+    rows = list(reader)
+    if not rows:
+        return {"error": "CSV file is empty."}
+
+    # Determine date range in uploaded file
+    dates = [r.get("date", "") for r in rows if r.get("date")]
+    date_min = min(dates) if dates else "unknown"
+    date_max = max(dates) if dates else "unknown"
+
+    # Load existing records to deduplicate
+    existing_keys: set[str] = set()
+    csv_dir = _get_csv_dir()
+    for f in csv_dir.glob("*.csv"):
+        with open(f, encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                key = f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
+                existing_keys.add(key)
+
+    # Filter out duplicates
+    new_rows = []
+    for row in rows:
+        key = f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
+        if key not in existing_keys:
+            new_rows.append(row)
+
+    if not new_rows:
+        return {
+            "status": "no_new_data",
+            "message": "All records already exist. No new data added.",
+            "date_range": {"start": date_min, "end": date_max},
+            "total_rows": len(rows),
+            "new_rows": 0,
+        }
+
+    # Save new rows to a timestamped CSV
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    out_path = csv_dir / f"premium_usage_{ts}.csv"
+    fieldnames = reader.fieldnames or list(rows[0].keys())
+    with open(out_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(new_rows)
+
+    return {
+        "status": "ok",
+        "date_range": {"start": date_min, "end": date_max},
+        "total_rows": len(rows),
+        "new_rows": len(new_rows),
+        "duplicates_skipped": len(rows) - len(new_rows),
+        "file_saved": out_path.name,
+    }
+
+
+@router.get("/data/premium-csv-info")
+async def get_premium_csv_info():
+    """Get info about uploaded premium usage CSV data."""
+    csv_dir = _get_csv_dir()
+    csv_files = sorted(csv_dir.glob("*.csv"))
+
+    if not csv_files:
+        return {"has_data": False, "latest_date": None, "file_count": 0, "total_records": 0}
+
+    total_records = 0
+    all_dates: list[str] = []
+    all_orgs: set[str] = set()
+    all_users: set[str] = set()
+
+    for f in csv_files:
+        with open(f, encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                total_records += 1
+                d = row.get("date", "")
+                if d:
+                    all_dates.append(d)
+                org = row.get("organization", "")
+                if org:
+                    all_orgs.add(org)
+                user = row.get("username", "")
+                if user:
+                    all_users.add(user)
+
+    return {
+        "has_data": total_records > 0,
+        "latest_date": max(all_dates) if all_dates else None,
+        "earliest_date": min(all_dates) if all_dates else None,
+        "file_count": len(csv_files),
+        "total_records": total_records,
+        "orgs": sorted(all_orgs),
+        "user_count": len(all_users),
     }

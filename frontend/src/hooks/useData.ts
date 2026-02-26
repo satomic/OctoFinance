@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, PremiumCsvInfo } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -124,4 +124,36 @@ export function useDashboard(selectedOrgs: string[]) {
   }, [fetchDashboard]);
 
   return { data, loading, refetch: fetchDashboard };
+}
+
+export function usePremiumCsvInfo() {
+  const [info, setInfo] = useState<PremiumCsvInfo | null>(null);
+
+  const fetchInfo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/data/premium-csv-info");
+      const data = await res.json();
+      setInfo(data);
+    } catch {
+      setInfo(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInfo();
+  }, [fetchInfo]);
+
+  const uploadCsv = useCallback(async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/data/upload-premium-csv", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await res.json();
+    await fetchInfo();
+    return result;
+  }, [fetchInfo]);
+
+  return { info, refetch: fetchInfo, uploadCsv };
 }

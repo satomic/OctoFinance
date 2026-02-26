@@ -398,6 +398,111 @@ export function Dashboard({ refreshKey }: Props) {
             </div>
           </Section>
 
+          {/* ===== Section: Per-User Premium Requests (from CSV) ===== */}
+          {data.user_premium_usage?.has_data && (
+            <Section title={t("dashboard.userPremium")}>
+              <div className="dashboard-charts">
+                {/* Daily trend chart */}
+                <div className="chart-card">
+                  <h4>{t("dashboard.userPremiumTrend")}</h4>
+                  {data.user_premium_usage.daily_trend.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={data.user_premium_usage.daily_trend}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickFormatter={(v) => v.slice(5)} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                        <Tooltip contentStyle={TOOLTIP_STYLE} />
+                        <Bar dataKey="requests" name="Requests" fill="#bc8cff" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="active_users" name="Active Users" fill="#3fb950" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="chart-empty">{t("dashboard.noData")}</div>
+                  )}
+                </div>
+                {/* Model breakdown pie */}
+                <div className="chart-card">
+                  <h4>{t("dashboard.userPremiumModel")}</h4>
+                  {data.user_premium_usage.model_breakdown.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={data.user_premium_usage.model_breakdown}
+                          dataKey="requests"
+                          nameKey="model"
+                          cx="50%" cy="50%" outerRadius={80}
+                          label={({ name, percent }: { name?: string; percent?: number }) => `${name || ""} ${((percent || 0) * 100).toFixed(0)}%`}
+                          labelLine={false}
+                        >
+                          {data.user_premium_usage.model_breakdown.map((_, i) => (
+                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={TOOLTIP_STYLE} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="chart-empty">{t("dashboard.noData")}</div>
+                  )}
+                </div>
+                {/* Per-user table */}
+                <div className="chart-card chart-card-wide">
+                  <h4>{t("dashboard.userPremiumTable")}</h4>
+                  {data.user_premium_usage.users.length > 0 ? (
+                    <div className="dashboard-table-wrap">
+                      <table className="dashboard-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>User</th>
+                            <th>Org</th>
+                            <th>Requests</th>
+                            <th>Cost</th>
+                            <th>Quota</th>
+                            <th>{t("dashboard.quotaUsage")}</th>
+                            <th>Days</th>
+                            <th>Top Models</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.user_premium_usage.users.map((u, i) => (
+                            <tr key={u.user}>
+                              <td className="rank">{i + 1}</td>
+                              <td className="user-name">{u.user}</td>
+                              <td>{u.org}</td>
+                              <td>{u.requests.toLocaleString()}</td>
+                              <td>${u.gross_amount.toFixed(2)}</td>
+                              <td>{u.quota.toLocaleString()}</td>
+                              <td>
+                                <div className="quota-bar-wrap">
+                                  <div className="quota-bar">
+                                    <div
+                                      className={`quota-bar-fill ${u.usage_pct > 80 ? "danger" : u.usage_pct > 50 ? "warning" : "success"}`}
+                                      style={{ width: `${Math.min(u.usage_pct, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="quota-bar-label">{u.usage_pct}%</span>
+                                </div>
+                              </td>
+                              <td>{u.days_active}</td>
+                              <td className="model-tags">
+                                {u.models.slice(0, 3).map((m) => (
+                                  <span key={m.model} className="dash-badge dash-badge-muted">{m.model}: {m.requests}</span>
+                                ))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="chart-empty">{t("dashboard.noData")}</div>
+                  )}
+                </div>
+              </div>
+            </Section>
+          )}
+
           {/* ===== Section: IDE Distribution ===== */}
           <Section title={t("dashboard.ideUsage")}>
             <div className="dashboard-charts">
