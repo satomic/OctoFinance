@@ -5,9 +5,12 @@ FastAPI application entry point.
 
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .routers import actions, auth, chat, data, pats, sessions, sync
 from .routers.auth import AUTH_PUBLIC_PATHS, is_authenticated
@@ -107,6 +110,15 @@ app.include_router(sync.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
 app.include_router(actions.router, prefix="/api")
 app.include_router(pats.router, prefix="/api")
+
+# Serve frontend static files
+_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if _dist.exists():
+    app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        return FileResponse(_dist / "index.html")
 
 
 @app.middleware("http")

@@ -136,6 +136,7 @@ export interface DashboardData {
 export interface UserPremiumRecord {
   user: string;
   org: string;
+  cost_center: string;
   requests: number;
   gross_amount: number;
   net_amount: number;
@@ -152,6 +153,7 @@ export interface UserPremiumUsage {
   daily_trend: { day: string; requests: number; amount: number; active_users: number }[];
   model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
   org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
+  cost_center_breakdown: { cost_center: string; requests: number; amount: number; user_count: number }[];
   total_requests: number;
   total_cost: number;
 }

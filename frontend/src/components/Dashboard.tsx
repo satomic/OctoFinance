@@ -432,6 +432,25 @@ export function Dashboard({ refreshKey }: Props) {
                     <div className="chart-empty">{t("dashboard.noData")}</div>
                   )}
                 </div>
+                {/* Cost center breakdown bar */}
+                <div className="chart-card">
+                  <h4>{t("dashboard.costCenterBreakdown")}</h4>
+                  {data.user_premium_usage.cost_center_breakdown.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={Math.max(200, data.user_premium_usage.cost_center_breakdown.length * 40)}>
+                      <BarChart data={data.user_premium_usage.cost_center_breakdown} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                        <YAxis dataKey="cost_center" type="category" width={140} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name?: string) => name === "amount" ? `$${Number(v).toFixed(2)}` : v} />
+                        <Bar dataKey="requests" name="Requests" fill="#bc8cff" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="user_count" name="Users" fill="#58a6ff" radius={[0, 4, 4, 0]} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="chart-empty">{t("dashboard.noData")}</div>
+                  )}
+                </div>
                 {/* Model breakdown pie */}
                 <div className="chart-card">
                   <h4>{t("dashboard.userPremiumModel")}</h4>
@@ -468,6 +487,7 @@ export function Dashboard({ refreshKey }: Props) {
                             <th>#</th>
                             <th>User</th>
                             <th>Org</th>
+                            <th>{t("dashboard.costCenter")}</th>
                             <th>Requests</th>
                             <th>Cost</th>
                             <th>Quota</th>
@@ -482,6 +502,7 @@ export function Dashboard({ refreshKey }: Props) {
                               <td className="rank">{i + 1}</td>
                               <td className="user-name">{u.user}</td>
                               <td>{u.org}</td>
+                              <td>{u.cost_center || "—"}</td>
                               <td>{u.requests.toLocaleString()}</td>
                               <td>${u.gross_amount.toFixed(2)}</td>
                               <td>{u.quota.toLocaleString()}</td>

@@ -129,6 +129,8 @@ const translations = {
     "dashboard.csvUploadSuccess": "Upload successful",
     "dashboard.csvNoDuplicate": "No new data (all records already exist)",
     "dashboard.quotaUsage": "Quota Usage",
+    "dashboard.costCenterBreakdown": "Cost Center Breakdown",
+    "dashboard.costCenter": "Cost Center",
 
     // Auth
     "auth.welcome": "Login to OctoFinance",
@@ -272,6 +274,8 @@ const translations = {
     "dashboard.csvUploadSuccess": "\u4e0a\u4f20\u6210\u529f",
     "dashboard.csvNoDuplicate": "\u65e0\u65b0\u6570\u636e\uff08\u6240\u6709\u8bb0\u5f55\u5df2\u5b58\u5728\uff09",
     "dashboard.quotaUsage": "\u914d\u989d\u4f7f\u7528",
+    "dashboard.costCenterBreakdown": "\u6210\u672c\u4e2d\u5fc3\u5206\u5e03",
+    "dashboard.costCenter": "\u6210\u672c\u4e2d\u5fc3",
 
     // Auth
     "auth.welcome": "\u767b\u5f55 OctoFinance",

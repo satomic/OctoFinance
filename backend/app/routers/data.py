@@ -460,7 +460,7 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
     user_map: dict[str, dict] = defaultdict(lambda: {
         "requests": 0, "gross_amount": 0.0, "net_amount": 0.0,
         "models": defaultdict(float), "days_active": set(), "org": "",
-        "quota": 0,
+        "quota": 0, "cost_center": "",
     })
     for r in filtered:
         user = r.get("username", "")
@@ -475,6 +475,7 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
         u["models"][model] += qty
         u["days_active"].add(r.get("date", ""))
         u["org"] = r.get("organization", "")
+        u["cost_center"] = r.get("cost_center_name", "") or ""
         try:
             u["quota"] = int(r.get("total_monthly_quota", 0))
         except (ValueError, TypeError):
@@ -486,6 +487,7 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
         users.append({
             "user": username,
             "org": info["org"],
+            "cost_center": info["cost_center"],
             "requests": round(info["requests"], 2),
             "gross_amount": round(info["gross_amount"], 4),
             "net_amount": round(info["net_amount"], 4),
@@ -539,6 +541,20 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
         for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])
     ]
 
+    # Cost center breakdown
+    cc_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        cc = r.get("cost_center_name", "") or "Unknown"
+        cm = cc_map[cc]
+        cm["requests"] += float(r.get("quantity", 0))
+        cm["amount"] += float(r.get("gross_amount", 0))
+        cm["users"].add(r.get("username", ""))
+
+    cost_center_breakdown = [
+        {"cost_center": cc, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
+        for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["requests"])
+    ]
+
     total_requests = sum(u["requests"] for u in users)
     total_cost = sum(u["gross_amount"] for u in users)
 
@@ -549,6 +565,7 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
         "daily_trend": daily_trend,
         "model_breakdown": model_breakdown,
         "org_breakdown": org_breakdown,
+        "cost_center_breakdown": cost_center_breakdown,
         "total_requests": round(total_requests, 2),
         "total_cost": round(total_cost, 4),
     }
