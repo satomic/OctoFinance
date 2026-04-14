@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSync, usePremiumCsvInfo } from "../hooks/useData";
+import { useSync, useCsvInfo } from "../hooks/useData";
 import { useTheme } from "../contexts/ThemeContext";
 import { useI18n } from "../contexts/I18nContext";
 import { PATSettingsModal } from "./PATSettingsModal";
@@ -20,7 +20,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
   const { lang, toggleLang, t } = useI18n();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { info: csvInfo, uploadCsv } = usePremiumCsvInfo();
+  const { info: csvInfo, uploadCsv } = useCsvInfo();
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvMessage, setCsvMessage] = useState("");
   const [health, setHealth] = useState<{
@@ -64,12 +64,18 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
       if (result.error) {
         setCsvMessage(result.error);
       } else if (result.status === "no_new_data") {
-        setCsvMessage(t("dashboard.csvNoDuplicate"));
+        const typeLabel = result.csv_type === "usage_report"
+          ? t("csvDash.csvType.usage_report")
+          : t("csvDash.csvType.premium_request");
+        setCsvMessage(`${typeLabel}: ${t("dashboard.csvNoDuplicate")}`);
       } else {
-        setCsvMessage(`${t("dashboard.csvUploadSuccess")}: ${result.new_rows}`);
+        const typeLabel = result.csv_type === "usage_report"
+          ? t("csvDash.csvType.usage_report")
+          : t("csvDash.csvType.premium_request");
+        const range = result.date_range ? ` (${result.date_range.start} ~ ${result.date_range.end})` : "";
+        setCsvMessage(`${typeLabel} ${t("dashboard.csvUploadSuccess")}: ${result.new_rows}${range}`);
       }
-      // Auto-clear message after 5 seconds
-      setTimeout(() => setCsvMessage(""), 5000);
+      setTimeout(() => setCsvMessage(""), 8000);
     } catch {
       setCsvMessage("Upload failed");
       setTimeout(() => setCsvMessage(""), 5000);
@@ -143,7 +149,16 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           >
             {csvUploading ? t("dashboard.csvUploading") : t("dashboard.uploadCsv")}
           </button>
-          {csvInfo?.has_data && <span className="csv-date-hint" title={`${csvInfo.earliest_date} ~ ${csvInfo.latest_date}`}>{csvInfo.latest_date}</span>}
+          {csvInfo?.premium_csv?.has_data && (
+            <span className="csv-date-hint" title={`${t("csvDash.csvType.premium_request")}: ${csvInfo.premium_csv.earliest_date} ~ ${csvInfo.premium_csv.latest_date}`}>
+              P:{csvInfo.premium_csv.latest_date}
+            </span>
+          )}
+          {csvInfo?.usage_report?.has_data && (
+            <span className="csv-date-hint" title={`${t("csvDash.csvType.usage_report")}: ${csvInfo.usage_report.earliest_date} ~ ${csvInfo.usage_report.latest_date}`}>
+              U:{csvInfo.usage_report.latest_date}
+            </span>
+          )}
           {csvMessage && <span className="csv-upload-msg">{csvMessage}</span>}
         </div>
         <button className="btn btn-small" onClick={handleSync} disabled={syncing}>

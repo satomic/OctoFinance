@@ -419,16 +419,345 @@ async def get_dashboard(orgs: str = Query(default="")):
 
 
 # ---------------------------------------------------------------------------
-# Premium Usage CSV helpers
+# CSV dashboard endpoint (dedicated, separate from main dashboard)
 # ---------------------------------------------------------------------------
 
-def _get_csv_dir() -> Path:
+@router.get("/data/csv-dashboard")
+async def get_csv_dashboard(
+    orgs: str = Query(default=""),
+    cost_centers: str = Query(default=""),
+    products: str = Query(default=""),
+    skus: str = Query(default=""),
+    date_from: str = Query(default=""),
+    date_to: str = Query(default=""),
+):
+    """Aggregated dashboard data derived entirely from uploaded CSVs."""
+    selected_orgs = [o.strip() for o in orgs.split(",") if o.strip()]
+    selected_ccs = [c.strip() for c in cost_centers.split(",") if c.strip()]
+    selected_products = [p.strip() for p in products.split(",") if p.strip()]
+    selected_skus = [s.strip() for s in skus.split(",") if s.strip()]
+
+    premium = _build_premium_csv_section(selected_orgs, selected_ccs, date_from, date_to)
+    usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to)
+
+    # Gather all filter options from raw data
+    all_premium = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    all_usage = _load_all_csv_records(CSV_TYPE_USAGE)
+    all_orgs: set[str] = set()
+    all_ccs: set[str] = set()
+    all_products: set[str] = set()
+    all_skus: set[str] = set()
+    for r in all_premium:
+        if r.get("organization"):
+            all_orgs.add(r["organization"])
+        if r.get("cost_center_name"):
+            all_ccs.add(r["cost_center_name"])
+    for r in all_usage:
+        if r.get("organization"):
+            all_orgs.add(r["organization"])
+        if r.get("cost_center_name"):
+            all_ccs.add(r["cost_center_name"])
+        if r.get("product"):
+            all_products.add(r["product"])
+        if r.get("sku"):
+            all_skus.add(r["sku"])
+
+    return {
+        "premium_csv": premium,
+        "usage_report": usage,
+        "filters": {
+            "orgs": sorted(all_orgs),
+            "cost_centers": sorted(all_ccs),
+            "products": sorted(all_products),
+            "skus": sorted(all_skus),
+        },
+    }
+
+
+def _apply_common_filters(records: list[dict], selected_orgs: list[str], selected_ccs: list[str],
+                           date_from: str, date_to: str) -> list[dict]:
+    result = records
+    if selected_orgs:
+        result = [r for r in result if r.get("organization", "") in selected_orgs]
+    if selected_ccs:
+        result = [r for r in result if (r.get("cost_center_name") or "") in selected_ccs]
+    if date_from:
+        result = [r for r in result if r.get("date", "") >= date_from]
+    if date_to:
+        result = [r for r in result if r.get("date", "") <= date_to]
+    return result
+
+
+def _build_premium_csv_section(selected_orgs: list[str], selected_ccs: list[str],
+                                date_from: str, date_to: str) -> dict:
+    """Build aggregated premium request CSV section for CSV dashboard."""
+    all_records = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    if not all_records:
+        return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
+                "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
+
+    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to)
+    if not filtered:
+        return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
+                "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
+
+    dates = [r.get("date", "") for r in filtered if r.get("date")]
+    date_range = {"start": min(dates) if dates else "", "end": max(dates) if dates else ""}
+
+    # Per-user aggregation
+    user_map: dict[str, dict] = defaultdict(lambda: {
+        "requests": 0, "gross_amount": 0.0, "net_amount": 0.0,
+        "models": defaultdict(float), "days_active": set(), "org": "",
+        "quota": 0, "cost_center": "",
+    })
+    for r in filtered:
+        user = r.get("username", "")
+        qty = float(r.get("quantity", 0))
+        gross = float(r.get("gross_amount", 0))
+        net = float(r.get("net_amount", 0))
+        model = r.get("model", "unknown")
+        u = user_map[user]
+        u["requests"] += qty
+        u["gross_amount"] += gross
+        u["net_amount"] += net
+        u["models"][model] += qty
+        u["days_active"].add(r.get("date", ""))
+        u["org"] = r.get("organization", "")
+        u["cost_center"] = r.get("cost_center_name", "") or ""
+        try:
+            u["quota"] = int(r.get("total_monthly_quota", 0))
+        except (ValueError, TypeError):
+            pass
+
+    users = []
+    for username, info in sorted(user_map.items(), key=lambda x: -x[1]["requests"]):
+        models = [{"model": m, "requests": q} for m, q in sorted(info["models"].items(), key=lambda x: -x[1])]
+        users.append({
+            "user": username, "org": info["org"], "cost_center": info["cost_center"],
+            "requests": round(info["requests"], 2), "gross_amount": round(info["gross_amount"], 4),
+            "net_amount": round(info["net_amount"], 4), "days_active": len(info["days_active"]),
+            "quota": info["quota"],
+            "usage_pct": round(info["requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
+            "models": models,
+        })
+
+    # Daily trend
+    day_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        dm = day_map[r.get("date", "")]
+        dm["requests"] += float(r.get("quantity", 0))
+        dm["amount"] += float(r.get("gross_amount", 0))
+        dm["users"].add(r.get("username", ""))
+    daily_trend = [{"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+                    "active_users": len(v["users"])} for d, v in sorted(day_map.items())]
+
+    # Model breakdown
+    model_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        mm = model_map[r.get("model", "unknown")]
+        mm["requests"] += float(r.get("quantity", 0))
+        mm["amount"] += float(r.get("gross_amount", 0))
+        mm["users"].add(r.get("username", ""))
+    model_breakdown = [{"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+                        "user_count": len(v["users"])} for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])]
+
+    # Org breakdown
+    org_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        om = org_map[r.get("organization", "")]
+        om["requests"] += float(r.get("quantity", 0))
+        om["amount"] += float(r.get("gross_amount", 0))
+        om["users"].add(r.get("username", ""))
+    org_breakdown = [{"org": o, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+                      "user_count": len(v["users"])} for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])]
+
+    # Cost center breakdown
+    cc_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
+    for r in filtered:
+        cc = r.get("cost_center_name", "") or "Unknown"
+        cm = cc_map[cc]
+        cm["requests"] += float(r.get("quantity", 0))
+        cm["amount"] += float(r.get("gross_amount", 0))
+        cm["users"].add(r.get("username", ""))
+    cost_center_breakdown = [{"cost_center": cc, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+                               "user_count": len(v["users"])} for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["requests"])]
+
+    total_requests = sum(u["requests"] for u in users)
+    total_cost = sum(u["gross_amount"] for u in users)
+
+    return {
+        "has_data": True,
+        "date_range": date_range,
+        "kpi": {
+            "total_requests": round(total_requests, 2),
+            "total_cost": round(total_cost, 4),
+            "unique_users": len(users),
+            "unique_orgs": len(org_breakdown),
+        },
+        "daily_trend": daily_trend,
+        "model_breakdown": model_breakdown,
+        "org_breakdown": org_breakdown,
+        "cost_center_breakdown": cost_center_breakdown,
+        "users": users,
+    }
+
+
+def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str],
+                                 selected_products: list[str], selected_skus: list[str],
+                                 date_from: str, date_to: str) -> dict:
+    """Build aggregated usage report CSV section for CSV dashboard."""
+    all_records = _load_all_csv_records(CSV_TYPE_USAGE)
+    if not all_records:
+        return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
+                "product_breakdown": [], "sku_breakdown": [], "org_breakdown": [],
+                "cost_center_breakdown": [], "users": []}
+
+    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to)
+    if selected_products:
+        filtered = [r for r in filtered if r.get("product", "") in selected_products]
+    if selected_skus:
+        filtered = [r for r in filtered if r.get("sku", "") in selected_skus]
+
+    if not filtered:
+        return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
+                "product_breakdown": [], "sku_breakdown": [], "org_breakdown": [],
+                "cost_center_breakdown": [], "users": []}
+
+    dates = [r.get("date", "") for r in filtered if r.get("date")]
+    date_range = {"start": min(dates) if dates else "", "end": max(dates) if dates else ""}
+
+    # Daily trend
+    day_map: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "net": 0.0, "users": set()})
+    for r in filtered:
+        dm = day_map[r.get("date", "")]
+        dm["gross"] += float(r.get("gross_amount", 0))
+        dm["net"] += float(r.get("net_amount", 0))
+        dm["users"].add(r.get("username", ""))
+    daily_trend = [{"day": d, "gross_amount": round(v["gross"], 4), "net_amount": round(v["net"], 4),
+                    "active_users": len(v["users"])} for d, v in sorted(day_map.items())]
+
+    # Product breakdown
+    prod_map: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "net": 0.0, "users": set(), "quantity": 0.0})
+    for r in filtered:
+        pm = prod_map[r.get("product", "unknown")]
+        pm["gross"] += float(r.get("gross_amount", 0))
+        pm["net"] += float(r.get("net_amount", 0))
+        pm["quantity"] += float(r.get("quantity", 0))
+        pm["users"].add(r.get("username", ""))
+    product_breakdown = [{"product": p, "gross_amount": round(v["gross"], 4), "net_amount": round(v["net"], 4),
+                           "quantity": round(v["quantity"], 4), "user_count": len(v["users"])}
+                         for p, v in sorted(prod_map.items(), key=lambda x: -x[1]["gross"])]
+
+    # SKU breakdown
+    sku_map: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "net": 0.0, "users": set(), "quantity": 0.0})
+    for r in filtered:
+        sm = sku_map[r.get("sku", "unknown")]
+        sm["gross"] += float(r.get("gross_amount", 0))
+        sm["net"] += float(r.get("net_amount", 0))
+        sm["quantity"] += float(r.get("quantity", 0))
+        sm["users"].add(r.get("username", ""))
+    sku_breakdown = [{"sku": s, "gross_amount": round(v["gross"], 4), "net_amount": round(v["net"], 4),
+                      "quantity": round(v["quantity"], 4), "user_count": len(v["users"])}
+                     for s, v in sorted(sku_map.items(), key=lambda x: -x[1]["gross"])]
+
+    # Org breakdown
+    org_map: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "net": 0.0, "users": set()})
+    for r in filtered:
+        om = org_map[r.get("organization", "")]
+        om["gross"] += float(r.get("gross_amount", 0))
+        om["net"] += float(r.get("net_amount", 0))
+        om["users"].add(r.get("username", ""))
+    org_breakdown = [{"org": o, "gross_amount": round(v["gross"], 4), "net_amount": round(v["net"], 4),
+                      "user_count": len(v["users"])} for o, v in sorted(org_map.items(), key=lambda x: -x[1]["gross"])]
+
+    # Cost center breakdown
+    cc_map: dict[str, dict] = defaultdict(lambda: {"gross": 0.0, "net": 0.0, "users": set()})
+    for r in filtered:
+        cc = r.get("cost_center_name", "") or "Unknown"
+        cm = cc_map[cc]
+        cm["gross"] += float(r.get("gross_amount", 0))
+        cm["net"] += float(r.get("net_amount", 0))
+        cm["users"].add(r.get("username", ""))
+    cost_center_breakdown = [{"cost_center": cc, "gross_amount": round(v["gross"], 4), "net_amount": round(v["net"], 4),
+                               "user_count": len(v["users"])} for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["gross"])]
+
+    # Per-user aggregation
+    user_map: dict[str, dict] = defaultdict(lambda: {
+        "gross": 0.0, "net": 0.0, "quantity": 0.0, "org": "", "cost_center": "",
+        "skus": defaultdict(float), "days_active": set(),
+    })
+    for r in filtered:
+        user = r.get("username", "")
+        um = user_map[user]
+        um["gross"] += float(r.get("gross_amount", 0))
+        um["net"] += float(r.get("net_amount", 0))
+        um["quantity"] += float(r.get("quantity", 0))
+        um["org"] = r.get("organization", "")
+        um["cost_center"] = r.get("cost_center_name", "") or ""
+        um["skus"][r.get("sku", "unknown")] += float(r.get("gross_amount", 0))
+        um["days_active"].add(r.get("date", ""))
+    users = []
+    for username, info in sorted(user_map.items(), key=lambda x: -x[1]["gross"]):
+        skus = [{"sku": s, "amount": round(a, 4)} for s, a in sorted(info["skus"].items(), key=lambda x: -x[1])]
+        users.append({
+            "user": username, "org": info["org"], "cost_center": info["cost_center"],
+            "gross_amount": round(info["gross"], 4), "net_amount": round(info["net"], 4),
+            "quantity": round(info["quantity"], 4), "days_active": len(info["days_active"]),
+            "skus": skus,
+        })
+
+    total_gross = sum(float(r.get("gross_amount", 0)) for r in filtered)
+    total_net = sum(float(r.get("net_amount", 0)) for r in filtered)
+    total_discount = sum(float(r.get("discount_amount", 0)) for r in filtered)
+
+    return {
+        "has_data": True,
+        "date_range": date_range,
+        "kpi": {
+            "total_gross": round(total_gross, 4),
+            "total_net": round(total_net, 4),
+            "total_discount": round(total_discount, 4),
+            "unique_users": len(users),
+            "unique_orgs": len(org_breakdown),
+        },
+        "daily_trend": daily_trend,
+        "product_breakdown": product_breakdown,
+        "sku_breakdown": sku_breakdown,
+        "org_breakdown": org_breakdown,
+        "cost_center_breakdown": cost_center_breakdown,
+        "users": users,
+    }
+
+
+# ---------------------------------------------------------------------------
+# CSV helpers
+# ---------------------------------------------------------------------------
+
+CSV_TYPE_PREMIUM = "premium_request"
+CSV_TYPE_USAGE = "usage_report"
+
+
+def _get_csv_dir(csv_type: str = CSV_TYPE_PREMIUM) -> Path:
+    if csv_type == CSV_TYPE_USAGE:
+        return data_collector.data_dir / "usage_report_csv"
     return data_collector.data_dir / "premium_usage_csv"
 
 
-def _load_all_csv_records() -> list[dict]:
-    """Load all CSV records from the premium_usage_csv directory."""
-    csv_dir = _get_csv_dir()
+def _detect_csv_type(fieldnames: list[str]) -> str | None:
+    """Detect whether a CSV is a premium_request or usage_report based on columns."""
+    cols = set(fieldnames)
+    if "model" in cols and "username" in cols and "organization" in cols:
+        return CSV_TYPE_PREMIUM
+    if "product" in cols and "sku" in cols and "unit_type" in cols:
+        return CSV_TYPE_USAGE
+    return None
+
+
+def _load_all_csv_records(csv_type: str = CSV_TYPE_PREMIUM) -> list[dict]:
+    """Load all CSV records from the given type's directory."""
+    csv_dir = _get_csv_dir(csv_type)
+    if not csv_dir.exists():
+        return []
     records: list[dict] = []
     for f in sorted(csv_dir.glob("*.csv")):
         with open(f, encoding="utf-8") as fh:
@@ -575,11 +904,12 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
 # CSV upload endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/data/upload-premium-csv")
-async def upload_premium_csv(file: UploadFile = File(...)):
-    """Upload a premium request usage CSV file (exported from GitHub UI).
+@router.post("/data/upload-csv")
+async def upload_csv(file: UploadFile = File(...)):
+    """Upload a CSV file – either a premium request CSV or a usage report CSV.
 
-    The CSV is validated, deduplicated against existing data, and saved.
+    The type is auto-detected from the column headers. The file is validated,
+    deduplicated against existing data, and saved.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         return {"error": "Only CSV files are accepted."}
@@ -587,50 +917,53 @@ async def upload_premium_csv(file: UploadFile = File(...)):
     content = await file.read()
     text = content.decode("utf-8-sig")  # handle BOM
 
-    # Validate CSV structure
     reader = csv.DictReader(io.StringIO(text))
-    required_cols = {"date", "username", "model", "quantity", "gross_amount", "organization"}
-    if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
-        return {"error": f"CSV must contain columns: {', '.join(sorted(required_cols))}"}
+    if not reader.fieldnames:
+        return {"error": "CSV file has no headers."}
+
+    csv_type = _detect_csv_type(list(reader.fieldnames))
+    if csv_type is None:
+        return {"error": "Unrecognised CSV format. Expected a premium request CSV (with 'model' column) "
+                         "or a usage report CSV (with 'product' and 'sku' columns)."}
 
     rows = list(reader)
     if not rows:
         return {"error": "CSV file is empty."}
 
-    # Determine date range in uploaded file
     dates = [r.get("date", "") for r in rows if r.get("date")]
     date_min = min(dates) if dates else "unknown"
     date_max = max(dates) if dates else "unknown"
 
-    # Load existing records to deduplicate
+    csv_dir = _get_csv_dir(csv_type)
+    csv_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build deduplication key per type
+    def _key(row: dict) -> str:
+        if csv_type == CSV_TYPE_PREMIUM:
+            return f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
+        return f"{row.get('date')}|{row.get('username')}|{row.get('sku')}|{row.get('organization')}"
+
     existing_keys: set[str] = set()
-    csv_dir = _get_csv_dir()
     for f in csv_dir.glob("*.csv"):
         with open(f, encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
-                key = f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
-                existing_keys.add(key)
+                existing_keys.add(_key(row))
 
-    # Filter out duplicates
-    new_rows = []
-    for row in rows:
-        key = f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
-        if key not in existing_keys:
-            new_rows.append(row)
+    new_rows = [row for row in rows if _key(row) not in existing_keys]
 
     if not new_rows:
         return {
             "status": "no_new_data",
-            "message": "All records already exist. No new data added.",
+            "csv_type": csv_type,
             "date_range": {"start": date_min, "end": date_max},
             "total_rows": len(rows),
             "new_rows": 0,
         }
 
-    # Save new rows to a timestamped CSV
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    out_path = csv_dir / f"premium_usage_{ts}.csv"
-    fieldnames = reader.fieldnames or list(rows[0].keys())
+    prefix = "premium_usage" if csv_type == CSV_TYPE_PREMIUM else "usage_report"
+    out_path = csv_dir / f"{prefix}_{ts}.csv"
+    fieldnames = list(reader.fieldnames)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
@@ -638,6 +971,7 @@ async def upload_premium_csv(file: UploadFile = File(...)):
 
     return {
         "status": "ok",
+        "csv_type": csv_type,
         "date_range": {"start": date_min, "end": date_max},
         "total_rows": len(rows),
         "new_rows": len(new_rows),
@@ -646,40 +980,52 @@ async def upload_premium_csv(file: UploadFile = File(...)):
     }
 
 
-@router.get("/data/premium-csv-info")
-async def get_premium_csv_info():
-    """Get info about uploaded premium usage CSV data."""
-    csv_dir = _get_csv_dir()
-    csv_files = sorted(csv_dir.glob("*.csv"))
+# Keep old endpoint as alias for backward-compatibility
+@router.post("/data/upload-premium-csv")
+async def upload_premium_csv(file: UploadFile = File(...)):
+    """Alias for /data/upload-csv (backward compatibility)."""
+    return await upload_csv(file)
 
-    if not csv_files:
-        return {"has_data": False, "latest_date": None, "file_count": 0, "total_records": 0}
 
-    total_records = 0
-    all_dates: list[str] = []
-    all_orgs: set[str] = set()
-    all_users: set[str] = set()
-
-    for f in csv_files:
-        with open(f, encoding="utf-8") as fh:
-            for row in csv.DictReader(fh):
-                total_records += 1
-                d = row.get("date", "")
-                if d:
-                    all_dates.append(d)
-                org = row.get("organization", "")
-                if org:
-                    all_orgs.add(org)
-                user = row.get("username", "")
-                if user:
-                    all_users.add(user)
+@router.get("/data/csv-info")
+async def get_csv_info():
+    """Get info about all uploaded CSV data (both premium request and usage report)."""
+    def _scan(csv_type: str) -> dict:
+        csv_dir = _get_csv_dir(csv_type)
+        csv_files = sorted(csv_dir.glob("*.csv")) if csv_dir.exists() else []
+        total_records = 0
+        all_dates: list[str] = []
+        all_orgs: set[str] = set()
+        all_users: set[str] = set()
+        for f in csv_files:
+            with open(f, encoding="utf-8") as fh:
+                for row in csv.DictReader(fh):
+                    total_records += 1
+                    d = row.get("date", "")
+                    if d:
+                        all_dates.append(d)
+                    if row.get("organization"):
+                        all_orgs.add(row["organization"])
+                    if row.get("username"):
+                        all_users.add(row["username"])
+        return {
+            "has_data": total_records > 0,
+            "latest_date": max(all_dates) if all_dates else None,
+            "earliest_date": min(all_dates) if all_dates else None,
+            "file_count": len(csv_files),
+            "total_records": total_records,
+            "orgs": sorted(all_orgs),
+            "user_count": len(all_users),
+        }
 
     return {
-        "has_data": total_records > 0,
-        "latest_date": max(all_dates) if all_dates else None,
-        "earliest_date": min(all_dates) if all_dates else None,
-        "file_count": len(csv_files),
-        "total_records": total_records,
-        "orgs": sorted(all_orgs),
-        "user_count": len(all_users),
+        "premium_csv": _scan(CSV_TYPE_PREMIUM),
+        "usage_report": _scan(CSV_TYPE_USAGE),
     }
+
+
+@router.get("/data/premium-csv-info")
+async def get_premium_csv_info():
+    """Get info about uploaded premium usage CSV data (legacy endpoint)."""
+    info = await get_csv_info()
+    return info["premium_csv"]

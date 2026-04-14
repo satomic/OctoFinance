@@ -158,7 +158,7 @@ export interface UserPremiumUsage {
   total_cost: number;
 }
 
-export interface PremiumCsvInfo {
+export interface CsvTypeInfo {
   has_data: boolean;
   latest_date: string | null;
   earliest_date: string | null;
@@ -166,4 +166,58 @@ export interface PremiumCsvInfo {
   total_records: number;
   orgs: string[];
   user_count: number;
+}
+
+export interface CsvInfo {
+  premium_csv: CsvTypeInfo;
+  usage_report: CsvTypeInfo;
+}
+
+// Keep alias for backward compatibility
+export type PremiumCsvInfo = CsvTypeInfo;
+
+// CSV Dashboard types
+export interface PremiumCsvSection {
+  has_data: boolean;
+  date_range: { start: string; end: string };
+  kpi: { total_requests: number; total_cost: number; unique_users: number; unique_orgs: number };
+  daily_trend: { day: string; requests: number; amount: number; active_users: number }[];
+  model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
+  org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
+  cost_center_breakdown: { cost_center: string; requests: number; amount: number; user_count: number }[];
+  users: UserPremiumRecord[];
+}
+
+export interface UsageReportUser {
+  user: string;
+  org: string;
+  cost_center: string;
+  gross_amount: number;
+  net_amount: number;
+  quantity: number;
+  days_active: number;
+  skus: { sku: string; amount: number }[];
+}
+
+export interface UsageReportSection {
+  has_data: boolean;
+  date_range: { start: string; end: string };
+  kpi: { total_gross: number; total_net: number; total_discount: number; unique_users: number; unique_orgs: number };
+  daily_trend: { day: string; gross_amount: number; net_amount: number; active_users: number }[];
+  product_breakdown: { product: string; gross_amount: number; net_amount: number; quantity: number; user_count: number }[];
+  sku_breakdown: { sku: string; gross_amount: number; net_amount: number; quantity: number; user_count: number }[];
+  org_breakdown: { org: string; gross_amount: number; net_amount: number; user_count: number }[];
+  cost_center_breakdown: { cost_center: string; gross_amount: number; net_amount: number; user_count: number }[];
+  users: UsageReportUser[];
+}
+
+export interface CsvDashboardData {
+  premium_csv: PremiumCsvSection;
+  usage_report: UsageReportSection;
+  filters: {
+    orgs: string[];
+    cost_centers: string[];
+    products: string[];
+    skus: string[];
+  };
 }

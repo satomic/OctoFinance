@@ -6,7 +6,7 @@ import { useChat } from "./hooks/useChat";
 import { useSessions } from "./hooks/useSessions";
 import { useSyncStream } from "./hooks/useSyncStream";
 import { ChatInterface } from "./components/ChatInterface";
-import { Dashboard } from "./components/Dashboard";
+import { UnifiedDashboard } from "./components/UnifiedDashboard";
 import { ConsolePanel } from "./components/ConsolePanel";
 import { SessionSelector } from "./components/SessionSelector";
 import { OverviewPanel } from "./components/OverviewPanel";
@@ -288,7 +288,7 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
               clearMessages={chat.clearMessages}
             />
           ) : (
-            <Dashboard refreshKey={refreshKey} />
+            <UnifiedDashboard refreshKey={refreshKey} />
           )}
           {consoleOpen && (
             <ConsolePanel

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, PremiumCsvInfo } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -126,12 +126,12 @@ export function useDashboard(selectedOrgs: string[]) {
   return { data, loading, refetch: fetchDashboard };
 }
 
-export function usePremiumCsvInfo() {
-  const [info, setInfo] = useState<PremiumCsvInfo | null>(null);
+export function useCsvInfo() {
+  const [info, setInfo] = useState<CsvInfo | null>(null);
 
   const fetchInfo = useCallback(async () => {
     try {
-      const res = await fetch("/api/data/premium-csv-info");
+      const res = await fetch("/api/data/csv-info");
       const data = await res.json();
       setInfo(data);
     } catch {
@@ -146,7 +146,7 @@ export function usePremiumCsvInfo() {
   const uploadCsv = useCallback(async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/data/upload-premium-csv", {
+    const res = await fetch("/api/data/upload-csv", {
       method: "POST",
       body: formData,
     });
@@ -156,4 +156,49 @@ export function usePremiumCsvInfo() {
   }, [fetchInfo]);
 
   return { info, refetch: fetchInfo, uploadCsv };
+}
+
+// Keep old hook for backward compat
+export function usePremiumCsvInfo() {
+  const { info, refetch, uploadCsv } = useCsvInfo();
+  return { info: info?.premium_csv ?? null, refetch, uploadCsv };
+}
+
+export function useCsvDashboard(params: {
+  orgs: string[];
+  costCenters: string[];
+  products: string[];
+  skus: string[];
+  dateFrom: string;
+  dateTo: string;
+}) {
+  const [data, setData] = useState<CsvDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qp = new URLSearchParams();
+      if (params.orgs.length) qp.set("orgs", params.orgs.join(","));
+      if (params.costCenters.length) qp.set("cost_centers", params.costCenters.join(","));
+      if (params.products.length) qp.set("products", params.products.join(","));
+      if (params.skus.length) qp.set("skus", params.skus.join(","));
+      if (params.dateFrom) qp.set("date_from", params.dateFrom);
+      if (params.dateTo) qp.set("date_to", params.dateTo);
+      const res = await fetch(`/api/data/csv-dashboard?${qp}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.orgs.join(","), params.costCenters.join(","), params.products.join(","), // eslint-disable-line react-hooks/exhaustive-deps
+      params.skus.join(","), params.dateFrom, params.dateTo]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, refetch: fetchData };
 }
