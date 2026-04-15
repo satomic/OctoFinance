@@ -134,7 +134,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           {t("console.title")}
         </button>
         <button className="btn btn-small btn-toggle" onClick={toggleLang} title="Switch language">
-          {lang === "en" ? "\u4e2d\u6587" : "EN"}
+          {lang === "en" ? "🇺🇸 EN" : lang === "zh" ? "🇨🇳 中文" : "🇻🇳 VI"}
         </button>
         <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
           {theme === "dark" ? "Light" : "Dark"}

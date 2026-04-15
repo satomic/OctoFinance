@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 
-type Lang = "en" | "zh";
+type Lang = "en" | "zh" | "vi";
 
 const translations = {
   en: {
@@ -81,7 +81,7 @@ const translations = {
     "settings.patDelete": "Delete",
     "settings.patDeleteConfirm": "Remove this PAT?",
     "settings.noPats": "No PATs configured. Add one to get started.",
-    "settings.patEnterprise": "Enterprise Slug",
+    "settings.patEnterprise": "Ent Slug",
     "settings.patEnterpriseHint": "Optional. Required for Cost Center management. Find it in your enterprise URL: github.com/enterprises/YOUR-SLUG",
     "settings.patHint": "Adding a PAT will auto-discover orgs and sync data.",
     "settings.patError": "Error",
@@ -296,7 +296,7 @@ const translations = {
     "settings.patDelete": "\u5220\u9664",
     "settings.patDeleteConfirm": "\u786e\u8ba4\u79fb\u9664\u6b64\u4ee4\u724c\uff1f",
     "settings.noPats": "\u672a\u914d\u7f6e\u4ee4\u724c\u3002\u8bf7\u6dfb\u52a0\u4e00\u4e2a\u4ee5\u5f00\u59cb\u4f7f\u7528\u3002",
-    "settings.patEnterprise": "Enterprise Slug",
+    "settings.patEnterprise": "Ent Slug",
     "settings.patEnterpriseHint": "\u53ef\u9009\u3002Cost Center \u7ba1\u7406\u6240\u9700\u3002\u5728\u4f01\u4e1a URL \u4e2d\u67e5\u627e\uff1a github.com/enterprises/YOUR-SLUG",
     "settings.patHint": "\u6dfb\u52a0\u4ee4\u724c\u540e\u5c06\u81ea\u52a8\u53d1\u73b0\u7ec4\u7ec7\u5e76\u540c\u6b65\u6570\u636e\u3002",
     "settings.patError": "\u9519\u8bef",
@@ -433,6 +433,221 @@ const translations = {
     "loading": "\u52a0\u8f7d\u4e2d...",
     "loading.actions": "\u52a0\u8f7d\u64cd\u4f5c\u4e2d...",
   },
+  vi: {
+    // StatusBar
+    "status.notConnected": "Chưa kết nối",
+    "status.orgs": "tổ chức",
+    "status.aiReady": "AI Sẵn sàng",
+    "status.aiStarting": "AI đang khởi động...",
+    "status.syncData": "Đồng bộ dữ liệu",
+    "status.syncing": "Đang đồng bộ...",
+
+    // Chat
+    "chat.title": "OctoFinance AI FinOps",
+    "chat.subtitle": "Hỏi bất cứ điều gì về việc sử dụng, chi phí và tối ưu hóa GitHub Copilot của bạn.",
+    "chat.placeholder": "Hỏi về việc sử dụng Copilot, chi phí, người dùng không hoạt động...",
+    "chat.send": "Gửi",
+    "chat.stop": "Dừng",
+    "chat.clear": "Xóa",
+    "chat.you": "Bạn",
+    "chat.ai": "OctoFinance AI",
+
+    // Quick Prompts
+    "qp.overview": "Tổng quan",
+    "qp.overviewPrompt": "Cho tôi tổng quan về việc sử dụng Copilot và chi phí của tất cả các tổ chức.",
+    "qp.inactive": "Người dùng không hoạt động",
+    "qp.inactivePrompt": "Tìm tất cả người dùng chưa sử dụng Copilot trong 30 ngày qua. Hiển thị tác động chi phí.",
+    "qp.costOpt": "Tối ưu chi phí",
+    "qp.costOptPrompt": "Phân tích chi tiêu Copilot và đề xuất cách giảm lãng phí.",
+    "qp.roi": "Phân tích ROI",
+    "qp.roiPrompt": "Tính toán ROI của khoản đầu tư Copilot. Chúng ta có nhận được giá trị không?",
+
+    // Sidebar
+    "sidebar.overview": "Tổng quan",
+    "sidebar.totalSeats": "Tổng ghế",
+    "sidebar.active": "Hoạt động",
+    "sidebar.inactive": "Không hoạt động",
+    "sidebar.utilization": "Tỷ lệ sử dụng",
+    "sidebar.monthlyCost": "Chi phí tháng",
+    "sidebar.monthlyWaste": "Lãng phí tháng",
+    "sidebar.organizations": "Tổ chức",
+    "sidebar.noOrgs": "Chưa tìm thấy tổ chức",
+    "sidebar.noCopilot": "Không có Copilot",
+
+    // Sort
+    "sort.name": "Tên",
+    "sort.seats": "Tổng ghế",
+    "sort.active": "Ghế hoạt động",
+    "sort.inactive": "Không hoạt động",
+    "sort.waste": "Lãng phí",
+
+    // Actions
+    "actions.title": "Hành động chờ xử lý",
+    "actions.empty": "Chưa có đề xuất. Hãy để AI phân tích mức sử dụng Copilot để nhận gợi ý tối ưu.",
+    "actions.approve": "Phê duyệt & Thực thi",
+    "actions.reject": "Từ chối",
+    "actions.users": "Người dùng",
+    "actions.savings": "Tiết kiệm ước tính",
+
+    // Console
+    "console.title": "Bảng điều khiển",
+    "console.clear": "Xóa",
+    "console.close": "Đóng",
+    "console.empty": "Chưa có nhật ký. Gửi tin nhắn để xem chi tiết xử lý AI.",
+
+    // Sessions
+    "sessions.title": "Phiên",
+    "sessions.new": "Phiên mới",
+    "sessions.delete": "Xóa",
+    "sessions.empty": "Chưa có phiên",
+
+    // Settings
+    "settings.title": "Cài đặt",
+    "settings.pats": "Token truy cập cá nhân GitHub",
+    "settings.addPat": "Thêm PAT",
+    "settings.patLabel": "Nhãn",
+    "settings.patToken": "Token",
+    "settings.patAdding": "Đang thêm...",
+    "settings.patDelete": "Xóa",
+    "settings.patDeleteConfirm": "Xóa PAT này?",
+    "settings.noPats": "Chưa cấu hình PAT. Thêm một PAT để bắt đầu.",
+    "settings.patEnterprise": "Enterprise Slug",
+    "settings.patEnterpriseHint": "Tùy chọn. Cần thiết để quản lý Cost Center. Tìm trong URL doanh nghiệp: github.com/enterprises/YOUR-SLUG",
+    "settings.patHint": "Thêm PAT sẽ tự động khám phá tổ chức và đồng bộ dữ liệu.",
+    "settings.patError": "Lỗi",
+    "settings.syncSettings": "Cài đặt đồng bộ",
+    "settings.autoSync": "Tự động đồng bộ khi khởi động",
+    "settings.syncCron": "Đồng bộ theo lịch",
+    "settings.cronHint": "Cú pháp cron: */30 * * * * (mỗi 30 phút), 0 */6 * * * (mỗi 6 giờ), 0 0 * * * (hàng ngày). Để trống để tắt.",
+
+    // Navigation
+    "nav.chat": "Trò chuyện",
+    "nav.dashboard": "Bảng điều khiển",
+    "nav.dashMetrics": "Chỉ số sử dụng",
+
+    // Cost Center Dashboard
+    "ccDash.tab": "Trung tâm chi phí",
+    "ccDash.title": "Bảng điều khiển trung tâm chi phí",
+    "ccDash.allEnterprises": "Tất cả doanh nghiệp",
+    "ccDash.allCostCenters": "Tất cả trung tâm chi phí",
+    "ccDash.stateActive": "Hoạt động",
+    "ccDash.stateArchived": "Đã lưu trữ",
+    "ccDash.stateAll": "Tất cả trạng thái",
+    "ccDash.search": "Tìm kiếm người dùng...",
+    "ccDash.noData": "Không có dữ liệu trung tâm chi phí. Chạy Đồng bộ dữ liệu để lấy dữ liệu.",
+    "ccDash.totalCostCenters": "Trung tâm chi phí",
+    "ccDash.totalMembers": "Thành viên duy nhất",
+    "ccDash.sectionCostCenters": "Trung tâm chi phí & Thành viên",
+    "ccDash.sectionUserMap": "Ánh xạ người dùng → Trung tâm chi phí",
+    "ccDash.colCostCenter": "Trung tâm chi phí",
+    "ccDash.colMembers": "Thành viên",
+    "ccDash.colResources": "Tài nguyên",
+    "ccDash.colUser": "Người dùng",
+    "ccDash.colSource": "Nguồn",
+    "ccDash.colCostCenters": "Trung tâm chi phí",
+    "ccDash.expandMembers": "Xem thành viên",
+    "ccDash.colState": "Trạng thái",
+
+    // Dashboard
+    "dashboard.title": "Bảng điều khiển sử dụng Copilot",
+    "dashboard.filters": "Bộ lọc",
+    "dashboard.allOrgs": "Tất cả tổ chức",
+    "dashboard.dailyTrend": "Xu hướng hoạt động hàng ngày",
+    "dashboard.featureUsage": "Sử dụng tính năng",
+    "dashboard.modelUsage": "Sử dụng mô hình",
+    "dashboard.ideUsage": "Phân bố IDE",
+    "dashboard.topUsers": "Người dùng hoạt động nhất",
+    "dashboard.noData": "Không có dữ liệu. Vui lòng đồng bộ dữ liệu trước.",
+    "dashboard.noSelection": "Chưa chọn tổ chức",
+    "dashboard.totalChats": "Tổng chat",
+    "dashboard.prSummaries": "Tóm tắt PR",
+    "dashboard.activeUserTrends": "Xu hướng người dùng hoạt động",
+    "dashboard.codeProductivity": "Năng suất mã",
+    "dashboard.locTrend": "Xu hướng LOC",
+    "dashboard.acceptRate": "Tỷ lệ chấp nhận",
+    "dashboard.langDist": "Phân bố ngôn ngữ",
+    "dashboard.langCodeGen": "Tạo mã theo ngôn ngữ",
+    "dashboard.codeCompletions": "Hoàn thiện mã",
+    "dashboard.modelPremium": "Mô hình & Yêu cầu cao cấp",
+    "dashboard.premiumDetail": "Chi tiết yêu cầu cao cấp",
+    "dashboard.ideChart": "Tương tác IDE",
+    "dashboard.ideDetail": "Chi tiết IDE",
+    "dashboard.seatMgmt": "Quản lý ghế",
+    "dashboard.userPremium": "Yêu cầu cao cấp theo người dùng",
+    "dashboard.userPremiumTrend": "Yêu cầu cao cấp hàng ngày",
+    "dashboard.userPremiumModel": "Phân tích mô hình",
+    "dashboard.userPremiumTable": "Chi tiết người dùng",
+    "dashboard.uploadCsv": "Tải lên CSV",
+    "dashboard.uploadCsvHint": "Tải lên CSV sử dụng yêu cầu cao cấp được xuất từ GitHub",
+    "dashboard.csvLatestDate": "Dữ liệu đến",
+    "dashboard.csvNoData": "Chưa tải lên dữ liệu CSV",
+    "dashboard.csvUploading": "Đang tải lên...",
+    "dashboard.csvUploadSuccess": "Tải lên thành công",
+    "dashboard.csvNoDuplicate": "Không có dữ liệu mới (tất cả bản ghi đã tồn tại)",
+    "dashboard.quotaUsage": "Sử dụng quota",
+    "dashboard.costCenterBreakdown": "Phân tích trung tâm chi phí",
+    "dashboard.costCenter": "Trung tâm chi phí",
+
+    // CSV Dashboard
+    "csvDash.title": "Bảng điều khiển báo cáo CSV",
+    "csvDash.tabs.premium": "Yêu cầu cao cấp",
+    "csvDash.tabs.usage": "Báo cáo sử dụng",
+    "csvDash.filters": "Bộ lọc",
+    "csvDash.allOrgs": "Tất cả tổ chức",
+    "csvDash.allCostCenters": "Tất cả trung tâm chi phí",
+    "csvDash.allProducts": "Tất cả sản phẩm",
+    "csvDash.allSkus": "Tất cả SKU",
+    "csvDash.noData": "Không có dữ liệu CSV. Tải lên tệp CSV để bắt đầu.",
+    "csvDash.noDataType": "Chưa có dữ liệu cho loại CSV này.",
+    "csvDash.dateFrom": "Từ",
+    "csvDash.dateTo": "Đến",
+    "csvDash.totalRequests": "Tổng yêu cầu",
+    "csvDash.totalCost": "Tổng chi phí",
+    "csvDash.uniqueUsers": "Người dùng duy nhất",
+    "csvDash.uniqueOrgs": "Tổ chức duy nhất",
+    "csvDash.totalGross": "Tổng gộp",
+    "csvDash.totalNet": "Tổng ròng",
+    "csvDash.totalDiscount": "Tổng chiết khấu",
+    "csvDash.dateRange": "Khoảng ngày",
+    "csvDash.dailyTrend": "Xu hướng hàng ngày",
+    "csvDash.modelBreakdown": "Phân tích mô hình",
+    "csvDash.productBreakdown": "Phân tích sản phẩm",
+    "csvDash.skuBreakdown": "Phân tích SKU",
+    "csvDash.orgBreakdown": "Phân tích tổ chức",
+    "csvDash.userTable": "Chi tiết người dùng",
+    "csvDash.user": "Người dùng",
+    "csvDash.org": "Tổ chức",
+    "csvDash.costCenter": "Trung tâm chi phí",
+    "csvDash.requests": "Yêu cầu",
+    "csvDash.cost": "Chi phí",
+    "csvDash.quota": "Quota",
+    "csvDash.quotaUsage": "Tỷ lệ sử dụng quota",
+    "csvDash.daysActive": "Ngày hoạt động",
+    "csvDash.models": "Mô hình hàng đầu",
+    "csvDash.skus": "SKU",
+    "csvDash.grossAmount": "Tổng gộp",
+    "csvDash.netAmount": "Tổng ròng",
+    "csvDash.quantity": "Số lượng",
+    "csvDash.csvType.premium_request": "CSV yêu cầu cao cấp",
+    "csvDash.csvType.usage_report": "CSV báo cáo sử dụng",
+    "csvDash.uploadedInfo": "Đã tải lên",
+
+    // Auth
+    "auth.welcome": "Đăng nhập OctoFinance",
+    "auth.createAccount": "Tạo tài khoản để bắt đầu",
+    "auth.username": "Tên đăng nhập",
+    "auth.password": "Mật khẩu",
+    "auth.confirmPassword": "Xác nhận mật khẩu",
+    "auth.passwordMismatch": "Mật khẩu không khớp",
+    "auth.setup": "Tạo tài khoản",
+    "auth.loginBtn": "Đăng nhập",
+    "auth.logout": "Đăng xuất",
+    "auth.error": "Tên đăng nhập và mật khẩu không được để trống",
+
+    // Loading
+    "loading": "Đang tải...",
+    "loading.actions": "Đang tải hành động...",
+  },
 } as const;
 
 type TranslationKey = keyof typeof translations.en;
@@ -452,12 +667,12 @@ const I18nContext = createContext<I18nContextValue>({
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLang] = useState<Lang>(() => {
     const saved = localStorage.getItem("octofinance-lang");
-    return (saved === "en" || saved === "zh") ? saved : "en";
+    return (saved === "en" || saved === "zh" || saved === "vi") ? saved : "en";
   });
 
   const toggleLang = useCallback(() => {
     setLang((l) => {
-      const next = l === "en" ? "zh" : "en";
+      const next = l === "en" ? "zh" : l === "zh" ? "vi" : "en";
       localStorage.setItem("octofinance-lang", next);
       return next;
     });

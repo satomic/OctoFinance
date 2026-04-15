@@ -121,7 +121,7 @@ export function LoginPage({ setupRequired, onLogin }: Props) {
 
         <div className="login-footer">
           <button className="btn btn-small btn-toggle" onClick={toggleLang}>
-            {lang === "en" ? "\u4e2d\u6587" : "EN"}
+            {lang === "en" ? "🇺🇸 EN" : lang === "zh" ? "🇨🇳 中文" : "🇻🇳 VI"}
           </button>
         </div>
       </div>
