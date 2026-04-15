@@ -93,7 +93,7 @@ const translations = {
     // Navigation
     "nav.chat": "Chat",
     "nav.dashboard": "Dashboard",
-    "nav.dashApi": "API",
+    "nav.dashMetrics": "Usage Metrics",
 
     // Cost Center Dashboard
     "ccDash.tab": "Cost Centers",
@@ -308,7 +308,7 @@ const translations = {
     // Navigation
     "nav.chat": "\u5bf9\u8bdd",
     "nav.dashboard": "\u6570\u636e\u9762\u677f",
-    "nav.dashApi": "API",
+    "nav.dashMetrics": "Usage Metrics",
 
     // Cost Center Dashboard
     "ccDash.tab": "\u6210\u672c\u4e2d\u5fc3",

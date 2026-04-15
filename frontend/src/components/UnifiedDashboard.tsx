@@ -12,9 +12,9 @@ interface Props {
 export function UnifiedDashboard({ refreshKey }: Props) {
   const { t } = useI18n();
   const ui = useUIState();
-  const tab = ui.dashboardTab ?? "api";
+  const tab = ui.dashboardTab ?? "metrics";
   const setTab = useCallback(
-    (v: "api" | "premium" | "usage" | "costcenter") => ui.patch({ dashboardTab: v }),
+    (v: "metrics" | "premium" | "usage" | "costcenter") => ui.patch({ dashboardTab: v }),
     [ui.patch],
   );
 
@@ -23,10 +23,10 @@ export function UnifiedDashboard({ refreshKey }: Props) {
       <div className="dashboard-tab-bar">
         <div className="view-toggle">
           <button
-            className={`btn btn-small btn-toggle ${tab === "api" ? "btn-toggle-active" : ""}`}
-            onClick={() => setTab("api")}
+            className={`btn btn-small btn-toggle ${tab === "metrics" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("metrics")}
           >
-            {t("nav.dashApi")}
+            {t("nav.dashMetrics")}
           </button>
           <button
             className={`btn btn-small btn-toggle ${tab === "premium" ? "btn-toggle-active" : ""}`}
@@ -49,12 +49,12 @@ export function UnifiedDashboard({ refreshKey }: Props) {
         </div>
       </div>
 
-      {tab === "api" ? (
+      {tab === "metrics" ? (
         <Dashboard refreshKey={refreshKey} />
       ) : tab === "costcenter" ? (
         <CostCenterDashboard refreshKey={refreshKey} />
       ) : (
-        <CsvDashboard refreshKey={refreshKey} tab={tab} />
+        <CsvDashboard refreshKey={refreshKey} tab={tab as "premium" | "usage"} />
       )}
     </div>
   );
