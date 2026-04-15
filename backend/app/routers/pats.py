@@ -16,6 +16,7 @@ router = APIRouter(tags=["pats"])
 class AddPATRequest(BaseModel):
     label: str
     token: str
+    enterprise_slugs: list[str] = []
 
 
 class UpdatePATRequest(BaseModel):
@@ -42,9 +43,12 @@ async def add_pat(request: AddPATRequest):
     if not token:
         raise HTTPException(status_code=400, detail="Token is required")
 
+    # Normalize enterprise slugs (strip whitespace, remove empties)
+    enterprise_slugs = [s.strip() for s in request.enterprise_slugs if s.strip()]
+
     # Add to persistent storage
     try:
-        pat = pat_manager.add(label, token)
+        pat = pat_manager.add(label, token, enterprise_slugs=enterprise_slugs)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

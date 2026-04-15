@@ -1029,3 +1029,104 @@ async def get_premium_csv_info():
     """Get info about uploaded premium usage CSV data (legacy endpoint)."""
     info = await get_csv_info()
     return info["premium_csv"]
+
+
+@router.get("/data/cost-center-dashboard")
+async def get_cost_center_dashboard(
+    enterprise: str = Query(default=""),
+    cost_centers: str = Query(default=""),
+    state: str = Query(default="active"),
+    search: str = Query(default=""),
+):
+    """Return cost center dashboard data from synced JSON files.
+
+    Supports filtering by enterprise slug, cost center names (comma-separated),
+    state ('active'|'archived'|'all'), and user login search.
+    """
+    # Collect available enterprises from saved data
+    enterprise_list = data_collector.load_latest("enterprise", "all") or []
+    if not isinstance(enterprise_list, list):
+        enterprise_list = []
+
+    if not enterprise_list:
+        return {
+            "enterprises": [],
+            "selected_enterprise": None,
+            "cost_centers": [],
+            "total_cost_centers": 0,
+            "total_unique_members": 0,
+            "user_map": [],
+            "no_data": True,
+        }
+
+    # Choose which enterprise to show
+    available_slugs = [e["slug"] for e in enterprise_list]
+    selected_slug = enterprise if enterprise in available_slugs else available_slugs[0]
+
+    cc_data = data_collector.load_latest("cost_centers", selected_slug)
+    if not cc_data:
+        return {
+            "enterprises": enterprise_list,
+            "selected_enterprise": selected_slug,
+            "cost_centers": [],
+            "total_cost_centers": 0,
+            "total_unique_members": 0,
+            "user_map": [],
+            "no_data": True,
+        }
+
+    all_ccs: list[dict] = cc_data.get("cost_centers", [])
+
+    # Apply state filter
+    if state != "all":
+        all_ccs = [cc for cc in all_ccs if cc.get("state", "active") == state]
+
+    # Apply cost center name filter
+    cc_filter = [n.strip() for n in cost_centers.split(",") if n.strip()] if cost_centers.strip() else []
+    if cc_filter:
+        all_ccs = [cc for cc in all_ccs if cc.get("name") in cc_filter]
+
+    # Apply member search filter
+    search_lower = search.strip().lower()
+    if search_lower:
+        filtered = []
+        for cc in all_ccs:
+            matched_members = [
+                m for m in cc.get("members", [])
+                if search_lower in m.get("login", "").lower()
+            ]
+            if matched_members:
+                filtered.append({**cc, "members": matched_members, "member_count": len(matched_members)})
+        all_ccs = filtered
+
+    # Build user → cost_centers reverse map
+    user_cc_map: dict[str, dict] = {}
+    for cc in all_ccs:
+        for member in cc.get("members", []):
+            login = member["login"]
+            if login not in user_cc_map:
+                user_cc_map[login] = {
+                    "login": login,
+                    "avatar_url": member.get("avatar_url", ""),
+                    "html_url": member.get("html_url", ""),
+                    "cost_centers": [],
+                }
+            user_cc_map[login]["cost_centers"].append({
+                "name": cc["name"],
+                "id": cc.get("id", ""),
+                "source_type": member.get("source_type", ""),
+                "source_name": member.get("source_name", ""),
+            })
+
+    user_map = sorted(user_cc_map.values(), key=lambda u: u["login"].lower())
+
+    return {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug,
+        "enterprise_name": cc_data.get("enterprise_name", selected_slug),
+        "cost_centers": all_ccs,
+        "total_cost_centers": len(all_ccs),
+        "total_unique_members": len(user_map),
+        "user_map": user_map,
+        "no_data": False,
+    }

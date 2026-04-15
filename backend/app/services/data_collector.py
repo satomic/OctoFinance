@@ -203,8 +203,137 @@ class DataCollector:
 
         return summary
 
+    async def _expand_cost_center_members(
+        self, cost_center: dict, api, log_fn: LogFn = None
+    ) -> list[dict]:
+        """Expand cost center resources into a flat member list.
+
+        - Resource type "User"  → added directly.
+        - Resource type "Org"   → all org members fetched and added.
+        - Resource type "Team"  → expects "name" as "org/team-slug"; members fetched.
+        """
+        members: list[dict] = []
+        seen_logins: set[str] = set()
+
+        def _add_member(raw: dict, source_type: str, source_name: str):
+            login = raw.get("login", "")
+            if not login or login in seen_logins:
+                return
+            seen_logins.add(login)
+            members.append({
+                "login": login,
+                "avatar_url": raw.get("avatar_url", ""),
+                "html_url": raw.get("html_url", f"https://github.com/{login}"),
+                "source_type": source_type,
+                "source_name": source_name,
+            })
+
+        for resource in cost_center.get("resources", []):
+            rtype = resource.get("type", "")
+            rname = resource.get("name", "")
+
+            if rtype == "User":
+                _add_member({"login": rname}, "User", rname)
+
+            elif rtype == "Org":
+                try:
+                    org_members = await api.get_org_members(rname)
+                    for m in org_members:
+                        _add_member(m, "Org", rname)
+                    if log_fn:
+                        log_fn("info", f"    Org '{rname}': {len(org_members)} members")
+                except Exception as e:
+                    if log_fn:
+                        log_fn("error", f"    Org '{rname}' members error: {e}")
+
+            elif rtype == "Team":
+                # "name" may be "org/team-slug" or just "team-slug"
+                parts = rname.split("/", 1)
+                if len(parts) == 2:
+                    org_name, team_slug = parts
+                else:
+                    # Fallback: try deriving org from the enterprise cost center context
+                    team_slug = parts[0]
+                    org_name = ""
+                if org_name:
+                    try:
+                        team_members = await api.get_team_members(org_name, team_slug)
+                        for m in team_members:
+                            _add_member(m, "Team", rname)
+                        if log_fn:
+                            log_fn("info", f"    Team '{rname}': {len(team_members)} members")
+                    except Exception as e:
+                        if log_fn:
+                            log_fn("error", f"    Team '{rname}' members error: {e}")
+
+        return members
+
+    async def sync_enterprises(self, log_fn: LogFn = None) -> dict:
+        """Sync enterprise list, all cost centers, and expand org/team members."""
+        summary: dict = {"synced": [], "errors": []}
+        if not self._api_manager:
+            return summary
+
+        enterprises = self._api_manager.get_all_enterprises()
+        if not enterprises:
+            if log_fn:
+                log_fn("info", "  No enterprises discovered, skipping enterprise sync")
+            return summary
+
+        # Save full enterprise list
+        self._save_json("enterprise", "all", enterprises)
+        summary["synced"].append(f"enterprises ({len(enterprises)} total)")
+        if log_fn:
+            log_fn("info", f"  Enterprises synced: {[e['slug'] for e in enterprises]}")
+
+        # Sync cost centers per enterprise (with member expansion)
+        for ent in enterprises:
+            slug = ent["slug"]
+            api = self._api_manager.get_api_for_enterprise(slug)
+            if not api:
+                summary["errors"].append(f"cost_centers/{slug}: no API client")
+                continue
+            try:
+                raw_cost_centers = await api.get_enterprise_cost_centers(slug)
+                if log_fn:
+                    log_fn("info", f"  {slug}: {len(raw_cost_centers)} cost centers, expanding members...")
+
+                expanded = []
+                total_members = 0
+                for cc in raw_cost_centers:
+                    members = await self._expand_cost_center_members(cc, api, log_fn=log_fn)
+                    expanded.append({
+                        **cc,
+                        "members": members,
+                        "member_count": len(members),
+                    })
+                    total_members += len(members)
+
+                self._save_json("cost_centers", slug, {
+                    "enterprise": slug,
+                    "enterprise_name": ent.get("name", ""),
+                    "cost_centers": expanded,
+                    "total": len(expanded),
+                    "total_unique_members": len({
+                        m["login"]
+                        for cc in expanded
+                        for m in cc["members"]
+                    }),
+                })
+                summary["synced"].append(
+                    f"cost_centers/{slug} ({len(expanded)} centers, {total_members} member assignments)"
+                )
+                if log_fn:
+                    log_fn("info", f"  {slug}: cost centers synced ({len(expanded)} centers, {total_members} member assignments)")
+            except Exception as e:
+                summary["errors"].append(f"cost_centers/{slug}: {e}")
+                if log_fn:
+                    log_fn("error", f"  {slug}: cost centers error - {e}")
+
+        return summary
+
     async def sync_all(self, log_fn: LogFn = None) -> list[dict]:
-        """Sync data for all discovered orgs via api_manager."""
+        """Sync data for all discovered orgs and enterprises via api_manager."""
         if not self._api_manager:
             return []
 
@@ -216,6 +345,12 @@ class DataCollector:
         for org_name in org_logins:
             result = await self.sync_org(org_name, log_fn=log_fn)
             results.append(result)
+
+        # Sync enterprise data (enterprises + cost centers)
+        if log_fn:
+            log_fn("info", "Syncing enterprise and cost center data...")
+        enterprise_summary = await self.sync_enterprises(log_fn=log_fn)
+        results.append({"org": "__enterprise__", **enterprise_summary})
 
         if log_fn:
             total_synced = sum(len(r["synced"]) for r in results)

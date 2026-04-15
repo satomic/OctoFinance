@@ -32,6 +32,7 @@ export interface PATInfo {
   user_login: string;
   user_avatar: string;
   orgs: string[];
+  enterprise_slugs: string[];
   created_at: string;
   last_synced_at: string;
 }
@@ -220,4 +221,40 @@ export interface CsvDashboardData {
     products: string[];
     skus: string[];
   };
+}
+
+// Cost Center dashboard types
+export interface CostCenterMember {
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  source_type: "User" | "Org" | "Team";
+  source_name: string;
+}
+
+export interface CostCenter {
+  id: string;
+  name: string;
+  state: "active" | "archived";
+  resources: { type: string; name: string }[];
+  members: CostCenterMember[];
+  member_count: number;
+}
+
+export interface UserCostCenterEntry {
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  cost_centers: { name: string; id: string; source_type: string; source_name: string }[];
+}
+
+export interface CostCenterDashboardData {
+  enterprises: { slug: string; name: string }[];
+  selected_enterprise: string;
+  enterprise_name: string;
+  cost_centers: CostCenter[];
+  total_cost_centers: number;
+  total_unique_members: number;
+  user_map: UserCostCenterEntry[];
+  no_data: boolean;
 }

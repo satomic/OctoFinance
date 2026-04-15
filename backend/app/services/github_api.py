@@ -66,6 +66,136 @@ class GitHubAPI:
         resp.raise_for_status()
         return resp.json()
 
+    async def discover_enterprises(self) -> list[dict]:
+        """Discover all enterprises the authenticated user belongs to.
+        API: GET /user/enterprise-memberships
+        Returns list of dicts with enterprise slug, name, and role.
+        """
+        try:
+            memberships = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    "/user/enterprise-memberships",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                memberships.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return [
+                {
+                    "slug": m.get("enterprise", {}).get("slug", ""),
+                    "name": m.get("enterprise", {}).get("name", ""),
+                    "id": m.get("enterprise", {}).get("id"),
+                    "role": m.get("role", ""),
+                }
+                for m in memberships
+                if m.get("enterprise", {}).get("slug")
+            ]
+        except Exception:
+            return []
+
+    async def get_org_members(self, org: str) -> list[dict]:
+        """Get all members of an organization.
+        API: GET /orgs/{org}/members
+        Returns list of member objects with login, avatar_url, html_url.
+        """
+        try:
+            members = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/orgs/{org}/members",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                members.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return members
+        except Exception:
+            return []
+
+    async def get_team_members(self, org: str, team_slug: str) -> list[dict]:
+        """Get all members of a team within an organization.
+        API: GET /orgs/{org}/teams/{team_slug}/members
+        Returns list of member objects with login, avatar_url, html_url.
+        """
+        try:
+            members = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/orgs/{org}/teams/{team_slug}/members",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                members.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return members
+        except Exception:
+            return []
+
+    async def get_enterprise_cost_centers(self, enterprise: str) -> list[dict]:
+        """List all cost centers for an enterprise (active + archived).
+        API: GET /enterprises/{enterprise}/settings/billing/cost-centers
+        Uses API version 2026-03-10.
+        Note: 'state' only accepts 'active' or 'archived' — 'all' returns 400.
+        We fetch both states and merge them.
+        """
+        _headers = {"X-GitHub-Api-Version": "2026-03-10"}
+        results = []
+        seen_ids: set[str] = set()
+
+        for state in ("active", "archived"):
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/settings/billing/cost-centers",
+                    params={"per_page": 100, "page": page, "state": state},
+                    headers=_headers,
+                )
+                if resp.status_code in (404, 403, 400):
+                    break
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, list):
+                    batch = data
+                else:
+                    batch = data.get("costCenters") or data.get("cost_centers") or []
+                if not batch:
+                    break
+                for item in batch:
+                    cc_id = item.get("id", "")
+                    if cc_id not in seen_ids:
+                        seen_ids.add(cc_id)
+                        results.append(item)
+                if len(batch) < 100:
+                    break
+                page += 1
+
+        return results
+
     # =========================================================================
     # Copilot Billing & Plan Detection
     # =========================================================================

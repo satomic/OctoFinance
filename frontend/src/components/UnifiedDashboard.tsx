@@ -3,6 +3,7 @@ import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { Dashboard } from "./Dashboard";
 import { CsvDashboard } from "./CsvDashboard";
+import { CostCenterDashboard } from "./CostCenterDashboard";
 
 interface Props {
   refreshKey: number;
@@ -13,7 +14,7 @@ export function UnifiedDashboard({ refreshKey }: Props) {
   const ui = useUIState();
   const tab = ui.dashboardTab ?? "api";
   const setTab = useCallback(
-    (v: "api" | "premium" | "usage") => ui.patch({ dashboardTab: v }),
+    (v: "api" | "premium" | "usage" | "costcenter") => ui.patch({ dashboardTab: v }),
     [ui.patch],
   );
 
@@ -39,11 +40,19 @@ export function UnifiedDashboard({ refreshKey }: Props) {
           >
             {t("csvDash.tabs.usage")}
           </button>
+          <button
+            className={`btn btn-small btn-toggle ${tab === "costcenter" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("costcenter")}
+          >
+            {t("ccDash.tab")}
+          </button>
         </div>
       </div>
 
       {tab === "api" ? (
         <Dashboard refreshKey={refreshKey} />
+      ) : tab === "costcenter" ? (
+        <CostCenterDashboard refreshKey={refreshKey} />
       ) : (
         <CsvDashboard refreshKey={refreshKey} tab={tab} />
       )}

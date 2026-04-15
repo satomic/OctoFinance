@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -156,6 +156,40 @@ export function useCsvInfo() {
   }, [fetchInfo]);
 
   return { info, refetch: fetchInfo, uploadCsv };
+}
+
+export function useCostCenterDashboard(params: {
+  enterprise: string;
+  costCenters: string[];
+  state: string;
+  search: string;
+}) {
+  const [data, setData] = useState<CostCenterDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qp = new URLSearchParams();
+      if (params.enterprise) qp.set("enterprise", params.enterprise);
+      if (params.costCenters.length) qp.set("cost_centers", params.costCenters.join(","));
+      if (params.state) qp.set("state", params.state);
+      if (params.search) qp.set("search", params.search);
+      const res = await fetch(`/api/data/cost-center-dashboard?${qp}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.enterprise, params.costCenters.join(","), params.state, params.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, refetch: fetchData };
 }
 
 // Keep old hook for backward compat

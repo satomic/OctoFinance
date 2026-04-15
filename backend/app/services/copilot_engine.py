@@ -17,6 +17,7 @@ from copilot.generated.session_events import SessionEvent, SessionEventType
 from .data_collector import create_session_collector
 from ..tools.action_tools import create_action_tools
 from ..tools.billing_tools import create_billing_tools
+from ..tools.cost_center_tools import create_cost_center_tools
 from ..tools.seat_tools import create_seat_tools
 from ..tools.usage_tools import create_usage_tools
 
@@ -111,6 +112,7 @@ class CopilotAIEngine:
             + create_usage_tools(collector, api_manager=self._api_manager)
             + create_billing_tools(collector)
             + create_action_tools(api_manager=self._api_manager, collector=collector)
+            + create_cost_center_tools(api_manager=self._api_manager, collector=collector)
         )
         return tools
 

@@ -58,14 +58,14 @@ export function usePATs() {
     loadSettings();
   }, [loadPATs, loadSettings]);
 
-  const addPAT = useCallback(async (label: string, token: string) => {
+  const addPAT = useCallback(async (label: string, token: string, enterprise_slugs: string[] = []) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/pats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, token }),
+        body: JSON.stringify({ label, token, enterprise_slugs }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -4,7 +4,7 @@ const STORAGE_KEY = "octofinance-ui-state";
 
 export interface UIState {
   currentView: "chat" | "dashboard";
-  dashboardTab: "api" | "premium" | "usage";
+  dashboardTab: "api" | "premium" | "usage" | "costcenter";
   consoleOpen: boolean;
   sidebarWidth: number;
   sidebarCollapsed: Record<string, boolean>;
@@ -20,7 +20,13 @@ export interface UIState {
   csvDashSkus: string[];
   csvDashDateFrom: string;
   csvDashDateTo: string;
+  // Cost Center dashboard filters
+  ccDashEnterprise: string;
+  ccDashCostCenters: string[];
+  ccDashState: string;
+  ccDashSearch: string;
 }
+
 
 const DEFAULTS: UIState = {
   currentView: "chat",
@@ -44,6 +50,10 @@ const DEFAULTS: UIState = {
   csvDashSkus: [],
   csvDashDateFrom: "",
   csvDashDateTo: "",
+  ccDashEnterprise: "",
+  ccDashCostCenters: [],
+  ccDashState: "active",
+  ccDashSearch: "",
 };
 
 interface UIStateContextValue extends UIState {

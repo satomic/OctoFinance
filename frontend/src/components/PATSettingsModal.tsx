@@ -43,15 +43,20 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const { pats, loading, error, addPAT, removePAT, clearError, settings, updateSettings } = usePATs();
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
+  const [enterpriseSlug, setEnterpriseSlug] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const handleAdd = async () => {
     if (!token.trim()) return;
     clearError();
-    const result = await addPAT(label.trim() || "Untitled", token.trim());
+    const slugs = enterpriseSlug.trim()
+      ? enterpriseSlug.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    const result = await addPAT(label.trim() || "Untitled", token.trim(), slugs);
     if (result) {
       setLabel("");
       setToken("");
+      setEnterpriseSlug("");
       onPATChange?.();
     }
   };
@@ -110,6 +115,11 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                     <div className="pat-item-user">
                       <strong>{pat.user_login || "Validating..."}</strong>
                       <span className="pat-item-orgs">{pat.orgs?.length || 0} orgs</span>
+                      {pat.enterprise_slugs?.length > 0 && (
+                        <span className="pat-item-enterprise">
+                          {pat.enterprise_slugs.join(", ")}
+                        </span>
+                      )}
                     </div>
                     <div className="pat-item-meta">
                       {pat.label} &middot; {pat.token_masked}
@@ -148,6 +158,17 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                 onKeyDown={handleKeyDown}
               />
             </div>
+            <div className="pat-form-row">
+              <label>{t("settings.patEnterprise")}</label>
+              <input
+                type="text"
+                value={enterpriseSlug}
+                onChange={(e) => setEnterpriseSlug(e.target.value)}
+                placeholder="e.g. my-enterprise"
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            <p className="pat-form-hint pat-enterprise-hint">{t("settings.patEnterpriseHint")}</p>
             <button
               className="btn btn-primary"
               onClick={handleAdd}
