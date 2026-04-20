@@ -1424,6 +1424,14 @@ body {
   margin-bottom: 16px;
 }
 
+.cc-download-btn {
+  margin-left: auto;
+}
+.cc-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .cc-search-input {
   height: 30px;
   padding: 0 10px;

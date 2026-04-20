@@ -12,9 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
+from ..services.report_generator import generate_report_zip
 
 router = APIRouter(tags=["data"])
 
@@ -1029,6 +1031,49 @@ async def get_premium_csv_info():
     """Get info about uploaded premium usage CSV data (legacy endpoint)."""
     info = await get_csv_info()
     return info["premium_csv"]
+
+
+@router.get("/data/cost-center-report")
+async def get_cost_center_report(enterprise: str = Query(default="")):
+    """Generate and return a ZIP archive with one HTML report per cost center.
+
+    Each HTML is self-contained (no external deps), includes premium request
+    and usage report analysis filtered to that cost center's members.
+    """
+    enterprise_list = data_collector.load_latest("enterprise", "all") or []
+    if not isinstance(enterprise_list, list):
+        enterprise_list = []
+
+    available_slugs = [e["slug"] for e in enterprise_list]
+    selected_slug = enterprise if enterprise in available_slugs else (available_slugs[0] if available_slugs else "")
+
+    if not selected_slug:
+        return {"error": "No enterprise data found. Run Sync Data first."}
+
+    cc_data = data_collector.load_latest("cost_centers", selected_slug)
+    if not cc_data:
+        return {"error": f"No cost center data for enterprise '{selected_slug}'. Run Sync Data first."}
+
+    cost_centers    = cc_data.get("cost_centers", [])
+    enterprise_name = cc_data.get("enterprise_name", selected_slug)
+
+    all_premium = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    all_usage   = _load_all_csv_records(CSV_TYPE_USAGE)
+
+    zip_bytes = generate_report_zip(
+        enterprise=selected_slug,
+        enterprise_name=enterprise_name,
+        cost_centers=cost_centers,
+        all_premium_records=all_premium,
+        all_usage_records=all_usage,
+    )
+
+    filename = f"cc-report-{selected_slug}.zip"
+    return StreamingResponse(
+        io.BytesIO(zip_bytes),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/data/cost-center-dashboard")

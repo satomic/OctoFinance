@@ -117,6 +117,8 @@ const translations = {
     "ccDash.colCostCenters": "Cost Centers",
     "ccDash.expandMembers": "Show members",
     "ccDash.colState": "State",
+    "ccDash.downloadReport": "Download Report",
+    "ccDash.downloading": "Generating...",
 
     // Dashboard
     "dashboard.title": "Copilot Usage Dashboard",
@@ -332,6 +334,8 @@ const translations = {
     "ccDash.colCostCenters": "\u6240\u5c5e\u6210\u672c\u4e2d\u5fc3",
     "ccDash.expandMembers": "\u67e5\u770b\u6210\u5458",
     "ccDash.colState": "\u72b6\u6001",
+    "ccDash.downloadReport": "\u4e0b\u8f7d\u62a5\u544a",
+    "ccDash.downloading": "\u751f\u6210\u4e2d...",
 
     // Dashboard
     "dashboard.title": "Copilot \u4f7f\u7528\u6982\u89c8",
@@ -547,6 +551,8 @@ const translations = {
     "ccDash.colCostCenters": "Trung tâm chi phí",
     "ccDash.expandMembers": "Xem thành viên",
     "ccDash.colState": "Trạng thái",
+    "ccDash.downloadReport": "Tải báo cáo",
+    "ccDash.downloading": "Đang tạo...",
 
     // Dashboard
     "dashboard.title": "Bảng điều khiển sử dụng Copilot",

@@ -213,10 +213,28 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
 
   // Local search state — only flushed to UIState (triggering re-fetch) on blur or Enter
   const [searchInput, setSearchInput] = useState(ui.ccDashSearch);
+  const [downloading, setDownloading] = useState(false);
   const commitSearch = useCallback(
     (v: string) => ui.patch({ ccDashSearch: v }),
     [ui.patch],
   );
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const url = `/api/data/cost-center-report${enterprise ? `?enterprise=${encodeURIComponent(enterprise)}` : ""}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `cc-report-${enterprise || "export"}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } finally {
+      setDownloading(false);
+    }
+  }, [enterprise]);
 
   const { data, loading } = useCostCenterDashboard({
     enterprise, costCenters, state, search: ui.ccDashSearch,
@@ -301,6 +319,16 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
           onBlur={() => commitSearch(searchInput)}
           onKeyDown={(e) => { if (e.key === "Enter") commitSearch(searchInput); }}
         />
+
+        {/* Download report button — pushed to the right */}
+        <button
+          className="btn btn-small cc-download-btn"
+          onClick={handleDownload}
+          disabled={downloading}
+          title={t("ccDash.downloadReport")}
+        >
+          {downloading ? t("ccDash.downloading") : `⬇ ${t("ccDash.downloadReport")}`}
+        </button>
       </div>
 
       {/* KPI cards */}
