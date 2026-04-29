@@ -60,14 +60,20 @@ async def add_pat(request: AddPATRequest):
         pat_manager.remove(pat["id"])
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Kick off background sync for newly discovered orgs
+    # Kick off background sync for newly discovered orgs and enterprises
     updated_pat = pat_manager.find_by_id(pat["id"])
-    if updated_pat and updated_pat.get("orgs"):
-        orgs_to_sync = list(updated_pat["orgs"])
+    has_orgs = bool(updated_pat and updated_pat.get("orgs"))
+    has_enterprises = bool(updated_pat and updated_pat.get("enterprise_slugs"))
+
+    if has_orgs or has_enterprises:
+        orgs_to_sync = list(updated_pat.get("orgs", []))
 
         async def _sync_new_orgs(log_fn):
             for org in orgs_to_sync:
                 await data_collector.sync_org(org, log_fn=log_fn)
+            # Refresh enterprise list and cost centers so data/enterprise/
+            # and data/cost_centers/ stay in sync with the new PAT.
+            await data_collector.sync_enterprises(log_fn=log_fn)
 
         sync_manager.run_in_background(_sync_new_orgs)
 
