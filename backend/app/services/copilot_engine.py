@@ -17,6 +17,7 @@ from copilot.generated.session_events import SessionEvent, SessionEventType
 from .data_collector import create_session_collector
 from ..tools.action_tools import create_action_tools
 from ..tools.billing_tools import create_billing_tools
+from ..tools.budget_tools import create_budget_tools
 from ..tools.cost_center_tools import create_cost_center_tools
 from ..tools.seat_tools import create_seat_tools
 from ..tools.usage_tools import create_usage_tools
@@ -52,6 +53,7 @@ Available data dimensions:
 - Billing: plan type, cost per seat, total cost, waste
 - Metrics: detailed IDE completions, chat usage, PR summaries (legacy API)
 - Premium Requests: per-model breakdown of premium request consumption, pricing, and costs
+- Budgets: UBB (Usage-Based Billing) AI credits budgets - Universal user-level budgets (default for all users), Individual user-level budgets (user-specific overrides), Enterprise/Cost center budgets (overage controls)
 
 Copilot Premium Requests quota (included free per user per month):
 - Copilot Business: 300 premium requests/user/month
@@ -61,6 +63,14 @@ Note: Per-user premium request breakdown is NOT available via API — only org-l
 
 For usage data, prefer the new usage report tools (get_usage_report, get_users_usage_report) which use the latest Copilot Usage Metrics API.
 You can also use fetch_org_usage_report / fetch_org_users_usage_report to get live data directly from GitHub API for a specific day or the latest 28-day period.
+
+Budget Management (UBB Era - June 2026):
+Starting June 1, 2026, GitHub Copilot billing switched from Premium Requests to AI Credits (UBB - Usage-Based Billing).
+- Universal user-level budget: Default personal limit for ALL Copilot users (each enterprise/org can have only one)
+- Individual user-level budget: User-specific limits that override Universal budget (for high-frequency users, core engineers, or restricted users)
+- Enterprise/Cost center budgets: Control overage spending after the shared pool of included credits is exhausted
+User-level budgets are hard limits by default (prevent_further_usage=true). When a user hits their budget limit, they are blocked from consuming more AI credits.
+Use batch_create_user_budgets for bulk operations (onboarding teams, applying uniform limits to user groups).
 """
 
 
@@ -78,8 +88,12 @@ class CopilotAIEngine:
 
     async def start(self):
         """Start the Copilot SDK client."""
-        self._client = CopilotClient()
-        await self._client.start()
+        self._client = CopilotClient(self._client_options())
+        try:
+            await self._client.start()
+        except BaseException:
+            self._client = None
+            raise
 
     async def stop(self):
         """Stop all sessions and the client."""
@@ -95,6 +109,24 @@ class CopilotAIEngine:
 
     def is_ready(self) -> bool:
         return self._client is not None and self._client.get_state() == "connected"
+
+    @staticmethod
+    def _client_options() -> dict:
+        """Build Copilot SDK client options from the configured application PAT."""
+        try:
+            from .pat_manager import pat_manager
+
+            configured_pats = pat_manager.get_all() or pat_manager.load()
+            for pat in configured_pats:
+                token = pat.get("token")
+                if token:
+                    return {
+                        "github_token": token,
+                        "use_logged_in_user": False,
+                    }
+        except Exception:
+            logger.exception("Failed to load configured PAT for Copilot SDK client")
+        return {}
 
     def _build_tools_for_session(self, working_directory: str | None) -> list:
         """Build a set of tools scoped to a session's data directory."""
@@ -113,6 +145,7 @@ class CopilotAIEngine:
             + create_billing_tools(collector)
             + create_action_tools(api_manager=self._api_manager, collector=collector)
             + create_cost_center_tools(api_manager=self._api_manager, collector=collector)
+            + create_budget_tools(api_manager=self._api_manager, collector=collector)
         )
         return tools
 
@@ -124,6 +157,10 @@ class CopilotAIEngine:
         self, session_id: str = "default", working_directory: str | None = None
     ) -> CopilotSession:
         """Return an in-memory session, try to resume a persisted one, or create new."""
+        if not self.is_ready():
+            logger.warning("Copilot client is not ready; starting SDK client before creating session %s", session_id)
+            await self._restart_client()
+
         # 1. Fast path — already in memory
         if session_id in self._sessions:
             return self._sessions[session_id]
@@ -140,9 +177,31 @@ class CopilotAIEngine:
                     "Failed to resume SDK session %s, creating new: %s",
                     sdk_session_id, exc,
                 )
+                self._delete_sdk_session_id(working_directory)
 
         # 3. Create brand-new session
-        return await self._create_session(session_id, working_directory)
+        try:
+            return await self._create_session(session_id, working_directory)
+        except Exception:
+            logger.exception("Failed to create Copilot session %s; restarting SDK client and retrying once", session_id)
+            await self._restart_client()
+            self._delete_sdk_session_id(working_directory)
+            return await self._create_session(session_id, working_directory)
+
+    async def _restart_client(self):
+        """Restart the Copilot SDK client after a transport/session failure."""
+        self._sessions.clear()
+        if self._client:
+            try:
+                await self._client.stop()
+            except Exception:
+                logger.exception("Failed to stop Copilot SDK client during restart")
+        self._client = CopilotClient(self._client_options())
+        try:
+            await self._client.start()
+        except BaseException:
+            self._client = None
+            raise
 
     async def _resume_session(
         self,
@@ -233,6 +292,16 @@ class CopilotAIEngine:
         path = Path(working_directory) / _SDK_SESSION_ID_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(sdk_session_id, encoding="utf-8")
+
+    @staticmethod
+    def _delete_sdk_session_id(working_directory: str | None):
+        if not working_directory:
+            return
+        path = Path(working_directory) / _SDK_SESSION_ID_FILE
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception("Failed to delete stale SDK session id file: %s", path)
 
     async def chat(
         self, message: str, session_id: str = "default", working_directory: str | None = None

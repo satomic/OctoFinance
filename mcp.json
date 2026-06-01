@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "octofinance": {
-      "command": "python",
-      "args": ["-m", "backend.app.mcp_server"],
-      "env": {}
-    }
-  }
-}

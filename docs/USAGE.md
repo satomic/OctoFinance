@@ -269,30 +269,6 @@ The upload is incremental — duplicate rows are automatically ignored.
 
 ---
 
-## MCP Integration
-
-OctoFinance can also be used as an MCP (Model Context Protocol) server, allowing external LLM clients to call OctoFinance tools directly.
-
-### Setup
-
-1. Install MCP dependency: `pip install mcp`
-2. Add to your MCP client configuration:
-   ```json
-   {
-     "mcpServers": {
-       "octofinance": {
-         "command": "python",
-         "args": ["-m", "backend.app.mcp_server"]
-       }
-     }
-   }
-   ```
-3. The MCP server exposes all 17 OctoFinance tools (seat management, usage analysis, billing, actions)
-
-See `mcp.json` in the project root for the example configuration.
-
----
-
 ## UI Tips
 
 | Feature | How |

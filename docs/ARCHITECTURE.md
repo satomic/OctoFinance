@@ -31,7 +31,7 @@
 │  └──────────────────┘   │  │  System Prompt: FinOps Assistant     │ │   │
 │                          │  │  Session Persistence (.copilot_sid)  │ │   │
 │  ┌──────────────────┐   │  └───────────────┬─────────────────────┘ │   │
-│  │  Sync Manager    │   │                  │ 17 Custom Tools        │   │
+│  │  Sync Manager    │   │                  │ 23 Custom Tools        │   │
 │  │  Cron Scheduler  │   │  ┌───────────────┴─────────────────────┐ │   │
 │  │  SSE Broadcast   │   │  │ Seat Tools    │ Usage Tools          │ │   │
 │  └──────────────────┘   │  │ get_all_seats │ get_usage_report     │ │   │
@@ -42,11 +42,11 @@
 │  │  Auto-Discovery  │   │  │ Billing Tools │ fetch_org_usage*     │ │   │
 │  └──────────────────┘   │  │ get_cost_ovw  │ fetch_org_users*     │ │   │
 │                          │  │ calculate_roi │ fetch_premium*       │ │   │
-│  ┌──────────────────┐   │  │               │                      │ │   │
-│  │  MCP Server      │   │  │ Action Tools                         │ │   │
-│  │  (stdio)         │   │  │ batch_remove  │ record_recommendation│ │   │
-│  │  17 MCP Tools    │   │  │               │ get_recommendations  │ │   │
-│  └──────────────────┘   │  └──────────────────────────────────────┘ │   │
+│                          │  │               │                      │ │   │
+│                          │  │ Action Tools  │ Budget Tools (UBB)   │ │   │
+│                          │  │ batch_remove  │ get_all_budgets      │ │   │
+│                          │  │ record_rec... │ create_user_budget   │ │   │
+│                          │  │ get_rec...    │ batch_create...      │ │   │
 │                          └──────────────────────────────────────────┘   │
 │                                   │                                      │
 │  ┌────────────────────────────────┴──────────────────────────────────┐  │
@@ -64,6 +64,8 @@
                     │  /orgs/{org}/copilot/reports  │
                     │  /organizations/{org}/billing  │
                     │  /enterprises/{ent}/reports    │
+                    │  /enterprises/{ent}/budgets    │
+                    │  /organizations/{org}/budgets  │
                     └──────────────────────────────┘
 ```
 
@@ -77,18 +79,6 @@
 5. Audit Log → Record all operational actions with timestamps
 ```
 
-## MCP Integration
-
-OctoFinance also runs as a standalone MCP server (`backend/app/mcp_server.py`), exposing the same 17 tools over the Model Context Protocol. This allows external LLM clients (VS Code, etc.) to call OctoFinance tools directly via stdio transport.
-
-```
-MCP Client
-    ↓ stdio
-OctoFinance MCP Server
-    ↓ reuses
-DataCollector + APIManager → GitHub REST API + JSON cache
-```
-
 ---
 
 ## Tech Stack
@@ -96,7 +86,6 @@ DataCollector + APIManager → GitHub REST API + JSON cache
 | Layer | Technology |
 |-------|-----------|
 | AI Engine | GitHub Copilot Python SDK (`github-copilot-sdk`) |
-| MCP Server | `mcp` Python SDK (FastMCP) |
 | Backend | Python 3.13+, FastAPI, Uvicorn, httpx |
 | Frontend | React 19, TypeScript 5.9, Vite 7, Recharts |
 | Data | JSON files (no database required) |
@@ -112,7 +101,6 @@ OctoFinance/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app, middleware, lifespan
-│   │   ├── mcp_server.py        # MCP server (17 tools via stdio)
 │   │   ├── config.py            # Configuration (data paths, pricing)
 │   │   ├── routers/
 │   │   │   ├── auth.py          # Authentication endpoints
@@ -132,10 +120,12 @@ OctoFinance/
 │   │   │   ├── pat_manager.py     # PAT CRUD & settings
 │   │   │   └── ops_executor.py    # Operation executor
 │   │   └── tools/
-│   │       ├── seat_tools.py      # 4 seat management tools
-│   │       ├── usage_tools.py     # 8 usage analysis tools
-│   │       ├── billing_tools.py   # 2 billing/ROI tools
-│   │       └── action_tools.py    # 3 action/recommendation tools
+│   │       ├── seat_tools.py          # 4 seat management tools
+│   │       ├── usage_tools.py         # 8 usage analysis tools
+│   │       ├── billing_tools.py       # 2 billing/ROI tools
+│   │       ├── action_tools.py        # 3 action/recommendation tools
+│   │       ├── cost_center_tools.py   # Cost center management tools
+│   │       └── budget_tools.py        # 6 budget management tools (UBB)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -171,7 +161,6 @@ OctoFinance/
 │   ├── ARCHITECTURE.md            # This file
 │   └── SECURITY.md                # RAI notes & security
 ├── AGENTS.md                      # Custom instructions
-├── mcp.json                       # MCP server configuration
 ├── README.md                      # Project overview & quick start
 └── SECURITY.md                    # Microsoft security policy
 ```

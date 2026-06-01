@@ -3,6 +3,7 @@ OctoFinance V2 - GitHub Copilot AI FinOps Platform
 FastAPI application entry point.
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from pathlib import Path
@@ -27,6 +28,13 @@ async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     print("[OctoFinance] Starting up...")
 
+    # Initialize logging first
+    try:
+        from .logging_config import setup_logging
+        setup_logging()
+    except Exception as e:
+        print(f"[OctoFinance] Warning: Failed to setup logging: {e}")
+
     # Load PATs from file (auto-migrates GITHUB_PAT env var if needed)
     pats_list = pat_manager.load()
     print(f"[OctoFinance] Loaded {len(pats_list)} PAT(s)")
@@ -44,7 +52,7 @@ async def lifespan(app: FastAPI):
     if pats_list:
         print("[OctoFinance] Auto-discovering GitHub resources...")
         try:
-            await api_manager.rebuild()
+            await asyncio.wait_for(api_manager.rebuild(), timeout=30)
             all_orgs = api_manager.get_all_orgs()
             org_names = [o["login"] for o in all_orgs]
             print(f"[OctoFinance] Discovered {len(all_orgs)} organizations: {org_names}")
@@ -65,6 +73,8 @@ async def lifespan(app: FastAPI):
                     cron_expr,
                     lambda log_fn: data_collector.sync_all(log_fn=log_fn),
                 )
+        except asyncio.TimeoutError:
+            print("[OctoFinance] Startup discovery warning: timed out; continue startup and retry from Settings/Sync.")
         except Exception as e:
             print(f"[OctoFinance] Startup discovery warning: {e}")
     else:
@@ -73,8 +83,10 @@ async def lifespan(app: FastAPI):
     # Start Copilot AI engine
     print("[OctoFinance] Starting Copilot AI engine...")
     try:
-        await copilot_engine.start()
+        await asyncio.wait_for(copilot_engine.start(), timeout=30)
         print("[OctoFinance] Copilot AI engine ready.")
+    except asyncio.TimeoutError:
+        print("[OctoFinance] Copilot engine startup warning: timed out; chat will retry when used.")
     except Exception as e:
         print(f"[OctoFinance] Copilot engine startup warning: {e}")
 

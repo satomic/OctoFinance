@@ -4,10 +4,13 @@ Each instance is bound to a specific PAT token.
 """
 
 import json
+import logging
 
 import httpx
 
 from ..config import COPILOT_PRICING
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubAPI:
@@ -26,6 +29,7 @@ class GitHubAPI:
                 headers={
                     "Accept": "application/vnd.github+json",
                     "Authorization": f"Bearer {self._token}",
+                    "Content-Type": "application/json",
                     "X-GitHub-Api-Version": "2022-11-28",
                 },
                 timeout=30.0,
@@ -537,3 +541,349 @@ class GitHubAPI:
             except Exception:
                 error_body = {"text": e.response.text}
             return {"error": str(e), "status_code": e.response.status_code, "response": error_body}
+
+    # =========================================================================
+    # Budget API (UBB - Usage-Based Billing)
+    # Docs: https://docs.github.com/en/rest/billing/budgets?apiVersion=2026-03-10
+    # Note: Requires API version 2026-03-10 and PAT with manage_billing:copilot scope
+    # =========================================================================
+
+    async def get_budgets(
+        self,
+        entity_type: str,
+        entity_name: str,
+        scope: str | None = None,
+    ) -> dict | None:
+        """Get budgets for an enterprise or organization.
+
+        Args:
+            entity_type: 'enterprise' or 'organization'
+            entity_name: Enterprise slug or organization name
+            scope: Optional filter by budget scope:
+                   - 'multi_user_customer' (Universal user-level budget)
+                   - 'user' (Individual user-level budget)
+                   - 'enterprise' (Enterprise budget)
+                   - 'cost_center' (Cost center budget)
+                   - 'organization' (Organization budget)
+                   - 'repository' (Repository budget)
+
+        API: GET /enterprises/{slug}/settings/billing/budgets
+             or GET /organizations/{org}/settings/billing/budgets
+        """
+        try:
+            if entity_type == "enterprise":
+                path = f"/enterprises/{entity_name}/settings/billing/budgets"
+            else:
+                path = f"/organizations/{entity_name}/settings/billing/budgets"
+
+            params = {}
+            if scope:
+                params["scope"] = scope
+
+            # Log request
+            logger.info(f"[GET_BUDGETS] REQUEST: GET {self._base_url}{path}")
+            logger.debug(f"[GET_BUDGETS] Params: {params}")
+            logger.debug(f"[GET_BUDGETS] Headers: X-GitHub-Api-Version=2026-03-10")
+
+            resp = await self.client.get(
+                path,
+                params=params,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+
+            # Log response
+            logger.info(f"[GET_BUDGETS] RESPONSE: {resp.status_code} {resp.reason_phrase}")
+            logger.debug(f"[GET_BUDGETS] Response Headers: {dict(resp.headers)}")
+
+            if resp.status_code in (404, 403):
+                logger.warning(f"[GET_BUDGETS] Failed with {resp.status_code}, returning None")
+                logger.debug(f"[GET_BUDGETS] Response Body: {resp.text}")
+                return None
+
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info(f"[GET_BUDGETS] Success - Found {result.get('total_count', 0)} budgets")
+            logger.debug(f"[GET_BUDGETS] Response Body: {json.dumps(result, indent=2)}")
+            return result
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[GET_BUDGETS] HTTPStatusError: {e}")
+            logger.debug(f"[GET_BUDGETS] Error Response: {e.response.text}")
+            return {"error": str(e), "status_code": e.response.status_code}
+
+    async def get_budget(
+        self,
+        entity_type: str,
+        entity_name: str,
+        budget_id: str,
+    ) -> dict | None:
+        """Get a specific budget by ID.
+
+        Args:
+            entity_type: 'enterprise' or 'organization'
+            entity_name: Enterprise slug or organization name
+            budget_id: Budget ID
+
+        API: GET /enterprises/{slug}/settings/billing/budgets/{budget_id}
+             or GET /organizations/{org}/settings/billing/budgets/{budget_id}
+        """
+        try:
+            if entity_type == "enterprise":
+                path = f"/enterprises/{entity_name}/settings/billing/budgets/{budget_id}"
+            else:
+                path = f"/organizations/{entity_name}/settings/billing/budgets/{budget_id}"
+
+            # Log request
+            logger.info(f"[GET_BUDGET] REQUEST: GET {self._base_url}{path}")
+            logger.debug(f"[GET_BUDGET] Budget ID: {budget_id}")
+
+            resp = await self.client.get(
+                path,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+
+            # Log response
+            logger.info(f"[GET_BUDGET] RESPONSE: {resp.status_code} {resp.reason_phrase}")
+
+            if resp.status_code in (404, 403):
+                logger.warning(f"[GET_BUDGET] Failed with {resp.status_code}, returning None")
+                return None
+
+            resp.raise_for_status()
+            result = resp.json()
+            logger.debug(f"[GET_BUDGET] Response Body: {json.dumps(result, indent=2)}")
+            return result
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[GET_BUDGET] HTTPStatusError: {e}")
+            return {"error": str(e), "status_code": e.response.status_code}
+
+    async def create_budget(
+        self,
+        entity_type: str,
+        entity_name: str,
+        budget_data: dict,
+    ) -> dict | None:
+        """Create a new budget.
+
+        Args:
+            entity_type: 'enterprise' or 'organization'
+            entity_name: Enterprise slug or organization name
+            budget_data: Budget configuration dict with fields:
+                - budget_type: 'BundlePricing' for AI credits
+                - budget_product_sku: 'ai_credits'
+                - budget_scope: 'multi_user_customer', 'user', 'enterprise', 'cost_center', etc.
+                - budget_entity_name: Entity name (enterprise/org/username)
+                - budget_amount: Budget amount in USD
+                - prevent_further_usage: true to block usage when limit is reached
+                - user: (optional) GitHub username for 'user' scope
+                - budget_alerting: (optional) Alert configuration
+                - budget_thresholds: (optional) Alert thresholds
+
+        API: POST /enterprises/{slug}/settings/billing/budgets
+             or POST /organizations/{org}/settings/billing/budgets
+        """
+        try:
+            if entity_type == "enterprise":
+                path = f"/enterprises/{entity_name}/settings/billing/budgets"
+            else:
+                path = f"/organizations/{entity_name}/settings/billing/budgets"
+
+            # Log request
+            logger.info(f"[CREATE_BUDGET] REQUEST: POST {self._base_url}{path}")
+            logger.debug(f"[CREATE_BUDGET] Request Body: {json.dumps(budget_data, indent=2)}")
+
+            resp = await self.client.post(
+                path,
+                json=budget_data,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+
+            # Log response
+            logger.info(f"[CREATE_BUDGET] RESPONSE: {resp.status_code} {resp.reason_phrase}")
+            logger.debug(f"[CREATE_BUDGET] Response Body: {resp.text}")
+
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info(f"[CREATE_BUDGET] Success - Created budget ID: {result.get('budget', {}).get('id', 'unknown')}")
+            return result
+        except httpx.HTTPStatusError as e:
+            error_body = {}
+            try:
+                error_body = e.response.json()
+                logger.error(f"[CREATE_BUDGET] Error (JSON): {json.dumps(error_body, indent=2)}")
+            except Exception:
+                error_body = {"text": e.response.text}
+                logger.error(f"[CREATE_BUDGET] Error (Text): {error_body['text']}")
+            logger.error(f"[CREATE_BUDGET] HTTPStatusError: {e}")
+            return {"error": str(e), "status_code": e.response.status_code, "response": error_body}
+
+    async def update_budget(
+        self,
+        entity_type: str,
+        entity_name: str,
+        budget_id: str,
+        budget_data: dict,
+    ) -> dict | None:
+        """Update an existing budget.
+
+        Args:
+            entity_type: 'enterprise' or 'organization'
+            entity_name: Enterprise slug or organization name
+            budget_id: Budget ID to update
+            budget_data: Budget update fields (budget_amount, prevent_further_usage, budget_alerting)
+
+        Note: Cannot change budget_scope. Delete and recreate if scope needs to change.
+
+        API: PATCH /enterprises/{slug}/settings/billing/budgets/{budget_id}
+             or PATCH /organizations/{org}/settings/billing/budgets/{budget_id}
+        """
+        try:
+            if entity_type == "enterprise":
+                path = f"/enterprises/{entity_name}/settings/billing/budgets/{budget_id}"
+            else:
+                path = f"/organizations/{entity_name}/settings/billing/budgets/{budget_id}"
+
+            # Log request
+            logger.info(f"[UPDATE_BUDGET] REQUEST: PATCH {self._base_url}{path}")
+            logger.debug(f"[UPDATE_BUDGET] Budget ID: {budget_id}")
+            logger.debug(f"[UPDATE_BUDGET] Request Body: {json.dumps(budget_data, indent=2)}")
+
+            resp = await self.client.patch(
+                path,
+                json=budget_data,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+
+            # Log response
+            logger.info(f"[UPDATE_BUDGET] RESPONSE: {resp.status_code} {resp.reason_phrase}")
+            logger.debug(f"[UPDATE_BUDGET] Response Body: {resp.text}")
+
+            resp.raise_for_status()
+            result = resp.json()
+            logger.info(f"[UPDATE_BUDGET] Success - Updated budget {budget_id}")
+            return result
+        except httpx.HTTPStatusError as e:
+            error_body = {}
+            try:
+                error_body = e.response.json()
+                logger.error(f"[UPDATE_BUDGET] Error (JSON): {json.dumps(error_body, indent=2)}")
+            except Exception:
+                error_body = {"text": e.response.text}
+                logger.error(f"[UPDATE_BUDGET] Error (Text): {error_body['text']}")
+            logger.error(f"[UPDATE_BUDGET] HTTPStatusError: {e}")
+            return {"error": str(e), "status_code": e.response.status_code, "response": error_body}
+
+    async def delete_budget(
+        self,
+        entity_type: str,
+        entity_name: str,
+        budget_id: str,
+    ) -> dict:
+        """Delete a budget.
+
+        Args:
+            entity_type: 'enterprise' or 'organization'
+            entity_name: Enterprise slug or organization name
+            budget_id: Budget ID to delete
+
+        Warning: Ensure there is another budget as fallback before deleting.
+        Deleting user-level budgets may leave users without personal budget constraints.
+
+        IMPORTANT: The authenticated user must be an ENTERPRISE ADMIN (not just billing manager)
+        to delete budgets.
+
+        API: DELETE /enterprises/{slug}/settings/billing/budgets/{budget_id}
+             or DELETE /organizations/{org}/settings/billing/budgets/{budget_id}
+        Returns: 200 OK with JSON response containing message and id
+        """
+        try:
+            if entity_type == "enterprise":
+                path = f"/enterprises/{entity_name}/settings/billing/budgets/{budget_id}"
+            else:
+                path = f"/organizations/{entity_name}/settings/billing/budgets/{budget_id}"
+
+            full_url = f"{self._base_url}{path}"
+
+            # Log detailed request information
+            logger.info(f"[DELETE_BUDGET] ======== DELETE BUDGET REQUEST ========")
+            logger.info(f"[DELETE_BUDGET] Method: DELETE")
+            logger.info(f"[DELETE_BUDGET] URL: {full_url}")
+            logger.info(f"[DELETE_BUDGET] Entity Type: {entity_type}")
+            logger.info(f"[DELETE_BUDGET] Entity Name: {entity_name}")
+            logger.info(f"[DELETE_BUDGET] Budget ID: {budget_id}")
+            logger.debug(f"[DELETE_BUDGET] Headers: X-GitHub-Api-Version=2026-03-10, Authorization=Bearer ***")
+
+            resp = await self.client.request(
+                "DELETE",
+                path,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+
+            # Log response details
+            logger.info(f"[DELETE_BUDGET] ======== DELETE BUDGET RESPONSE ========")
+            logger.info(f"[DELETE_BUDGET] Status Code: {resp.status_code}")
+            logger.info(f"[DELETE_BUDGET] Reason: {resp.reason_phrase}")
+            logger.debug(f"[DELETE_BUDGET] Response Headers: {dict(resp.headers)}")
+            logger.debug(f"[DELETE_BUDGET] Response Body: {resp.text}")
+
+            resp.raise_for_status()
+
+            # DELETE returns 200 OK with JSON response (not 204)
+            result = resp.json() if resp.text else {}
+            logger.info(f"[DELETE_BUDGET] ✅ SUCCESS - Budget {budget_id} deleted successfully")
+            logger.debug(f"[DELETE_BUDGET] Response data: {result}")
+
+            return {
+                "success": True,
+                "budget_id": budget_id,
+                "status_code": resp.status_code,
+                "message": result.get("message", f"Budget {budget_id} deleted successfully"),
+                "id": result.get("id", budget_id)
+            }
+        except httpx.HTTPStatusError as e:
+            # Log error details
+            logger.error(f"[DELETE_BUDGET] ======== DELETE BUDGET ERROR ========")
+            logger.error(f"[DELETE_BUDGET] HTTP Status: {e.response.status_code}")
+            logger.error(f"[DELETE_BUDGET] Reason: {e.response.reason_phrase}")
+            logger.error(f"[DELETE_BUDGET] Response Headers: {dict(e.response.headers)}")
+
+            error_body = {}
+            try:
+                # Try to parse JSON error response
+                error_body = e.response.json()
+                logger.error(f"[DELETE_BUDGET] Error Body (JSON): {json.dumps(error_body, indent=2)}")
+            except Exception:
+                # If not JSON, use raw text
+                error_body = {"text": e.response.text if e.response.text else "No error details"}
+                logger.error(f"[DELETE_BUDGET] Error Body (Text): {error_body['text']}")
+
+            logger.error(f"[DELETE_BUDGET] Request Path: {path}")
+            logger.error(f"[DELETE_BUDGET] Full URL: {full_url}")
+
+            return {
+                "error": f"HTTP {e.response.status_code}: {e.response.reason_phrase}",
+                "status_code": e.response.status_code,
+                "response": error_body,
+                "request_path": path
+            }
+        except httpx.TimeoutException as e:
+            logger.error(f"[DELETE_BUDGET] ======== DELETE BUDGET TIMEOUT ========")
+            logger.error(f"[DELETE_BUDGET] Request timed out: {type(e).__name__}: {e}")
+            logger.error(f"[DELETE_BUDGET] Request Path: {path}")
+            logger.error(f"[DELETE_BUDGET] Full URL: {full_url}")
+            return {
+                "error": f"Timeout while deleting budget: {type(e).__name__}",
+                "status_code": None,
+                "response": {"message": str(e)},
+                "request_path": path,
+            }
+        except httpx.RequestError as e:
+            logger.error(f"[DELETE_BUDGET] ======== DELETE BUDGET REQUEST ERROR ========")
+            logger.error(f"[DELETE_BUDGET] Request failed: {type(e).__name__}: {e}")
+            logger.error(f"[DELETE_BUDGET] Request Path: {path}")
+            logger.error(f"[DELETE_BUDGET] Full URL: {full_url}")
+            return {
+                "error": f"Request error while deleting budget: {type(e).__name__}",
+                "status_code": None,
+                "response": {"message": str(e)},
+                "request_path": path,
+            }
