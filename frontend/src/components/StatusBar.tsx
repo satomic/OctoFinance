@@ -77,8 +77,8 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
       }
       setTimeout(() => setCsvMessage(""), 8000);
     } catch {
-      setCsvMessage("Upload failed");
-      setTimeout(() => setCsvMessage(""), 5000);
+      setCsvMessage("Upload failed (network or server error)");
+      setTimeout(() => setCsvMessage(""), 6000);
     } finally {
       setCsvUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";

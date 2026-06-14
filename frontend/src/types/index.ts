@@ -174,6 +174,18 @@ export interface CsvInfo {
   usage_report: CsvTypeInfo;
 }
 
+export interface CsvUploadResult {
+  status?: "ok" | "no_new_data";
+  csv_type?: "ai_usage" | "usage_report";
+  date_range?: { start: string; end: string };
+  total_rows?: number;
+  new_rows?: number;
+  duplicates_skipped?: number;
+  file_saved?: string;
+  error?: string;
+  status_code?: number;
+}
+
 // CSV Dashboard types
 export interface AiUsageSection {
   has_data: boolean;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, BudgetsDashboardData } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, BudgetsDashboardData, CsvUploadResult } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -191,14 +191,29 @@ export function useCsvInfo() {
     fetchInfo();
   }, [fetchInfo]);
 
-  const uploadCsv = useCallback(async (file: File) => {
+  const uploadCsv = useCallback(async (file: File): Promise<CsvUploadResult> => {
     const formData = new FormData();
     formData.append("file", file);
     const res = await fetch("/api/data/upload-csv", {
       method: "POST",
       body: formData,
     });
-    const result = await res.json();
+    // A reverse proxy (e.g. nginx client_max_body_size) may reject large files
+    // before they reach the backend, returning a non-JSON error page.
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      if (res.status === 413) {
+        detail = "File too large — the server/proxy rejected it (HTTP 413). Increase the upload size limit (e.g. nginx client_max_body_size).";
+      }
+      await fetchInfo();
+      return { error: detail, status_code: res.status };
+    }
+    let result: CsvUploadResult;
+    try {
+      result = await res.json();
+    } catch {
+      result = { error: `Unexpected non-JSON response (HTTP ${res.status}).` };
+    }
     await fetchInfo();
     return result;
   }, [fetchInfo]);
