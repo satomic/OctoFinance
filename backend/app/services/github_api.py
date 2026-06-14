@@ -280,20 +280,21 @@ class GitHubAPI:
             return None
 
     # =========================================================================
-    # Billing: Premium Request Usage
-    # Docs: https://docs.github.com/en/rest/billing/usage?apiVersion=2022-11-28
+    # Billing: AI Credit Usage (UBB)
+    # Docs: https://docs.github.com/en/enterprise-cloud@latest/rest/billing/usage
     # =========================================================================
 
-    async def get_premium_request_usage(
+    async def get_ai_credit_usage(
         self,
         org: str,
         year: int | None = None,
         month: int | None = None,
         day: int | None = None,
     ) -> dict | None:
-        """Get Copilot premium request usage for an org.
-        API: GET /organizations/{org}/settings/billing/premium_request/usage
+        """Get Copilot AI credit usage for an org (UBB - Usage-Based Billing).
+        API: GET /organizations/{org}/settings/billing/ai_credit/usage
         Note: uses /organizations/ not /orgs/.
+        This is the current billing usage endpoint (UBB, effective June 2026).
         """
         try:
             params: dict = {}
@@ -304,8 +305,9 @@ class GitHubAPI:
             if day is not None:
                 params["day"] = day
             resp = await self.client.get(
-                f"/organizations/{org}/settings/billing/premium_request/usage",
+                f"/organizations/{org}/settings/billing/ai_credit/usage",
                 params=params,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
             )
             if resp.status_code in (404, 403):
                 return None
@@ -553,6 +555,8 @@ class GitHubAPI:
         entity_type: str,
         entity_name: str,
         scope: str | None = None,
+        page: int | None = None,
+        per_page: int | None = None,
     ) -> dict | None:
         """Get budgets for an enterprise or organization.
 
@@ -566,6 +570,8 @@ class GitHubAPI:
                    - 'cost_center' (Cost center budget)
                    - 'organization' (Organization budget)
                    - 'repository' (Repository budget)
+            page: Optional page number (default 1).
+            per_page: Optional results per page (max 100, default 10).
 
         API: GET /enterprises/{slug}/settings/billing/budgets
              or GET /organizations/{org}/settings/billing/budgets
@@ -576,9 +582,13 @@ class GitHubAPI:
             else:
                 path = f"/organizations/{entity_name}/settings/billing/budgets"
 
-            params = {}
+            params: dict = {}
             if scope:
                 params["scope"] = scope
+            if page is not None:
+                params["page"] = page
+            if per_page is not None:
+                params["per_page"] = per_page
 
             # Log request
             logger.info(f"[GET_BUDGETS] REQUEST: GET {self._base_url}{path}")
@@ -609,6 +619,31 @@ class GitHubAPI:
             logger.error(f"[GET_BUDGETS] HTTPStatusError: {e}")
             logger.debug(f"[GET_BUDGETS] Error Response: {e.response.text}")
             return {"error": str(e), "status_code": e.response.status_code}
+
+    async def get_all_budgets_paginated(
+        self,
+        entity_type: str,
+        entity_name: str,
+        scope: str | None = None,
+    ) -> list[dict]:
+        """Fetch all budgets across pages for an enterprise/organization.
+
+        Returns a flat list of budget dicts (empty list on error or no data).
+        """
+        all_budgets: list[dict] = []
+        page = 1
+        while True:
+            result = await self.get_budgets(
+                entity_type, entity_name, scope=scope, page=page, per_page=100
+            )
+            if not isinstance(result, dict) or result.get("error"):
+                break
+            batch = result.get("budgets", []) or []
+            all_budgets.extend(batch)
+            if not result.get("has_next_page") or not batch:
+                break
+            page += 1
+        return all_budgets
 
     async def get_budget(
         self,

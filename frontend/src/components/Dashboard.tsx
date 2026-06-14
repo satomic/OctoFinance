@@ -349,8 +349,8 @@ export function Dashboard({ refreshKey }: Props) {
             </Section>
           )}
 
-          {/* ===== Section: Model & Premium Requests ===== */}
-          <Section sectionKey="modelPremium" title={t("dashboard.modelPremium")}>
+          {/* ===== Section: Model & AI Credits ===== */}
+          <Section sectionKey="modelAi" title={t("dashboard.modelAiCredits")}>
             <div className="dashboard-charts">
               <div className="chart-card">
                 <h4>{t("dashboard.modelUsage")}</h4>
@@ -377,8 +377,8 @@ export function Dashboard({ refreshKey }: Props) {
                 )}
               </div>
               <div className="chart-card">
-                <h4>{t("dashboard.premiumDetail")}</h4>
-                {data.premium_detail.length > 0 ? (
+                <h4>{t("dashboard.aiCreditDetail")}</h4>
+                {data.ai_credit_detail.length > 0 ? (
                   <div className="dashboard-table-wrap">
                     <table className="dashboard-table">
                       <thead>
@@ -391,7 +391,7 @@ export function Dashboard({ refreshKey }: Props) {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.premium_detail.map((p) => (
+                        {data.ai_credit_detail.map((p) => (
                           <tr key={p.model}>
                             <td className="user-name">{p.model}</td>
                             <td>{p.gross_qty.toLocaleString()}</td>

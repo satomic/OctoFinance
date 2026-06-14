@@ -3,8 +3,7 @@ import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { Dashboard } from "./Dashboard";
 import { CsvDashboard } from "./CsvDashboard";
-import { CostCenterDashboard } from "./CostCenterDashboard";
-
+import { CostCenterDashboard } from "./CostCenterDashboard";import { BudgetsDashboard } from "./BudgetsDashboard";
 interface Props {
   refreshKey: number;
 }
@@ -14,7 +13,7 @@ export function UnifiedDashboard({ refreshKey }: Props) {
   const ui = useUIState();
   const tab = ui.dashboardTab ?? "metrics";
   const setTab = useCallback(
-    (v: "metrics" | "premium" | "usage" | "costcenter") => ui.patch({ dashboardTab: v }),
+    (v: "metrics" | "ai" | "usage" | "costcenter" | "budgets") => ui.patch({ dashboardTab: v }),
     [ui.patch],
   );
 
@@ -29,10 +28,10 @@ export function UnifiedDashboard({ refreshKey }: Props) {
             {t("nav.dashMetrics")}
           </button>
           <button
-            className={`btn btn-small btn-toggle ${tab === "premium" ? "btn-toggle-active" : ""}`}
-            onClick={() => setTab("premium")}
+            className={`btn btn-small btn-toggle ${tab === "ai" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("ai")}
           >
-            {t("csvDash.tabs.premium")}
+            {t("csvDash.tabs.ai")}
           </button>
           <button
             className={`btn btn-small btn-toggle ${tab === "usage" ? "btn-toggle-active" : ""}`}
@@ -46,6 +45,12 @@ export function UnifiedDashboard({ refreshKey }: Props) {
           >
             {t("ccDash.tab")}
           </button>
+          <button
+            className={`btn btn-small btn-toggle ${tab === "budgets" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("budgets")}
+          >
+            {t("budgetsDash.tab")}
+          </button>
         </div>
       </div>
 
@@ -53,8 +58,10 @@ export function UnifiedDashboard({ refreshKey }: Props) {
         <Dashboard refreshKey={refreshKey} />
       ) : tab === "costcenter" ? (
         <CostCenterDashboard refreshKey={refreshKey} />
+      ) : tab === "budgets" ? (
+        <BudgetsDashboard refreshKey={refreshKey} />
       ) : (
-        <CsvDashboard refreshKey={refreshKey} tab={tab as "premium" | "usage"} />
+        <CsvDashboard refreshKey={refreshKey} tab={tab as "ai" | "usage"} />
       )}
     </div>
   );

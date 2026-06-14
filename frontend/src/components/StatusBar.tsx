@@ -66,12 +66,12 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
       } else if (result.status === "no_new_data") {
         const typeLabel = result.csv_type === "usage_report"
           ? t("csvDash.csvType.usage_report")
-          : t("csvDash.csvType.premium_request");
+          : t("csvDash.csvType.ai_usage");
         setCsvMessage(`${typeLabel}: ${t("dashboard.csvNoDuplicate")}`);
       } else {
         const typeLabel = result.csv_type === "usage_report"
           ? t("csvDash.csvType.usage_report")
-          : t("csvDash.csvType.premium_request");
+          : t("csvDash.csvType.ai_usage");
         const range = result.date_range ? ` (${result.date_range.start} ~ ${result.date_range.end})` : "";
         setCsvMessage(`${typeLabel} ${t("dashboard.csvUploadSuccess")}: ${result.new_rows}${range}`);
       }
@@ -149,9 +149,9 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           >
             {csvUploading ? t("dashboard.csvUploading") : t("dashboard.uploadCsv")}
           </button>
-          {csvInfo?.premium_csv?.has_data && (
-            <span className="csv-date-hint" title={`${t("csvDash.csvType.premium_request")}: ${csvInfo.premium_csv.earliest_date} ~ ${csvInfo.premium_csv.latest_date}`}>
-              P:{csvInfo.premium_csv.latest_date}
+          {csvInfo?.ai_usage?.has_data && (
+            <span className="csv-date-hint" title={`${t("csvDash.csvType.ai_usage")}: ${csvInfo.ai_usage.earliest_date} ~ ${csvInfo.ai_usage.latest_date}`}>
+              AI:{csvInfo.ai_usage.latest_date}
             </span>
           )}
           {csvInfo?.usage_report?.has_data && (

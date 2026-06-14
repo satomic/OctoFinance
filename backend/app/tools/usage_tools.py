@@ -51,16 +51,16 @@ class FetchOrgUsersUsageReportParams(BaseModel):
     )
 
 
-class GetUserPremiumUsageParams(BaseModel):
+class GetUserAiUsageParams(BaseModel):
     user: str = Field(default="", description="Username to filter. Leave empty for all users.")
     org: str = Field(default="", description="Organization name to filter. Leave empty for all orgs.")
 
 
-class GetPremiumRequestUsageParams(BaseModel):
+class GetAiCreditUsageParams(BaseModel):
     org: str = Field(default="", description="Organization name. Leave empty for all orgs.")
 
 
-class FetchPremiumRequestUsageParams(BaseModel):
+class FetchAiCreditUsageParams(BaseModel):
     org: str = Field(description="Organization name (required).")
     year: int = Field(default=0, description="Year (e.g. 2026). Leave 0 for current year.")
     month: int = Field(default=0, description="Month (1-12). Leave 0 for current month.")
@@ -136,39 +136,41 @@ def create_usage_tools(
 
     @define_tool(
         description=(
-            "Get Copilot premium request usage from cached data (synced during last Sync Data). "
-            "Shows per-model breakdown of premium request consumption including model names, "
-            "request counts, pricing, gross/discount/net amounts. Essential for cost analysis."
+            "Get Copilot AI credit usage from cached data (synced during last Sync Data). "
+            "Under usage-based billing (UBB) each org consumes AI credits per model. "
+            "Shows per-model breakdown of AI credit consumption including model names, "
+            "credit quantities, pricing, gross/discount/net amounts. Essential for cost analysis."
         )
     )
-    def get_premium_request_usage(params: GetPremiumRequestUsageParams) -> str:
+    def get_ai_credit_usage(params: GetAiCreditUsageParams) -> str:
         if params.org:
-            data = collector.load_latest("premium_requests", params.org)
+            data = collector.load_latest("ai_credits", params.org)
             if not data:
-                return json.dumps({"error": f"No premium request data for org '{params.org}'. Try fetch_premium_request_usage to get live data."})
+                return json.dumps({"error": f"No AI credit data for org '{params.org}'. Try fetch_ai_credit_usage to get live data."})
             return json.dumps(data, default=str)
         else:
-            all_data = collector.load_all_latest("premium_requests")
+            all_data = collector.load_all_latest("ai_credits")
             if not all_data:
-                return json.dumps({"error": "No premium request data found. Try fetch_premium_request_usage to get live data."})
+                return json.dumps({"error": "No AI credit data found. Try fetch_ai_credit_usage to get live data."})
             return json.dumps(all_data, default=str)
 
     @define_tool(
         description=(
-            "Get per-user premium request usage from uploaded CSV data. "
+            "Get per-user AI usage from uploaded CSV data (the AI Usage report). "
             "This data comes from CSV files manually exported from GitHub UI and uploaded by the admin. "
-            "Shows each user's daily premium request consumption broken down by AI model, "
-            "including request counts, costs, quota usage percentage, and active days. "
+            "Under usage-based billing (UBB) each user consumes AI credits per AI model. "
+            "Shows each user's daily AI credit consumption broken down by model, "
+            "including credit amounts, costs, quota usage percentage, and active days. "
             "Can filter by username or organization. Use this to answer questions about "
-            "individual user's premium request spending and model preferences."
+            "individual user's AI spending and model preferences."
         )
     )
-    def get_user_premium_usage(params: GetUserPremiumUsageParams) -> str:
+    def get_user_ai_usage(params: GetUserAiUsageParams) -> str:
         import csv as csv_mod
         # Check both primary and fallback (global) data dirs for CSV files
-        csv_dirs = [collector.data_dir / "premium_usage_csv"]
+        csv_dirs = [collector.data_dir / "ai_usage_csv"]
         if collector._fallback_dir:
-            csv_dirs.append(collector._fallback_dir / "premium_usage_csv")
+            csv_dirs.append(collector._fallback_dir / "ai_usage_csv")
         records: list[dict] = []
         seen_files: set[str] = set()
         for csv_dir in csv_dirs:
@@ -183,7 +185,7 @@ def create_usage_tools(
                         records.append(row)
 
         if not records:
-            return json.dumps({"error": "No per-user premium usage CSV data found. Please upload a premium request usage CSV from the Dashboard page."})
+            return json.dumps({"error": "No per-user AI usage CSV data found. Please upload an AI Usage CSV from the Dashboard page."})
 
         # Filter
         if params.org:
@@ -197,14 +199,14 @@ def create_usage_tools(
         # Aggregate per user
         from collections import defaultdict as dd
         user_map: dict[str, dict] = dd(lambda: {
-            "total_requests": 0, "total_cost": 0.0,
+            "total_credits": 0, "total_cost": 0.0,
             "models": dd(float), "days": set(), "org": "", "quota": 0,
         })
         for r in records:
             user = r.get("username", "")
             u = user_map[user]
             qty = float(r.get("quantity", 0))
-            u["total_requests"] += qty
+            u["total_credits"] += qty
             u["total_cost"] += float(r.get("gross_amount", 0))
             u["models"][r.get("model", "unknown")] += qty
             u["days"].add(r.get("date", ""))
@@ -215,14 +217,14 @@ def create_usage_tools(
                 pass
 
         result = []
-        for username, info in sorted(user_map.items(), key=lambda x: -x[1]["total_requests"]):
+        for username, info in sorted(user_map.items(), key=lambda x: -x[1]["total_credits"]):
             result.append({
                 "user": username,
                 "org": info["org"],
-                "total_requests": round(info["total_requests"], 2),
+                "total_credits": round(info["total_credits"], 2),
                 "total_cost": round(info["total_cost"], 4),
                 "quota": info["quota"],
-                "usage_pct": round(info["total_requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
+                "usage_pct": round(info["total_credits"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
                 "days_active": len(info["days"]),
                 "date_range": {"start": min(info["days"]), "end": max(info["days"])} if info["days"] else None,
                 "models": {m: round(q, 2) for m, q in sorted(info["models"].items(), key=lambda x: -x[1])},
@@ -230,7 +232,7 @@ def create_usage_tools(
 
         return json.dumps({"users": result, "total_records": len(records)}, default=str)
 
-    tools = [get_usage_report, get_users_usage_report, get_metrics_detail, get_premium_request_usage, get_user_premium_usage]
+    tools = [get_usage_report, get_users_usage_report, get_metrics_detail, get_ai_credit_usage, get_user_ai_usage]
 
     # --- Live fetch tools (require api_manager) ---
 
@@ -299,21 +301,21 @@ def create_usage_tools(
 
         @define_tool(
             description=(
-                "Fetch LIVE Copilot premium request usage directly from GitHub API. "
-                "Shows per-model breakdown of premium request consumption including "
-                "model names (GPT-5.2, Claude Opus 4.6, etc.), request counts, "
-                "pricing ($0.04/request), gross/discount/net amounts. "
+                "Fetch LIVE Copilot AI credit usage directly from GitHub API (UBB). "
+                "Shows per-model breakdown of AI credit consumption including "
+                "model names (GPT-5.4, Claude Opus 4.7, etc.), credit quantities, "
+                "pricing ($0.01/credit), gross/discount/net amounts. "
                 "Optionally specify year and month to query historical data (up to 24 months)."
             )
         )
-        def fetch_premium_request_usage(params: FetchPremiumRequestUsageParams) -> str:
+        def fetch_ai_credit_usage(params: FetchAiCreditUsageParams) -> str:
             api = api_manager.get_api_for_org(params.org)
             if not api:
                 return json.dumps({"error": f"No API client for org '{params.org}'."})
 
             loop = asyncio.get_event_loop()
             result = loop.run_until_complete(
-                api.get_premium_request_usage(
+                api.get_ai_credit_usage(
                     params.org,
                     year=params.year if params.year else None,
                     month=params.month if params.month else None,
@@ -321,12 +323,12 @@ def create_usage_tools(
             )
 
             if not result:
-                return json.dumps({"error": f"No premium request data for org '{params.org}'.", "hint": "Ensure the PAT has 'Administration' org permission (read)."})
+                return json.dumps({"error": f"No AI credit data for org '{params.org}'.", "hint": "Ensure the PAT has 'Administration' org permission (read)."})
 
             # Cache the result
-            collector._save_json("premium_requests", params.org, result)
+            collector._save_json("ai_credits", params.org, result)
             return json.dumps(result, default=str)
 
-        tools.extend([fetch_org_usage_report, fetch_org_users_usage_report, fetch_premium_request_usage])
+        tools.extend([fetch_org_usage_report, fetch_org_users_usage_report, fetch_ai_credit_usage])
 
     return tools

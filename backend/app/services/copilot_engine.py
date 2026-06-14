@@ -52,14 +52,15 @@ Available data dimensions:
 - Usage Reports: org-level and user-level usage metrics (28-day or specific day), feature adoption, engagement data
 - Billing: plan type, cost per seat, total cost, waste
 - Metrics: detailed IDE completions, chat usage, PR summaries (legacy API)
-- Premium Requests: per-model breakdown of premium request consumption, pricing, and costs
+- AI Credits: per-model breakdown of AI credit consumption, pricing, and costs (UBB)
 - Budgets: UBB (Usage-Based Billing) AI credits budgets - Universal user-level budgets (default for all users), Individual user-level budgets (user-specific overrides), Enterprise/Cost center budgets (overage controls)
 
-Copilot Premium Requests quota (included free per user per month):
-- Copilot Business: 300 premium requests/user/month
-- Copilot Enterprise: 1000 premium requests/user/month
-Requests beyond the included quota are billed at $0.04 per request. Use this information when analyzing premium request usage and cost optimization.
-Note: Per-user premium request breakdown is NOT available via API — only org-level totals by model. Per-user data can only be obtained through the GitHub UI email export.
+Copilot AI credits (UBB - Usage-Based Billing, effective June 1, 2026):
+Each Copilot plan includes a monthly allowance of AI credits per user; Copilot Enterprise includes
+a larger allowance than Copilot Business. AI credit usage beyond the included monthly allowance is
+billed per the model's price per credit (e.g. ~$0.01/credit). Use this information when analyzing
+AI credit usage and cost optimization.
+Note: Per-user AI credit breakdown is NOT available via API — only org-level totals by model. Per-user data can only be obtained through the GitHub UI AI Usage report CSV export.
 
 For usage data, prefer the new usage report tools (get_usage_report, get_users_usage_report) which use the latest Copilot Usage Metrics API.
 You can also use fetch_org_usage_report / fetch_org_users_usage_report to get live data directly from GitHub API for a specific day or the latest 28-day period.

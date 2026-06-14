@@ -37,11 +37,11 @@
 │  └──────────────────┘   │  │ get_all_seats │ get_usage_report     │ │   │
 │                          │  │ find_inactive │ get_users_usage      │ │   │
 │  ┌──────────────────┐   │  │ remove_seat   │ get_metrics_detail   │ │   │
-│  │  PAT Manager     │   │  │ add_team_mbr  │ get_premium_requests │ │   │
-│  │  Multi-PAT       │   │  │               │ get_user_premium     │ │   │
+│  │  PAT Manager     │   │  │ add_team_mbr  │ get_ai_credit_usage  │ │   │
+│  │  Multi-PAT       │   │  │               │ get_user_ai_usage    │ │   │
 │  │  Auto-Discovery  │   │  │ Billing Tools │ fetch_org_usage*     │ │   │
 │  └──────────────────┘   │  │ get_cost_ovw  │ fetch_org_users*     │ │   │
-│                          │  │ calculate_roi │ fetch_premium*       │ │   │
+│                          │  │ calculate_roi │ fetch_ai_credit*     │ │   │
 │                          │  │               │                      │ │   │
 │                          │  │ Action Tools  │ Budget Tools (UBB)   │ │   │
 │                          │  │ batch_remove  │ get_all_budgets      │ │   │
@@ -73,7 +73,7 @@
 
 ```
 1. PAT Configuration → Auto-discover user → Auto-discover orgs → Detect Copilot plans
-2. Data Sync → Fetch seats, billing, usage, metrics, premium requests → Cache as JSON
+2. Data Sync → Fetch seats, billing, usage, metrics, AI credits → Cache as JSON
 3. User Message → Copilot SDK Session → LLM selects tools → Tools read cached data or call live API
 4. AI Analysis → Generate recommendations → Human approval → Execute via GitHub API
 5. Audit Log → Record all operational actions with timestamps

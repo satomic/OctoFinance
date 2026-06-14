@@ -297,13 +297,13 @@ async def get_dashboard(orgs: str = Query(default="")):
     ide_usage = [{"ide": k, **v} for k, v in sorted(ide_map.items(), key=lambda x: -x[1]["interactions"])]
     language_usage = [{"language": k, **v} for k, v in sorted(lang_map.items(), key=lambda x: -x[1]["code_gen"])]
 
-    # --- Premium request detail ---
+    # --- AI credit detail ---
     pr_detail_map: dict[str, dict] = defaultdict(lambda: {
         "gross_qty": 0, "discount_qty": 0, "net_qty": 0,
         "gross_amount": 0.0, "net_amount": 0.0,
     })
     for org_name in selected:
-        pr = data_collector.load_latest("premium_requests", org_name)
+        pr = data_collector.load_latest("ai_credits", org_name)
         if not pr:
             continue
         for item in pr.get("usageItems", []):
@@ -314,16 +314,16 @@ async def get_dashboard(orgs: str = Query(default="")):
             pr_detail_map[m]["gross_amount"] += item.get("grossAmount", 0.0)
             pr_detail_map[m]["net_amount"] += item.get("netAmount", 0.0)
 
-    premium_detail = [{"model": k, **v} for k, v in sorted(pr_detail_map.items(), key=lambda x: -x[1]["gross_qty"])]
+    ai_credit_detail = [{"model": k, **v} for k, v in sorted(pr_detail_map.items(), key=lambda x: -x[1]["gross_qty"])]
 
-    # Merge premium totals into model_usage
+    # Merge AI credit totals into model_usage
     for entry in model_usage:
         pd = pr_detail_map.pop(entry["model"], None)
-        entry["premium_requests"] = pd["gross_qty"] if pd else 0
+        entry["ai_credits"] = pd["gross_qty"] if pd else 0
     for m, pd in pr_detail_map.items():
         if pd["gross_qty"] > 0:
             model_usage.append({"model": m, "interactions": 0, "code_gen": 0, "code_accept": 0,
-                                "loc_suggested": 0, "loc_accepted": 0, "premium_requests": pd["gross_qty"]})
+                                "loc_suggested": 0, "loc_accepted": 0, "ai_credits": pd["gross_qty"]})
 
     # --- Top users from usage_users (enhanced) ---
     user_agg: dict[str, dict] = defaultdict(lambda: {
@@ -411,12 +411,12 @@ async def get_dashboard(orgs: str = Query(default="")):
         "ide_usage": ide_usage,
         "language_usage": language_usage,
         "code_completions": code_completions,
-        "premium_detail": premium_detail,
+        "ai_credit_detail": ai_credit_detail,
         "chat_stats": chat_stats,
         "top_users": top_users,
         "orgs": all_org_names,
         "date_range": {"start": date_start, "end": date_end},
-        "user_premium_usage": _aggregate_user_premium_csv(selected),
+        "user_ai_usage": _aggregate_user_ai_usage(selected),
     }
 
 
@@ -439,17 +439,17 @@ async def get_csv_dashboard(
     selected_products = [p.strip() for p in products.split(",") if p.strip()]
     selected_skus = [s.strip() for s in skus.split(",") if s.strip()]
 
-    premium = _build_premium_csv_section(selected_orgs, selected_ccs, date_from, date_to)
+    ai_usage = _build_ai_usage_section(selected_orgs, selected_ccs, date_from, date_to)
     usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to)
 
     # Gather all filter options from raw data
-    all_premium = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    all_ai_usage = _load_all_csv_records(CSV_TYPE_AI)
     all_usage = _load_all_csv_records(CSV_TYPE_USAGE)
     all_orgs: set[str] = set()
     all_ccs: set[str] = set()
     all_products: set[str] = set()
     all_skus: set[str] = set()
-    for r in all_premium:
+    for r in all_ai_usage:
         if r.get("organization"):
             all_orgs.add(r["organization"])
         if r.get("cost_center_name"):
@@ -465,7 +465,7 @@ async def get_csv_dashboard(
             all_skus.add(r["sku"])
 
     return {
-        "premium_csv": premium,
+        "ai_usage": ai_usage,
         "usage_report": usage,
         "filters": {
             "orgs": sorted(all_orgs),
@@ -490,10 +490,10 @@ def _apply_common_filters(records: list[dict], selected_orgs: list[str], selecte
     return result
 
 
-def _build_premium_csv_section(selected_orgs: list[str], selected_ccs: list[str],
+def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
                                 date_from: str, date_to: str) -> dict:
-    """Build aggregated premium request CSV section for CSV dashboard."""
-    all_records = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    """Build aggregated AI usage CSV section for the CSV dashboard."""
+    all_records = _load_all_csv_records(CSV_TYPE_AI)
     if not all_records:
         return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
                 "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
@@ -735,27 +735,32 @@ def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str
 # CSV helpers
 # ---------------------------------------------------------------------------
 
-CSV_TYPE_PREMIUM = "premium_request"
+CSV_TYPE_AI = "ai_usage"
 CSV_TYPE_USAGE = "usage_report"
 
 
-def _get_csv_dir(csv_type: str = CSV_TYPE_PREMIUM) -> Path:
+def _get_csv_dir(csv_type: str = CSV_TYPE_AI) -> Path:
     if csv_type == CSV_TYPE_USAGE:
         return data_collector.data_dir / "usage_report_csv"
-    return data_collector.data_dir / "premium_usage_csv"
+    return data_collector.data_dir / "ai_usage_csv"
 
 
 def _detect_csv_type(fieldnames: list[str]) -> str | None:
-    """Detect whether a CSV is a premium_request or usage_report based on columns."""
+    """Detect whether a CSV is an AI usage report or a usage report based on columns.
+
+    - AI Usage report (UBB): has a per-model breakdown, identified by a ``model``
+      column alongside ``username``/``organization``.
+    - Usage report: aggregated by ``product``/``sku``/``unit_type`` with no ``model`` column.
+    """
     cols = set(fieldnames)
     if "model" in cols and "username" in cols and "organization" in cols:
-        return CSV_TYPE_PREMIUM
+        return CSV_TYPE_AI
     if "product" in cols and "sku" in cols and "unit_type" in cols:
         return CSV_TYPE_USAGE
     return None
 
 
-def _load_all_csv_records(csv_type: str = CSV_TYPE_PREMIUM) -> list[dict]:
+def _load_all_csv_records(csv_type: str = CSV_TYPE_AI) -> list[dict]:
     """Load all CSV records from the given type's directory."""
     csv_dir = _get_csv_dir(csv_type)
     if not csv_dir.exists():
@@ -769,8 +774,8 @@ def _load_all_csv_records(csv_type: str = CSV_TYPE_PREMIUM) -> list[dict]:
     return records
 
 
-def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
-    """Aggregate per-user premium usage from uploaded CSV files.
+def _aggregate_user_ai_usage(selected_orgs: list[str]) -> dict:
+    """Aggregate per-user AI usage from uploaded CSV files.
 
     Returns structure with per-user breakdown, daily trend, model breakdown, etc.
     """
@@ -908,7 +913,7 @@ def _aggregate_user_premium_csv(selected_orgs: list[str]) -> dict:
 
 @router.post("/data/upload-csv")
 async def upload_csv(file: UploadFile = File(...)):
-    """Upload a CSV file – either a premium request CSV or a usage report CSV.
+    """Upload a CSV file – either an AI usage CSV or a usage report CSV.
 
     The type is auto-detected from the column headers. The file is validated,
     deduplicated against existing data, and saved.
@@ -925,7 +930,7 @@ async def upload_csv(file: UploadFile = File(...)):
 
     csv_type = _detect_csv_type(list(reader.fieldnames))
     if csv_type is None:
-        return {"error": "Unrecognised CSV format. Expected a premium request CSV (with 'model' column) "
+        return {"error": "Unrecognised CSV format. Expected an AI usage CSV (with a 'model' column) "
                          "or a usage report CSV (with 'product' and 'sku' columns)."}
 
     rows = list(reader)
@@ -941,7 +946,7 @@ async def upload_csv(file: UploadFile = File(...)):
 
     # Build deduplication key per type
     def _key(row: dict) -> str:
-        if csv_type == CSV_TYPE_PREMIUM:
+        if csv_type == CSV_TYPE_AI:
             return f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
         return f"{row.get('date')}|{row.get('username')}|{row.get('sku')}|{row.get('organization')}"
 
@@ -963,7 +968,7 @@ async def upload_csv(file: UploadFile = File(...)):
         }
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    prefix = "premium_usage" if csv_type == CSV_TYPE_PREMIUM else "usage_report"
+    prefix = "ai_usage" if csv_type == CSV_TYPE_AI else "usage_report"
     out_path = csv_dir / f"{prefix}_{ts}.csv"
     fieldnames = list(reader.fieldnames)
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
@@ -982,16 +987,9 @@ async def upload_csv(file: UploadFile = File(...)):
     }
 
 
-# Keep old endpoint as alias for backward-compatibility
-@router.post("/data/upload-premium-csv")
-async def upload_premium_csv(file: UploadFile = File(...)):
-    """Alias for /data/upload-csv (backward compatibility)."""
-    return await upload_csv(file)
-
-
 @router.get("/data/csv-info")
 async def get_csv_info():
-    """Get info about all uploaded CSV data (both premium request and usage report)."""
+    """Get info about all uploaded CSV data (both AI usage and usage report)."""
     def _scan(csv_type: str) -> dict:
         csv_dir = _get_csv_dir(csv_type)
         csv_files = sorted(csv_dir.glob("*.csv")) if csv_dir.exists() else []
@@ -1021,23 +1019,16 @@ async def get_csv_info():
         }
 
     return {
-        "premium_csv": _scan(CSV_TYPE_PREMIUM),
+        "ai_usage": _scan(CSV_TYPE_AI),
         "usage_report": _scan(CSV_TYPE_USAGE),
     }
-
-
-@router.get("/data/premium-csv-info")
-async def get_premium_csv_info():
-    """Get info about uploaded premium usage CSV data (legacy endpoint)."""
-    info = await get_csv_info()
-    return info["premium_csv"]
 
 
 @router.get("/data/cost-center-report")
 async def get_cost_center_report(enterprise: str = Query(default="")):
     """Generate and return a ZIP archive with one HTML report per cost center.
 
-    Each HTML is self-contained (no external deps), includes premium request
+    Each HTML is self-contained (no external deps), includes AI usage
     and usage report analysis filtered to that cost center's members.
     """
     enterprise_list = data_collector.load_latest("enterprise", "all") or []
@@ -1057,14 +1048,14 @@ async def get_cost_center_report(enterprise: str = Query(default="")):
     cost_centers    = cc_data.get("cost_centers", [])
     enterprise_name = cc_data.get("enterprise_name", selected_slug)
 
-    all_premium = _load_all_csv_records(CSV_TYPE_PREMIUM)
+    all_ai_usage = _load_all_csv_records(CSV_TYPE_AI)
     all_usage   = _load_all_csv_records(CSV_TYPE_USAGE)
 
     zip_bytes = generate_report_zip(
         enterprise=selected_slug,
         enterprise_name=enterprise_name,
         cost_centers=cost_centers,
-        all_premium_records=all_premium,
+        all_ai_usage_records=all_ai_usage,
         all_usage_records=all_usage,
     )
 
@@ -1173,5 +1164,115 @@ async def get_cost_center_dashboard(
         "total_cost_centers": len(all_ccs),
         "total_unique_members": len(user_map),
         "user_map": user_map,
+        "no_data": False,
+    }
+
+
+@router.get("/data/budgets-dashboard")
+async def get_budgets_dashboard(
+    enterprise: str = Query(default=""),
+    scope: str = Query(default="all"),
+    search: str = Query(default=""),
+):
+    """Return budgets dashboard data from synced JSON files.
+
+    Supports filtering by enterprise slug, budget scope, and a text search over
+    the budget entity name / SKU / scope.
+    """
+    enterprise_list = data_collector.load_latest("enterprise", "all") or []
+    if not isinstance(enterprise_list, list):
+        enterprise_list = []
+
+    empty = {
+        "enterprises": enterprise_list,
+        "selected_enterprise": None,
+        "enterprise_name": "",
+        "budgets": [],
+        "total_budgets": 0,
+        "total_amount": 0,
+        "hard_limit_count": 0,
+        "alerting_count": 0,
+        "scope_breakdown": [],
+        "scopes": [],
+        "no_data": True,
+    }
+
+    if not enterprise_list:
+        return empty
+
+    available_slugs = [e["slug"] for e in enterprise_list]
+    selected_slug = enterprise if enterprise in available_slugs else available_slugs[0]
+
+    budgets_data = data_collector.load_latest("budgets", selected_slug)
+    if not budgets_data:
+        return {**empty, "selected_enterprise": selected_slug}
+
+    raw_budgets: list[dict] = budgets_data.get("budgets", [])
+
+    # Normalize each budget to a stable shape for the frontend
+    def _normalize(b: dict) -> dict:
+        skus = b.get("budget_product_skus")
+        if not skus:
+            single = b.get("budget_product_sku")
+            skus = [single] if single else []
+        alerting = b.get("budget_alerting") or {}
+        return {
+            "id": b.get("id", ""),
+            "budget_type": b.get("budget_type", ""),
+            "scope": b.get("budget_scope", ""),
+            "entity_name": b.get("budget_entity_name", "") or "",
+            "skus": [s for s in skus if s],
+            "amount": b.get("budget_amount", 0) or 0,
+            "prevent_further_usage": bool(b.get("prevent_further_usage", False)),
+            "will_alert": bool(alerting.get("will_alert", False)),
+            "alert_recipients": alerting.get("alert_recipients", []) or [],
+        }
+
+    budgets = [_normalize(b) for b in raw_budgets]
+
+    # All available scopes (before filtering) for the scope selector
+    all_scopes = sorted({b["scope"] for b in budgets if b["scope"]})
+
+    # Apply scope filter
+    if scope and scope != "all":
+        budgets = [b for b in budgets if b["scope"] == scope]
+
+    # Apply text search over entity name, scope, type, and SKUs
+    search_lower = search.strip().lower()
+    if search_lower:
+        def _matches(b: dict) -> bool:
+            haystack = " ".join([
+                b["entity_name"], b["scope"], b["budget_type"],
+                " ".join(b["skus"]),
+            ]).lower()
+            return search_lower in haystack
+        budgets = [b for b in budgets if _matches(b)]
+
+    # Scope breakdown
+    scope_map: dict[str, dict] = defaultdict(lambda: {"count": 0, "amount": 0.0})
+    for b in budgets:
+        sm = scope_map[b["scope"] or "unknown"]
+        sm["count"] += 1
+        sm["amount"] += float(b["amount"] or 0)
+    scope_breakdown = [
+        {"scope": s, "count": v["count"], "amount": round(v["amount"], 2)}
+        for s, v in sorted(scope_map.items(), key=lambda x: -x[1]["amount"])
+    ]
+
+    total_amount = round(sum(float(b["amount"] or 0) for b in budgets), 2)
+    hard_limit_count = sum(1 for b in budgets if b["prevent_further_usage"])
+    alerting_count = sum(1 for b in budgets if b["will_alert"])
+
+    return {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug,
+        "enterprise_name": budgets_data.get("enterprise_name", selected_slug),
+        "budgets": budgets,
+        "total_budgets": len(budgets),
+        "total_amount": total_amount,
+        "hard_limit_count": hard_limit_count,
+        "alerting_count": alerting_count,
+        "scope_breakdown": scope_breakdown,
+        "scopes": all_scopes,
         "no_data": False,
     }

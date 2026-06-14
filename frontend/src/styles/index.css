@@ -1445,6 +1445,34 @@ body {
 
 .cc-search-input::placeholder { color: var(--text-muted); }
 
+/* Native <select> styled to match the custom MultiSelect trigger */
+.cc-native-select {
+  display: block;
+  width: 100%;
+  padding: 4px 26px 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M3 4.5L6 7.5L9 4.5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+}
+
+.cc-native-select:hover,
+.cc-native-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .cc-table-wrap {
   overflow-x: auto;
   border-radius: 8px;
@@ -2136,6 +2164,7 @@ body {
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .dash-section-header {
@@ -2199,6 +2228,12 @@ body {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border: 1px solid var(--border);
+}
+
+.dash-badge-danger {
+  background: color-mix(in srgb, var(--danger, #f85149) 18%, transparent);
+  color: var(--danger, #f85149);
+  border: 1px solid color-mix(in srgb, var(--danger, #f85149) 45%, transparent);
 }
 
 /* Seat avatar inline */

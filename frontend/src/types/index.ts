@@ -122,19 +122,19 @@ export interface DashboardData {
     loc_suggested: number; loc_accepted: number;
   }[];
   feature_usage: { feature: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
-  model_usage: { model: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; premium_requests: number }[];
+  model_usage: { model: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; ai_credits: number }[];
   ide_usage: { ide: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
   language_usage: { language: string; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
   code_completions: { language: string; suggestions: number; acceptances: number; lines_suggested: number; lines_accepted: number; engaged_users: number }[];
-  premium_detail: { model: string; gross_qty: number; discount_qty: number; net_qty: number; gross_amount: number; net_amount: number }[];
+  ai_credit_detail: { model: string; gross_qty: number; discount_qty: number; net_qty: number; gross_amount: number; net_amount: number }[];
   chat_stats: { ide_chats: number; ide_copy_events: number; ide_insertion_events: number; dotcom_chats: number; pr_summaries: number };
   top_users: { user: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; days_active: number; used_agent: boolean; used_chat: boolean }[];
   orgs: string[];
   date_range: { start: string; end: string };
-  user_premium_usage: UserPremiumUsage;
+  user_ai_usage: AiUsage;
 }
 
-export interface UserPremiumRecord {
+export interface AiUsageRecord {
   user: string;
   org: string;
   cost_center: string;
@@ -147,10 +147,10 @@ export interface UserPremiumRecord {
   models: { model: string; requests: number }[];
 }
 
-export interface UserPremiumUsage {
+export interface AiUsage {
   has_data: boolean;
   latest_date: string | null;
-  users: UserPremiumRecord[];
+  users: AiUsageRecord[];
   daily_trend: { day: string; requests: number; amount: number; active_users: number }[];
   model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
   org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
@@ -170,15 +170,12 @@ export interface CsvTypeInfo {
 }
 
 export interface CsvInfo {
-  premium_csv: CsvTypeInfo;
+  ai_usage: CsvTypeInfo;
   usage_report: CsvTypeInfo;
 }
 
-// Keep alias for backward compatibility
-export type PremiumCsvInfo = CsvTypeInfo;
-
 // CSV Dashboard types
-export interface PremiumCsvSection {
+export interface AiUsageSection {
   has_data: boolean;
   date_range: { start: string; end: string };
   kpi: { total_requests: number; total_cost: number; unique_users: number; unique_orgs: number };
@@ -186,7 +183,7 @@ export interface PremiumCsvSection {
   model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
   org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
   cost_center_breakdown: { cost_center: string; requests: number; amount: number; user_count: number }[];
-  users: UserPremiumRecord[];
+  users: AiUsageRecord[];
 }
 
 export interface UsageReportUser {
@@ -213,7 +210,7 @@ export interface UsageReportSection {
 }
 
 export interface CsvDashboardData {
-  premium_csv: PremiumCsvSection;
+  ai_usage: AiUsageSection;
   usage_report: UsageReportSection;
   filters: {
     orgs: string[];
@@ -256,5 +253,32 @@ export interface CostCenterDashboardData {
   total_cost_centers: number;
   total_unique_members: number;
   user_map: UserCostCenterEntry[];
+  no_data: boolean;
+}
+
+// Budgets dashboard types
+export interface Budget {
+  id: string;
+  budget_type: string;
+  scope: string;
+  entity_name: string;
+  skus: string[];
+  amount: number;
+  prevent_further_usage: boolean;
+  will_alert: boolean;
+  alert_recipients: string[];
+}
+
+export interface BudgetsDashboardData {
+  enterprises: { slug: string; name: string }[];
+  selected_enterprise: string;
+  enterprise_name: string;
+  budgets: Budget[];
+  total_budgets: number;
+  total_amount: number;
+  hard_limit_count: number;
+  alerting_count: number;
+  scope_breakdown: { scope: string; count: number; amount: number }[];
+  scopes: string[];
   no_data: boolean;
 }

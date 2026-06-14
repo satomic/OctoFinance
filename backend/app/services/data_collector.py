@@ -184,19 +184,19 @@ class DataCollector:
             if log_fn:
                 log_fn("error", f"  {org}: metrics error - {e}")
 
-        # Premium Request Usage (current month)
+        # AI Credit Usage (current month, UBB)
         try:
-            premium = await api.get_premium_request_usage(org)
-            if premium:
-                self._save_json("premium_requests", org, premium)
-                n = len(premium.get("usageItems", []))
-                summary["synced"].append(f"premium_requests ({n} items)")
+            ai_credits = await api.get_ai_credit_usage(org)
+            if ai_credits:
+                self._save_json("ai_credits", org, ai_credits)
+                n = len(ai_credits.get("usageItems", []))
+                summary["synced"].append(f"ai_credits ({n} items)")
                 if log_fn:
-                    log_fn("info", f"  {org}: premium requests synced ({n} items)")
+                    log_fn("info", f"  {org}: AI credit usage synced ({n} items)")
         except Exception as e:
-            summary["errors"].append(f"premium_requests: {e}")
+            summary["errors"].append(f"ai_credits: {e}")
             if log_fn:
-                log_fn("error", f"  {org}: premium requests error - {e}")
+                log_fn("error", f"  {org}: AI credit usage error - {e}")
 
         if log_fn:
             log_fn("info", f"  {org}: done ({len(summary['synced'])} synced, {len(summary['errors'])} errors)")
@@ -269,7 +269,7 @@ class DataCollector:
         return members
 
     async def sync_enterprises(self, log_fn: LogFn = None) -> dict:
-        """Sync enterprise list, all cost centers, and expand org/team members."""
+        """Sync enterprise list, all cost centers, and budgets."""
         summary: dict = {"synced": [], "errors": []}
         if not self._api_manager:
             return summary
@@ -286,7 +286,55 @@ class DataCollector:
         if log_fn:
             log_fn("info", f"  Enterprises synced: {[e['slug'] for e in enterprises]}")
 
-        # Sync cost centers per enterprise (with member expansion)
+        # Cost centers + budgets
+        cc_summary = await self._sync_cost_centers(enterprises, log_fn=log_fn)
+        bd_summary = await self._sync_budgets(enterprises, log_fn=log_fn)
+        summary["synced"].extend(cc_summary["synced"] + bd_summary["synced"])
+        summary["errors"].extend(cc_summary["errors"] + bd_summary["errors"])
+
+        return summary
+
+    async def sync_dataset(self, dataset: str, log_fn: LogFn = None) -> dict:
+        """Sync a single enterprise-scoped dataset only ('cost_centers' or 'budgets').
+
+        Always refreshes the enterprise list first (needed by the dashboards),
+        then syncs the requested dataset for every discovered enterprise.
+        """
+        summary: dict = {"synced": [], "errors": []}
+        if not self._api_manager:
+            return summary
+
+        enterprises = self._api_manager.get_all_enterprises()
+        if not enterprises:
+            if log_fn:
+                log_fn("info", "  No enterprises discovered, skipping sync")
+            return summary
+
+        # Keep the enterprise list fresh so dashboards have their selector data
+        self._save_json("enterprise", "all", enterprises)
+
+        if dataset == "cost_centers":
+            if log_fn:
+                log_fn("info", "Syncing cost center data...")
+            result = await self._sync_cost_centers(enterprises, log_fn=log_fn)
+        elif dataset == "budgets":
+            if log_fn:
+                log_fn("info", "Syncing budget data...")
+            result = await self._sync_budgets(enterprises, log_fn=log_fn)
+        else:
+            summary["errors"].append(f"Unknown dataset '{dataset}'")
+            if log_fn:
+                log_fn("error", f"  Unknown dataset '{dataset}'")
+            return summary
+
+        summary["synced"].extend(result["synced"])
+        summary["errors"].extend(result["errors"])
+        return summary
+
+    async def _sync_cost_centers(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
+        """Sync cost centers (with member expansion) for the given enterprises."""
+        summary: dict = {"synced": [], "errors": []}
+
         for ent in enterprises:
             slug = ent["slug"]
             api = self._api_manager.get_api_for_enterprise(slug)
@@ -329,6 +377,34 @@ class DataCollector:
                 summary["errors"].append(f"cost_centers/{slug}: {e}")
                 if log_fn:
                     log_fn("error", f"  {slug}: cost centers error - {e}")
+
+        return summary
+
+    async def _sync_budgets(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
+        """Sync billing budgets (UBB) for the given enterprises."""
+        summary: dict = {"synced": [], "errors": []}
+
+        for ent in enterprises:
+            slug = ent["slug"]
+            api = self._api_manager.get_api_for_enterprise(slug)
+            if not api:
+                summary["errors"].append(f"budgets/{slug}: no API client")
+                continue
+            try:
+                budgets = await api.get_all_budgets_paginated("enterprise", slug)
+                self._save_json("budgets", slug, {
+                    "enterprise": slug,
+                    "enterprise_name": ent.get("name", ""),
+                    "budgets": budgets,
+                    "total": len(budgets),
+                })
+                summary["synced"].append(f"budgets/{slug} ({len(budgets)} budgets)")
+                if log_fn:
+                    log_fn("info", f"  {slug}: budgets synced ({len(budgets)} budgets)")
+            except Exception as e:
+                summary["errors"].append(f"budgets/{slug}: {e}")
+                if log_fn:
+                    log_fn("error", f"  {slug}: budgets error - {e}")
 
         return summary
 

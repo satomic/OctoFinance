@@ -3,17 +3,20 @@
 
 ## Project Summary
 
-OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 23 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user premium request tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
+OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 23 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
 
 ![alt text](images/chat.png)
 
-![alt text](images/dashboard.png)
+![alt text](images/metrics.png)
+
+![alt text](images/aiusage.png)
+
 
 ---
 
 ## Problem & Solution
 
-**Problem**: Enterprises managing hundreds or thousands of Copilot seats across multiple organizations lack unified visibility into usage, waste, and ROI. Manual cost analysis through spreadsheets is time-consuming and error-prone, and premium request costs are hard to track per-user.
+**Problem**: Enterprises managing hundreds or thousands of Copilot seats across multiple organizations lack unified visibility into usage, waste, and ROI. Manual cost analysis through spreadsheets is time-consuming and error-prone, and AI credit costs are hard to track per-user.
 
 **Solution**: An AI-first FinOps platform built on the GitHub Copilot SDK with:
 - **Conversational interface** — Ask questions in natural language, get data-driven answers
@@ -38,7 +41,7 @@ OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot
 │   Data Collector · Audit Log · Budget Management                   │
 └──────────────────────────┬─────────────────────────────────────────┘
                            │
-              GitHub REST API (Seats, Billing, Usage, Metrics, Premium, Budgets)
+              GitHub REST API (Seats, Billing, Usage, Metrics, AI Credits, Budgets)
                            │
               JSON Data Store (No database required)
 ```
@@ -55,7 +58,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 - **Multi-Org Management** — Multiple PATs, auto-discovery, enterprise support
 - **Human-in-the-Loop** — Recommendation → Review → Approve/Reject workflow
 - **Real-Time Sync** — Auto-sync, cron scheduling, SSE progress streaming
-- **Premium Request Tracking** — Org-level API data + per-user CSV upload
+- **AI Credit Tracking** — Org-level API data + per-user CSV upload
 - **Security** — Cookie auth, PBKDF2 hashing, audit logging
 - **i18n** — English and Chinese (Simplified)
 - **Theming** — Dark and Light modes
@@ -124,4 +127,4 @@ cd backend && ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-*Built with the [GitHub Copilot Python SDK](https://github.com/github/copilot-sdk) for the FY26 GitHub Copilot SDK Enterprise Challenge.*
+*Built with the [GitHub Copilot Python SDK](https://github.com/github/copilot-sdk)*

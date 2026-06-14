@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, BudgetsDashboardData } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -98,7 +98,55 @@ export function useSync() {
     await fetch("/api/sync", { method: "POST" });
   }, []);
 
-  return { sync };
+  /** Sync only a single enterprise-scoped dataset: 'cost_centers' | 'budgets'. */
+  const syncDataset = useCallback(async (dataset: "cost_centers" | "budgets") => {
+    await fetch(`/api/sync/dataset/${dataset}`, { method: "POST" });
+  }, []);
+
+  return { sync, syncDataset };
+}
+
+/**
+ * Triggers a dataset-scoped sync and resolves once the background sync finishes.
+ * Polls /api/health for the global is_syncing flag. Exposes a local `syncing`
+ * state so a dashboard can show its own button spinner independently.
+ */
+export function useDatasetSync() {
+  const [syncing, setSyncing] = useState(false);
+
+  const runSync = useCallback(async (dataset: "cost_centers" | "budgets", onDone?: () => void) => {
+    setSyncing(true);
+    try {
+      await fetch(`/api/sync/dataset/${dataset}`, { method: "POST" }).catch(() => {});
+
+      const started = Date.now();
+      let sawSyncing = false;
+      await new Promise<void>((resolve) => {
+        const iv = setInterval(async () => {
+          try {
+            const res = await fetch("/api/health");
+            const data = await res.json();
+            const isSyncing = !!data.is_syncing;
+            const elapsed = Date.now() - started;
+            if (isSyncing) sawSyncing = true;
+            // Done once we observed a sync that has finished...
+            if (sawSyncing && !isSyncing) { clearInterval(iv); resolve(); return; }
+            // ...or the sync was so fast/absent we never saw it (fallback after 3s)...
+            if (!isSyncing && elapsed > 3000) { clearInterval(iv); resolve(); return; }
+            // ...or a hard safety timeout.
+            if (elapsed > 120000) { clearInterval(iv); resolve(); return; }
+          } catch {
+            /* ignore transient poll errors */
+          }
+        }, 1500);
+      });
+    } finally {
+      setSyncing(false);
+      onDone?.();
+    }
+  }, []);
+
+  return { syncing, runSync };
 }
 
 export function useDashboard(selectedOrgs: string[]) {
@@ -192,10 +240,36 @@ export function useCostCenterDashboard(params: {
   return { data, loading, refetch: fetchData };
 }
 
-// Keep old hook for backward compat
-export function usePremiumCsvInfo() {
-  const { info, refetch, uploadCsv } = useCsvInfo();
-  return { info: info?.premium_csv ?? null, refetch, uploadCsv };
+export function useBudgetsDashboard(params: {
+  enterprise: string;
+  scope: string;
+  search: string;
+}) {
+  const [data, setData] = useState<BudgetsDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qp = new URLSearchParams();
+      if (params.enterprise) qp.set("enterprise", params.enterprise);
+      if (params.scope) qp.set("scope", params.scope);
+      if (params.search) qp.set("search", params.search);
+      const res = await fetch(`/api/data/budgets-dashboard?${qp}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.enterprise, params.scope, params.search]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, refetch: fetchData };
 }
 
 export function useCsvDashboard(params: {

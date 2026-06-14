@@ -20,11 +20,11 @@
 | **Usage** | `get_usage_report` | Org-level 28-day usage from cached data |
 | | `get_users_usage_report` | User-level 28-day usage from cached data |
 | | `get_metrics_detail` | Detailed metrics (legacy API) |
-| | `get_premium_request_usage` | Org-level premium request breakdown |
-| | `get_user_premium_usage` | Per-user premium usage from CSV data |
+| | `get_ai_credit_usage` | Org-level AI credit breakdown |
+| | `get_user_ai_usage` | Per-user AI usage from CSV data |
 | | `fetch_org_usage_report` | Live org-level usage from GitHub API |
 | | `fetch_org_users_usage_report` | Live user-level usage from GitHub API |
-| | `fetch_premium_request_usage` | Live premium request data from GitHub API |
+| | `fetch_ai_credit_usage` | Live AI credit data from GitHub API |
 | **Billing** | `get_cost_overview` | Cost overview: seats, waste, utilization |
 | | `calculate_roi` | ROI metrics: cost per user, acceptance rate |
 | **Actions** | `batch_remove_seats` | Batch seat removal with audit logging |
@@ -39,8 +39,8 @@
 | **Code Productivity** | LOC suggested/accepted trend, acceptance rate line chart |
 | **Feature Usage** | Feature-by-feature table (interactions, code gen, acceptance) |
 | **Language Distribution** | Horizontal bar chart + code completions table by language |
-| **Model & Premium Requests** | Model usage pie chart + per-model cost/quantity table |
-| **Per-User Premium** | Daily trend bar, model breakdown pie, per-user table with quota bars |
+| **Model & AI Credits** | Model usage pie chart + per-model cost/quantity table |
+| **AI Usage** | Daily trend bar, model breakdown pie, per-user table with quota bars |
 | **IDE Distribution** | IDE interaction bar chart + detailed table |
 | **Seat Management** | Full seat table with status, team, activity, plan badges |
 | **Top Active Users** | Ranked table with interactions, code gen, chat/agent usage |
@@ -69,11 +69,11 @@
 - **Intelligent seat removal**: auto-detects org-level vs. team-level assignment and uses correct API
 - **Audit logging** for all executed operations
 
-## Premium Request Analytics
+## AI Credit Analytics
 
-- **Org-level premium request** tracking via GitHub Billing API
-- **Per-user premium usage** from CSV upload (GitHub UI email export)
-- **Per-model breakdown** (GPT-5.2, Claude Opus 4.6, etc.)
+- **Org-level AI credit** tracking via GitHub Billing API (UBB)
+- **Per-user AI usage** from CSV upload (GitHub UI AI Usage report export)
+- **Per-model breakdown** (GPT-5.4, Claude Opus 4.7, etc.)
 - **Quota tracking** with visual progress bars
 - **Cost analysis** including gross/discount/net amounts
 

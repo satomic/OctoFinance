@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
-import { useCostCenterDashboard } from "../hooks/useData";
+import { useCostCenterDashboard, useDatasetSync } from "../hooks/useData";
 import type { CostCenter, UserCostCenterEntry } from "../types";
 
 interface Props {
@@ -236,9 +236,13 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
     }
   }, [enterprise]);
 
-  const { data, loading } = useCostCenterDashboard({
+  const { data, loading, refetch } = useCostCenterDashboard({
     enterprise, costCenters, state, search: ui.ccDashSearch,
   });
+  const { syncing: ccSyncing, runSync } = useDatasetSync();
+  const handleSync = useCallback(() => {
+    runSync("cost_centers", refetch);
+  }, [runSync, refetch]);
 
   const setEnterprise = useCallback(
     (v: string) => ui.patch({ ccDashEnterprise: v }),
@@ -275,10 +279,9 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
         {enterpriseOptions.length > 1 && (
           <div className="org-dropdown" style={{ minWidth: 160 }}>
             <select
-              className="org-dropdown-trigger"
+              className="cc-native-select"
               value={enterprise || data.selected_enterprise}
               onChange={(e) => handleEnterpriseSelect(e.target.value)}
-              style={{ width: "100%", background: "none", border: "none", color: "inherit", fontSize: 13, cursor: "pointer" }}
             >
               {enterpriseOptions.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -298,10 +301,9 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
         {/* State filter */}
         <div className="org-dropdown" style={{ minWidth: 120 }}>
           <select
-            className="org-dropdown-trigger"
+            className="cc-native-select"
             value={state}
             onChange={(e) => setState(e.target.value)}
-            style={{ width: "100%", background: "none", border: "none", color: "inherit", fontSize: 13, cursor: "pointer" }}
           >
             <option value="active">{t("ccDash.stateActive")}</option>
             <option value="archived">{t("ccDash.stateArchived")}</option>
@@ -320,9 +322,21 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
           onKeyDown={(e) => { if (e.key === "Enter") commitSearch(searchInput); }}
         />
 
-        {/* Download report button — pushed to the right */}
+        {/* Sync + Download buttons — pushed to the right */}
+        <button
+          className="btn btn-small"
+          style={{ marginLeft: "auto" }}
+          onClick={handleSync}
+          disabled={ccSyncing}
+          title={t("ccDash.syncHint")}
+        >
+          {ccSyncing ? t("status.syncing") : `⟳ ${t("ccDash.sync")}`}
+        </button>
+
+        {/* Download report button */}
         <button
           className="btn btn-small cc-download-btn"
+          style={{ marginLeft: 0 }}
           onClick={handleDownload}
           disabled={downloading}
           title={t("ccDash.downloadReport")}

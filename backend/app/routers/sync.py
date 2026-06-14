@@ -77,6 +77,29 @@ async def sync_all(session_id: str | None = Query(default=None)):
     return {"status": "started"}
 
 
+@router.post("/sync/dataset/{dataset}")
+async def sync_dataset(dataset: str, session_id: str | None = Query(default=None)):
+    """Trigger a sync for a single enterprise-scoped dataset only.
+
+    Supported datasets: 'cost_centers', 'budgets'. Runs in background; logs
+    stream via /sync-stream. Two path segments avoid colliding with /sync/{org}.
+    """
+    if dataset not in ("cost_centers", "budgets"):
+        return {"status": "error", "error": f"Unsupported dataset '{dataset}'"}
+
+    if sync_manager.is_syncing:
+        return {"status": "already_syncing"}
+
+    collectors = _get_collectors(session_id)
+
+    async def _do_sync(log_fn):
+        for collector in collectors:
+            await collector.sync_dataset(dataset, log_fn=log_fn)
+
+    sync_manager.run_in_background(_do_sync)
+    return {"status": "started", "dataset": dataset}
+
+
 @router.post("/sync/{org}")
 async def sync_org(org: str, session_id: str | None = Query(default=None)):
     """Trigger data sync for a specific organization.
@@ -106,7 +129,7 @@ async def sync_status():
         has_usage = data_collector.load_latest("usage", org_name) is not None
         has_usage_users = data_collector.load_latest("usage_users", org_name) is not None
         has_metrics = data_collector.load_latest("metrics", org_name) is not None
-        has_premium_requests = data_collector.load_latest("premium_requests", org_name) is not None
+        has_ai_credits = data_collector.load_latest("ai_credits", org_name) is not None
         orgs_with_data.append({
             "org": org_name,
             "has_seats": has_seats,
@@ -114,7 +137,7 @@ async def sync_status():
             "has_usage": has_usage,
             "has_usage_users": has_usage_users,
             "has_metrics": has_metrics,
-            "has_premium_requests": has_premium_requests,
+            "has_ai_credits": has_ai_credits,
         })
 
     users = api_manager.get_discovered_users()

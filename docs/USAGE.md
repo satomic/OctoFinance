@@ -63,7 +63,7 @@ The top bar contains health indicators and controls (left to right):
 | **Console** | Toggle the bottom console panel |
 | **中文 / EN** | Switch UI language between English and Chinese |
 | **Dark / Light** | Switch color theme |
-| **Upload CSV** | Upload premium request usage CSV (exported from GitHub UI) |
+| **Upload CSV** | Upload AI Usage report CSV (exported from GitHub UI) |
 | **Sync Data** | Manually trigger a full data sync from GitHub APIs |
 | **Logout** | End session and return to login |
 
@@ -150,9 +150,9 @@ Help me analyze where we can save money and provide specific recommendations
 List all inactive users and create suggestions to remove their seats
 ```
 
-**Premium request analysis:**
+**AI credit analysis:**
 ```
-Show me premium request usage — which models cost the most?
+Show me AI credit usage — which models cost the most?
 ```
 
 **Cross-organization comparison:**
@@ -206,8 +206,8 @@ Each section is collapsible. Click the header to expand/collapse.
 | **Code Productivity** | LOC suggested/accepted trend line, acceptance rate chart |
 | **Feature Usage** | Feature-by-feature table (interactions, code generation, acceptance) |
 | **Language Distribution** | Horizontal bar chart + code completions table by language |
-| **Model & Premium Requests** | Model usage pie chart + per-model cost/quantity table |
-| **Per-User Premium** | Daily trend bar chart, model breakdown pie, per-user table with quota bars |
+| **Model & AI Credits** | Model usage pie chart + per-model cost/quantity table |
+| **AI Usage** | Daily trend bar chart, model breakdown pie, per-user table with quota bars |
 | **IDE Distribution** | IDE interaction bar chart + detailed table |
 | **Seat Management** | Full seat table with status, team, activity, plan badges |
 | **Top Active Users** | Ranked table with interactions, code generation, chat/agent usage |
@@ -231,7 +231,7 @@ Click **Settings** in the StatusBar to open the PAT management modal.
 | `read:org` | Discover organizations |
 | `admin:org` | Read Copilot billing and seats |
 | `copilot` | Access Copilot usage metrics |
-| `manage_billing:copilot` | Premium request usage data |
+| `manage_billing:copilot` | AI credit usage data |
 
 ### Remove a PAT
 
@@ -256,14 +256,14 @@ The console auto-opens when a sync begins.
 
 ---
 
-## Premium Request CSV Upload
+## AI Usage CSV Upload
 
-GitHub does not provide per-user premium request breakdown via API — only org-level totals. To get per-user data:
+GitHub does not provide per-user AI credit breakdown via API — only org-level totals. To get per-user data:
 
 1. Go to GitHub.com > Organization Settings > Billing > Copilot > Export usage as CSV
 2. Click **Upload CSV** in the StatusBar
 3. Select the downloaded CSV file
-4. The data appears in the Dashboard's **Per-User Premium** section
+4. The data appears in the Dashboard's **AI Usage** section
 
 The upload is incremental — duplicate rows are automatically ignored.
 

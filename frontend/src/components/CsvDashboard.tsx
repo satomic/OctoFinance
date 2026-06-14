@@ -6,14 +6,14 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useCsvDashboard } from "../hooks/useData";
-import type { PremiumCsvSection, UsageReportSection } from "../types";
+import type { AiUsageSection, UsageReportSection } from "../types";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
 const TOOLTIP_STYLE = { background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 };
 
 interface Props {
   refreshKey: number;
-  tab: "premium" | "usage";
+  tab: "ai" | "usage";
 }
 
 /* ---------- Multi-select Dropdown ---------- */
@@ -88,8 +88,8 @@ function Section({ sectionKey, title, defaultOpen = true, children }: {
   );
 }
 
-/* ---------- Premium CSV content ---------- */
-function PremiumContent({ data }: { data: PremiumCsvSection }) {
+/* ---------- AI Usage content ---------- */
+function AiUsageContent({ data }: { data: AiUsageSection }) {
   const { t } = useI18n();
 
   if (!data.has_data) {
@@ -117,7 +117,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
         </div>
       </div>
 
-      <Section sectionKey="premiumTrend" title={t("csvDash.dailyTrend")}>
+      <Section sectionKey="aiTrend" title={t("csvDash.dailyTrend")}>
         <div className="dashboard-charts">
           <div className="chart-card chart-card-wide">
             {data.daily_trend.length > 0 ? (
@@ -127,7 +127,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "var(--text-muted)" }} tickFormatter={(v) => v.slice(5)} />
                   <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Area type="monotone" dataKey="requests" name="Requests" stroke="#bc8cff" fill="#bc8cff" fillOpacity={0.15} />
+                  <Area type="monotone" dataKey="requests" name="AI Credits" stroke="#bc8cff" fill="#bc8cff" fillOpacity={0.15} />
                   <Area type="monotone" dataKey="active_users" name="Active Users" stroke="#3fb950" fill="#3fb950" fillOpacity={0.15} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                 </AreaChart>
@@ -137,7 +137,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
         </div>
       </Section>
 
-      <Section sectionKey="premiumBreakdowns" title={t("csvDash.modelBreakdown")}>
+      <Section sectionKey="aiBreakdowns" title={t("csvDash.modelBreakdown")}>
         <div className="dashboard-charts">
           <div className="chart-card">
             <h4>{t("csvDash.modelBreakdown")}</h4>
@@ -165,7 +165,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
                   <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
                   <YAxis dataKey="org" type="category" width={120} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="requests" name="Requests" fill="#58a6ff" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="requests" name="AI Credits" fill="#58a6ff" radius={[0, 4, 4, 0]} />
                   <Bar dataKey="user_count" name="Users" fill="#3fb950" radius={[0, 4, 4, 0]} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                 </BarChart>
@@ -181,7 +181,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
                   <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
                   <YAxis dataKey="cost_center" type="category" width={140} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name?: string) => name === "amount" ? `$${Number(v).toFixed(2)}` : v} />
-                  <Bar dataKey="requests" name="Requests" fill="#bc8cff" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="requests" name="AI Credits" fill="#bc8cff" radius={[0, 4, 4, 0]} />
                   <Bar dataKey="user_count" name="Users" fill="#58a6ff" radius={[0, 4, 4, 0]} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                 </BarChart>
@@ -191,7 +191,7 @@ function PremiumContent({ data }: { data: PremiumCsvSection }) {
         </div>
       </Section>
 
-      <Section sectionKey="premiumUsers" title={t("csvDash.userTable")}>
+      <Section sectionKey="aiUsers" title={t("csvDash.userTable")}>
         <div className="dashboard-charts">
           <div className="chart-card chart-card-wide">
             {data.users.length > 0 ? (
@@ -448,11 +448,11 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
 
   const { data, loading } = useCsvDashboard(params);
 
-  const hasAnyData = data && (data.premium_csv?.has_data || data.usage_report?.has_data);
+  const hasAnyData = data && (data.ai_usage?.has_data || data.usage_report?.has_data);
 
   const activeDateRange = useMemo(() => {
     if (!data) return null;
-    const section = tab === "premium" ? data.premium_csv : data.usage_report;
+    const section = tab === "ai" ? data.ai_usage : data.usage_report;
     return section?.has_data ? section.date_range : null;
   }, [data, tab]);
 
@@ -476,8 +476,7 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
                 selected={costCenters}
                 onChange={setCostCenters}
               />
-              {tab === "usage" && (
-                <>
+              {tab === "usage" && (                <>
                   <MultiSelect
                     label={t("csvDash.allProducts")}
                     options={data.filters.products}
@@ -516,8 +515,8 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
       {!loading && !hasAnyData && <div className="dashboard-empty">{t("csvDash.noData")}</div>}
 
       {data && (
-        tab === "premium"
-          ? <PremiumContent data={data.premium_csv} />
+        tab === "ai"
+          ? <AiUsageContent data={data.ai_usage} />
           : <UsageContent data={data.usage_report} />
       )}
     </div>

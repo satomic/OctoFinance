@@ -226,22 +226,22 @@ def _section_members(cc: dict) -> str:
     )
 
 
-def _section_premium(premium: dict, chart_id: str) -> str:
-    if not premium.get("has_data"):
+def _section_ai_usage(ai_usage: dict, chart_id: str) -> str:
+    if not ai_usage.get("has_data"):
         return (
             "<details open class='section'>"
-            "<summary class='section-title'>Premium Requests Analysis</summary>"
-            "<p class='no-data'>No premium request CSV data available for this cost center.</p>"
+            "<summary class='section-title'>AI Usage Analysis</summary>"
+            "<p class='no-data'>No AI usage CSV data available for this cost center.</p>"
             "</details>"
         )
 
-    kpi = premium.get("kpi", {})
-    dr  = premium.get("date_range", {})
+    kpi = ai_usage.get("kpi", {})
+    dr  = ai_usage.get("date_range", {})
     pr_date_str = dr.get("start", "") + " → " + dr.get("end", "")
 
     kpi_row = (
         f"<div class='kpi-row'>"
-        f"{_kpi_card('Total Requests', _num(kpi.get('total_requests', 0)))}"
+        f"{_kpi_card('Total AI Credits', _num(kpi.get('total_requests', 0)))}"
         f"{_kpi_card('Total Cost', _money(kpi.get('total_cost', 0)))}"
         f"{_kpi_card('Unique Users', _num(kpi.get('unique_users', 0)))}"
         f"{_kpi_card('Date Range', pr_date_str)}"
@@ -249,12 +249,12 @@ def _section_premium(premium: dict, chart_id: str) -> str:
     )
 
     chart = _svg_line_chart(
-        premium.get("daily_trend", []), "day", "requests",
-        "Daily Premium Requests", f"{chart_id}pr",
+        ai_usage.get("daily_trend", []), "day", "requests",
+        "Daily AI Credits", f"{chart_id}pr",
     )
 
     # Model breakdown
-    models     = premium.get("model_breakdown", [])
+    models     = ai_usage.get("model_breakdown", [])
     total_req  = float(kpi.get("total_requests", 1)) or 1
     model_rows = ""
     for m in models:
@@ -273,14 +273,14 @@ def _section_premium(premium: dict, chart_id: str) -> str:
     model_table = (
         "<h3 class='sub-title'>Model Breakdown</h3>"
         "<div class='table-wrap'><table class='table'>"
-        "<thead><tr><th>Model</th><th class='num'>Requests</th>"
+        "<thead><tr><th>Model</th><th class='num'>AI Credits</th>"
         "<th class='num'>Cost</th><th class='num'>Users</th><th>Share</th></tr></thead>"
         f"<tbody>{model_rows}</tbody></table></div>"
     )
 
     # Per-user table
     user_rows = ""
-    for u in premium.get("users", []):
+    for u in ai_usage.get("users", []):
         top_model = u["models"][0]["model"] if u.get("models") else "—"
         uname = u["user"]
         user_rows += (
@@ -299,7 +299,7 @@ def _section_premium(premium: dict, chart_id: str) -> str:
     user_table = (
         "<h3 class='sub-title'>Per-User Details</h3>"
         "<div class='table-wrap'><table class='table'>"
-        "<thead><tr><th>User</th><th>Org</th><th class='num'>Requests</th>"
+        "<thead><tr><th>User</th><th>Org</th><th class='num'>AI Credits</th>"
         "<th class='num'>Cost</th><th class='num'>Quota</th>"
         "<th class='num'>Usage%</th><th class='num'>Active Days</th>"
         "<th>Top Model</th></tr></thead>"
@@ -308,7 +308,7 @@ def _section_premium(premium: dict, chart_id: str) -> str:
 
     return (
         "<details open class='section'>"
-        "<summary class='section-title'>💰 Premium Requests Analysis</summary>"
+        "<summary class='section-title'>💰 AI Usage Analysis</summary>"
         f"{kpi_row}<div class='chart-wrap'>{chart}</div>"
         f"{model_table}{user_table}"
         "</details>"
@@ -402,15 +402,15 @@ def _section_usage(usage: dict, chart_id: str) -> str:
     )
 
 
-def _section_insights(cc: dict, premium: dict, usage: dict) -> str:
+def _section_insights(cc: dict, ai_usage: dict, usage: dict) -> str:
     member_logins  = {m["login"] for m in cc.get("members", [])}
-    premium_users  = {u["user"] for u in premium.get("users", [])} if premium.get("has_data") else set()
+    ai_users       = {u["user"] for u in ai_usage.get("users", [])} if ai_usage.get("has_data") else set()
 
-    # Top 5 by premium cost
-    all_users = premium.get("users", []) if premium.get("has_data") else []
+    # Top 5 by AI cost
+    all_users = ai_usage.get("users", []) if ai_usage.get("has_data") else []
     top5 = sorted(all_users, key=lambda u: -float(u.get("gross_amount", 0)))[:5]
 
-    zero_premium = sorted(member_logins - premium_users) if premium.get("has_data") else []
+    zero_ai = sorted(member_logins - ai_users) if ai_usage.get("has_data") else []
 
     parts = []
 
@@ -430,23 +430,23 @@ def _section_insights(cc: dict, premium: dict, usage: dict) -> str:
         rows = "".join(_top5_row(i, u) for i, u in enumerate(top5, 1))
         parts.append(
             "<div class='insight-card'>"
-            "<h3 class='sub-title'>🏆 Top 5 by Premium Cost</h3>"
+            "<h3 class='sub-title'>🏆 Top 5 by AI Cost</h3>"
             "<div class='table-wrap'><table class='table'>"
             "<thead><tr><th>#</th><th>User</th><th class='num'>Cost</th>"
-            "<th class='num'>Requests</th><th class='num'>Quota%</th></tr></thead>"
+            "<th class='num'>AI Credits</th><th class='num'>Quota%</th></tr></thead>"
             f"<tbody>{rows}</tbody></table></div>"
             "</div>"
         )
 
-    if zero_premium:
+    if zero_ai:
         tags = " ".join(
             f"<a href='https://github.com/{_e(u)}' target='_blank' class='user-tag'>{_e(u)}</a>"
-            for u in zero_premium
+            for u in zero_ai
         )
         parts.append(
             "<div class='insight-card insight-warn'>"
-            f"<h3 class='sub-title'>⚠️ Zero Premium Usage ({len(zero_premium)} member{'s' if len(zero_premium)!=1 else ''})</h3>"
-            "<p class='insight-desc'>These cost center members had no premium request activity "
+            f"<h3 class='sub-title'>⚠️ Zero AI Usage ({len(zero_ai)} member{'s' if len(zero_ai)!=1 else ''})</h3>"
+            "<p class='insight-desc'>These cost center members had no AI usage activity "
             "in the data period. Review their Copilot seat assignment.</p>"
             f"<div class='tag-list'>{tags}</div>"
             "</div>"
@@ -592,7 +592,7 @@ details[open] summary.section-title::before{transform:rotate(90deg)}
 
 # ── aggregation helpers (mirrors data.py logic on pre-filtered records) ────────
 
-def _build_premium_section(records: list[dict]) -> dict:
+def _build_ai_usage_section(records: list[dict]) -> dict:
     if not records:
         return {"has_data": False}
 
@@ -770,7 +770,7 @@ def _render_html(
     enterprise: str,
     enterprise_name: str,
     cc: dict,
-    premium: dict,
+    ai_usage: dict,
     usage: dict,
     generated_at: str,
     chart_id: str,
@@ -781,7 +781,7 @@ def _render_html(
 
     # overall date range
     all_dates: list[str] = []
-    for sect in (premium, usage):
+    for sect in (ai_usage, usage):
         dr = sect.get("date_range", {})
         for k in ("start", "end"):
             if dr.get(k):
@@ -790,8 +790,8 @@ def _render_html(
 
     # total cost
     total_cost = 0.0
-    if premium.get("has_data"):
-        total_cost += float(premium.get("kpi", {}).get("total_cost", 0) or 0)
+    if ai_usage.get("has_data"):
+        total_cost += float(ai_usage.get("kpi", {}).get("total_cost", 0) or 0)
     if usage.get("has_data"):
         total_cost += float(usage.get("kpi", {}).get("total_gross", 0) or 0)
 
@@ -834,9 +834,9 @@ def _render_html(
 <main class="main-content">
   {_section_resources(cc)}
   {_section_members(cc)}
-  {_section_premium(premium, chart_id)}
+  {_section_ai_usage(ai_usage, chart_id)}
   {_section_usage(usage, chart_id)}
-  {_section_insights(cc, premium, usage)}
+  {_section_insights(cc, ai_usage, usage)}
 </main>
 
 <footer class="report-footer">
@@ -866,7 +866,7 @@ def generate_report_zip(
     enterprise: str,
     enterprise_name: str,
     cost_centers: list[dict],
-    all_premium_records: list[dict],
+    all_ai_usage_records: list[dict],
     all_usage_records: list[dict],
 ) -> bytes:
     """Return ZIP bytes with one self-contained HTML file per cost center."""
@@ -877,17 +877,17 @@ def generate_report_zip(
         for idx, cc in enumerate(cost_centers):
             cc_name = cc.get("name", f"cc_{idx}")
 
-            pr_records = [r for r in all_premium_records if r.get("cost_center_name") == cc_name]
+            pr_records = [r for r in all_ai_usage_records if r.get("cost_center_name") == cc_name]
             ur_records = [r for r in all_usage_records  if r.get("cost_center_name") == cc_name]
 
-            premium = _build_premium_section(pr_records)
+            ai_usage = _build_ai_usage_section(pr_records)
             usage   = _build_usage_section(ur_records)
 
             html = _render_html(
                 enterprise=enterprise,
                 enterprise_name=enterprise_name,
                 cc=cc,
-                premium=premium,
+                ai_usage=ai_usage,
                 usage=usage,
                 generated_at=generated_at,
                 chart_id=str(idx),

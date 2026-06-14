@@ -40,13 +40,13 @@ Available data dimensions:
   feature adoption, engagement data
 - Billing: plan type, cost per seat, total cost, waste
 - Metrics: detailed IDE completions, chat usage, PR summaries (legacy API)
-- Premium Requests: per-model breakdown of premium request consumption,
-  pricing, and costs
+- AI Credits: per-model breakdown of AI credit consumption,
+  pricing, and costs (UBB - Usage-Based Billing)
 
-Copilot Premium Requests quota (included free per user per month):
-- Copilot Business: 300 premium requests/user/month
-- Copilot Enterprise: 1000 premium requests/user/month
-Requests beyond the included quota are billed at $0.04 per request.
+Copilot AI credits (UBB, effective June 1, 2026):
+Each Copilot plan includes a monthly allowance of AI credits per user; Copilot
+Enterprise includes a larger allowance than Copilot Business. Usage beyond the
+included allowance is billed per the model's price per credit (e.g. ~$0.01/credit).
 
 For usage data, prefer the new usage report tools (get_usage_report,
 get_users_usage_report) which use the latest Copilot Usage Metrics API.
@@ -74,11 +74,11 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 | 5 | `get_usage_report` | Read (Cached) | Get org-level Copilot usage report from cached data. Contains aggregated usage statistics, feature adoption metrics, and engagement data for the latest 28-day period. |
 | 6 | `get_users_usage_report` | Read (Cached) | Get user-level Copilot usage report from cached data. Contains per-user engagement statistics, feature usage patterns, and adoption metrics. |
 | 7 | `get_metrics_detail` | Read (Cached) | Get detailed Copilot metrics (legacy API) including IDE code completions, chat usage, PR summaries, and per-editor/model breakdown. |
-| 8 | `get_premium_request_usage` | Read (Cached) | Get premium request usage from cached data. Shows per-model breakdown: model names, request counts, pricing, gross/discount/net amounts. |
-| 9 | `get_user_premium_usage` | Read (CSV) | Get per-user premium request usage from uploaded CSV data. Shows each user's daily consumption by AI model, including costs, quota usage, and active days. |
+| 8 | `get_ai_credit_usage` | Read (Cached) | Get AI credit usage from cached data. Shows per-model breakdown: model names, credit quantities, pricing, gross/discount/net amounts. |
+| 9 | `get_user_ai_usage` | Read (CSV) | Get per-user AI usage from uploaded CSV data. Shows each user's daily AI credit consumption by AI model, including costs, quota usage, and active days. |
 | 10 | `fetch_org_usage_report` | Read (Live) | Fetch LIVE org-level usage report directly from GitHub API. Supports specific day or 28-day report. Data available from Oct 10, 2025 onward. |
 | 11 | `fetch_org_users_usage_report` | Read (Live) | Fetch LIVE user-level usage report directly from GitHub API. Supports specific day or 28-day report. |
-| 12 | `fetch_premium_request_usage` | Read (Live) | Fetch LIVE premium request usage from GitHub API. Supports historical queries (year/month, up to 24 months). |
+| 12 | `fetch_ai_credit_usage` | Read (Live) | Fetch LIVE AI credit usage from GitHub API. Supports historical queries (year/month, up to 24 months). |
 
 ### Billing & ROI Tools (`backend/app/tools/billing_tools.py`)
 
