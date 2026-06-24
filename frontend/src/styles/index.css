@@ -1608,6 +1608,116 @@ body {
 
 .cc-member-login:hover { text-decoration: underline; }
 
+.cc-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.cc-batch-select {
+  width: 220px;
+  max-width: 100%;
+}
+
+.cc-inline-message {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.cc-inline-error {
+  color: var(--danger);
+}
+
+.cc-unassigned-table {
+  min-width: 980px;
+}
+
+.cc-checkbox-cell {
+  width: 34px;
+  text-align: center;
+}
+
+.cc-checkbox-cell input {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.cc-user-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cc-user-muted {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.cc-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.cc-row-select {
+  min-width: 170px;
+}
+
+.cc-confirm-modal {
+  width: 460px;
+}
+
+.cc-confirm-text {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.cc-confirm-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cc-confirm-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.cc-confirm-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 130px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-primary);
+}
+
+.cc-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .pat-item-meta {
   font-size: 12px;
   color: var(--text-muted);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, BudgetsDashboardData, CsvUploadResult } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, UnassignedCostCenterUsersData, AssignCostCenterUsersResult, BudgetsDashboardData, CsvUploadResult } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -253,6 +253,61 @@ export function useCostCenterDashboard(params: {
   }, [fetchData]);
 
   return { data, loading, refetch: fetchData };
+}
+
+export function useUnassignedCostCenterUsers(params: {
+  enterprise: string;
+  search: string;
+}) {
+  const [data, setData] = useState<UnassignedCostCenterUsersData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qp = new URLSearchParams();
+      if (params.enterprise) qp.set("enterprise", params.enterprise);
+      if (params.search) qp.set("search", params.search);
+      const res = await fetch(`/api/data/cost-center-unassigned-users?${qp}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.enterprise, params.search]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const assignUsers = useCallback(async (
+    enterprise: string,
+    costCenterId: string,
+    users: string[],
+  ): Promise<AssignCostCenterUsersResult> => {
+    const res = await fetch("/api/data/cost-center-unassigned-users/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enterprise, cost_center_id: costCenterId, users }),
+    });
+    let result: AssignCostCenterUsersResult;
+    try {
+      result = await res.json();
+    } catch {
+      result = { error: `Unexpected non-JSON response (HTTP ${res.status}).` };
+    }
+    if (!res.ok && !result.error) {
+      result.error = `HTTP ${res.status}`;
+    }
+    if (!result.error) {
+      await fetchData();
+    }
+    return result;
+  }, [fetchData]);
+
+  return { data, loading, refetch: fetchData, assignUsers };
 }
 
 export function useBudgetsDashboard(params: {

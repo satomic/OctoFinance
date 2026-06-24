@@ -200,6 +200,57 @@ class GitHubAPI:
 
         return results
 
+    async def get_enterprise_orgs(self, enterprise: str) -> list[dict]:
+        """List organizations owned by an enterprise.
+        API: GET /enterprises/{enterprise}/organizations
+        """
+        try:
+            orgs = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/organizations",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                orgs.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return orgs
+        except Exception:
+            return []
+
+    async def add_cost_center_resources(
+        self,
+        enterprise: str,
+        cost_center_id: str,
+        users: list[str] | None = None,
+        organizations: list[str] | None = None,
+        repositories: list[str] | None = None,
+    ) -> dict:
+        """Add users, organizations, or repositories to an enterprise cost center."""
+        body: dict = {}
+        if users:
+            body["users"] = users
+        if organizations:
+            body["organizations"] = organizations
+        if repositories:
+            body["repositories"] = repositories
+
+        resp = await self.client.post(
+            f"/enterprises/{enterprise}/settings/billing/cost-centers/{cost_center_id}/resource",
+            json=body,
+            headers={"X-GitHub-Api-Version": "2026-03-10"},
+        )
+        resp.raise_for_status()
+        return resp.json() if resp.content else {"success": True}
+
     # =========================================================================
     # Copilot Billing & Plan Detection
     # =========================================================================

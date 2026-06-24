@@ -268,6 +268,46 @@ export interface CostCenterDashboardData {
   no_data: boolean;
 }
 
+export interface CostCenterOption {
+  id: string;
+  name: string;
+  state: "active" | "archived";
+  member_count: number;
+}
+
+export interface UnassignedCostCenterUser {
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  orgs: string[];
+  teams: string[];
+  plan_types: string[];
+  last_activity_at: string;
+  last_activity_editor: string;
+  seat_count: number;
+}
+
+export interface UnassignedCostCenterUsersData {
+  enterprises: { slug: string; name: string }[];
+  selected_enterprise: string;
+  enterprise_name: string;
+  cost_centers: CostCenterOption[];
+  unassigned_users: UnassignedCostCenterUser[];
+  total_unassigned: number;
+  total_copilot_users: number;
+  assigned_user_count: number;
+  orgs: string[];
+  no_data: boolean;
+}
+
+export interface AssignCostCenterUsersResult {
+  status?: string;
+  error?: string;
+  enterprise?: string;
+  cost_center?: { id: string; name: string };
+  assigned_users?: string[];
+}
+
 // Budgets dashboard types
 export interface Budget {
   id: string;

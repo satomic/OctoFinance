@@ -13,12 +13,21 @@ from pathlib import Path
 
 from fastapi import APIRouter, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
 from ..services.report_generator import generate_report_zip
 
 router = APIRouter(tags=["data"])
+
+
+class AssignCostCenterUsersRequest(BaseModel):
+    """Request to assign one or more GitHub users to an enterprise cost center."""
+
+    enterprise: str = Field(default="")
+    cost_center_id: str
+    users: list[str] = Field(default_factory=list)
 
 
 @router.get("/data/orgs")
@@ -1021,6 +1030,233 @@ async def get_csv_info():
     return {
         "ai_usage": _scan(CSV_TYPE_AI),
         "usage_report": _scan(CSV_TYPE_USAGE),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Cost center user assignment endpoints
+# ---------------------------------------------------------------------------
+
+def _load_enterprise_list() -> list[dict]:
+    enterprise_list = data_collector.load_latest("enterprise", "all") or []
+    return enterprise_list if isinstance(enterprise_list, list) else []
+
+
+def _resolve_enterprise(enterprise: str = "") -> tuple[str, dict | None, list[dict]]:
+    enterprise_list = _load_enterprise_list()
+    if not enterprise_list:
+        enterprise_list = api_manager.get_all_enterprises()
+
+    if not enterprise_list:
+        return "", None, []
+
+    selected_slug = enterprise if any(e.get("slug") == enterprise for e in enterprise_list) else enterprise_list[0].get("slug", "")
+    selected = next((e for e in enterprise_list if e.get("slug") == selected_slug), None)
+    return selected_slug, selected, enterprise_list
+
+
+async def _get_enterprise_org_logins(enterprise_slug: str, enterprise_info: dict | None) -> list[str]:
+    api = api_manager.get_api_for_enterprise(enterprise_slug)
+    orgs: list[str] = []
+
+    if api:
+        live_orgs = await api.get_enterprise_orgs(enterprise_slug)
+        orgs = [o.get("login", "") for o in live_orgs if o.get("login")]
+
+    if not orgs:
+        pat_id = (enterprise_info or {}).get("pat_id")
+        discovered = api_manager.get_all_orgs()
+        if pat_id:
+            orgs = [o.get("login", "") for o in discovered if o.get("pat_id") == pat_id and o.get("login")]
+        elif len(_load_enterprise_list()) <= 1:
+            orgs = [o.get("login", "") for o in discovered if o.get("login")]
+
+    if not orgs and len(_load_enterprise_list()) <= 1:
+        orgs = list(data_collector.load_all_latest("seats").keys())
+
+    return sorted(set(orgs), key=str.lower)
+
+
+def _active_cost_centers(cc_data: dict | None) -> list[dict]:
+    if not cc_data:
+        return []
+    return [cc for cc in cc_data.get("cost_centers", []) if cc.get("state", "active") == "active"]
+
+
+def _append_audit_log(entry: dict):
+    log_file = data_collector.data_dir / "audit_log.json"
+    logs = []
+    if log_file.exists():
+        try:
+            logs = json.loads(log_file.read_text(encoding="utf-8"))
+        except Exception:
+            logs = []
+    logs.append(entry)
+    log_file.write_text(json.dumps(logs, indent=2, default=str), encoding="utf-8")
+
+
+@router.get("/data/cost-center-unassigned-users")
+async def get_cost_center_unassigned_users(
+    enterprise: str = Query(default=""),
+    search: str = Query(default=""),
+):
+    """List Copilot seat users in an enterprise who are not in an active cost center."""
+    selected_slug, selected_enterprise, enterprise_list = _resolve_enterprise(enterprise)
+    empty = {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug or None,
+        "enterprise_name": (selected_enterprise or {}).get("name", selected_slug),
+        "cost_centers": [],
+        "unassigned_users": [],
+        "total_unassigned": 0,
+        "total_copilot_users": 0,
+        "assigned_user_count": 0,
+        "orgs": [],
+        "no_data": True,
+    }
+    if not selected_slug:
+        return empty
+
+    cc_data = data_collector.load_latest("cost_centers", selected_slug)
+    active_ccs = _active_cost_centers(cc_data)
+    if not cc_data:
+        return empty
+
+    assigned_logins = {
+        m.get("login", "").lower()
+        for cc in active_ccs
+        for m in cc.get("members", [])
+        if m.get("login")
+    }
+
+    org_logins = await _get_enterprise_org_logins(selected_slug, selected_enterprise)
+    seat_users: dict[str, dict] = {}
+
+    for org in org_logins:
+        seats_data = data_collector.load_latest("seats", org)
+        if not seats_data:
+            continue
+        for seat in seats_data.get("seats", []):
+            assignee = seat.get("assignee") or {}
+            login = assignee.get("login", "")
+            if not login:
+                continue
+            key = login.lower()
+            entry = seat_users.setdefault(key, {
+                "login": login,
+                "avatar_url": assignee.get("avatar_url", ""),
+                "html_url": assignee.get("html_url", f"https://github.com/{login}"),
+                "orgs": [],
+                "teams": [],
+                "plan_types": [],
+                "last_activity_at": seat.get("last_activity_at") or "",
+                "last_activity_editor": seat.get("last_activity_editor") or "",
+                "seat_count": 0,
+            })
+            if org not in entry["orgs"]:
+                entry["orgs"].append(org)
+            team = seat.get("assigning_team") or {}
+            team_name = team.get("name") or team.get("slug") or ""
+            if team_name and team_name not in entry["teams"]:
+                entry["teams"].append(team_name)
+            plan_type = seat.get("plan_type") or ""
+            if plan_type and plan_type not in entry["plan_types"]:
+                entry["plan_types"].append(plan_type)
+            last_activity = seat.get("last_activity_at") or ""
+            if last_activity and (not entry["last_activity_at"] or last_activity > entry["last_activity_at"]):
+                entry["last_activity_at"] = last_activity
+                entry["last_activity_editor"] = seat.get("last_activity_editor") or ""
+            entry["seat_count"] += 1
+
+    unassigned = [u for key, u in seat_users.items() if key not in assigned_logins]
+    search_lower = search.strip().lower()
+    if search_lower:
+        unassigned = [
+            u for u in unassigned
+            if search_lower in u["login"].lower()
+            or any(search_lower in org.lower() for org in u["orgs"])
+            or any(search_lower in team.lower() for team in u["teams"])
+        ]
+
+    for user in unassigned:
+        user["orgs"].sort(key=str.lower)
+        user["teams"].sort(key=str.lower)
+        user["plan_types"].sort(key=str.lower)
+
+    cost_centers = [
+        {
+            "id": cc.get("id", ""),
+            "name": cc.get("name", ""),
+            "state": cc.get("state", "active"),
+            "member_count": cc.get("member_count", 0),
+        }
+        for cc in active_ccs
+        if cc.get("id") and cc.get("name")
+    ]
+
+    return {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug,
+        "enterprise_name": cc_data.get("enterprise_name", selected_slug),
+        "cost_centers": sorted(cost_centers, key=lambda c: c["name"].lower()),
+        "unassigned_users": sorted(unassigned, key=lambda u: u["login"].lower()),
+        "total_unassigned": len(unassigned),
+        "total_copilot_users": len(seat_users),
+        "assigned_user_count": len({k for k in seat_users.keys() if k in assigned_logins}),
+        "orgs": org_logins,
+        "no_data": False,
+    }
+
+
+@router.post("/data/cost-center-unassigned-users/assign")
+async def assign_cost_center_unassigned_users(request: AssignCostCenterUsersRequest):
+    """Assign selected users to an active enterprise cost center via GitHub API."""
+    users = sorted({u.strip() for u in request.users if u.strip()}, key=str.lower)
+    if not users:
+        return {"error": "Select at least one user to assign."}
+    if not request.cost_center_id.strip():
+        return {"error": "Select a cost center."}
+
+    selected_slug, selected_enterprise, _ = _resolve_enterprise(request.enterprise)
+    if not selected_slug or not selected_enterprise:
+        return {"error": "No enterprise data found. Run Sync Data first."}
+
+    cc_data = data_collector.load_latest("cost_centers", selected_slug)
+    target_cc = next(
+        (cc for cc in _active_cost_centers(cc_data) if cc.get("id") == request.cost_center_id),
+        None,
+    )
+    if not target_cc:
+        return {"error": f"Active cost center '{request.cost_center_id}' was not found."}
+
+    api = api_manager.get_api_for_enterprise(selected_slug)
+    if not api:
+        return {"error": f"No API client found for enterprise '{selected_slug}'."}
+
+    try:
+        api_result = await api.add_cost_center_resources(selected_slug, request.cost_center_id, users=users)
+    except Exception as e:
+        return {"error": f"GitHub API assignment failed: {e}"}
+
+    sync_result = await data_collector.sync_cost_centers_for_enterprise(selected_enterprise)
+    audit_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "assign_cost_center_users",
+        "enterprise": selected_slug,
+        "cost_center_id": request.cost_center_id,
+        "cost_center_name": target_cc.get("name", ""),
+        "users": users,
+        "api_result": api_result,
+    }
+    _append_audit_log(audit_entry)
+
+    return {
+        "status": "ok",
+        "enterprise": selected_slug,
+        "cost_center": {"id": request.cost_center_id, "name": target_cc.get("name", "")},
+        "assigned_users": users,
+        "api_result": api_result,
+        "sync_result": sync_result,
     }
 
 

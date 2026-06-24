@@ -380,6 +380,10 @@ class DataCollector:
 
         return summary
 
+    async def sync_cost_centers_for_enterprise(self, enterprise: dict, log_fn: LogFn = None) -> dict:
+        """Refresh cached cost center data for a single enterprise."""
+        return await self._sync_cost_centers([enterprise], log_fn=log_fn)
+
     async def _sync_budgets(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
         """Sync billing budgets (UBB) for the given enterprises."""
         summary: dict = {"synced": [], "errors": []}
