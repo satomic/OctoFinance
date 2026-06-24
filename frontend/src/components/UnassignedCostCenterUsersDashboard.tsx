@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useDatasetSync, useUnassignedCostCenterUsers } from "../hooks/useData";
@@ -41,6 +42,132 @@ function TagList({ values, empty = "-" }: { values: string[]; empty?: string }) 
   return (
     <div className="cc-resource-tags">
       {values.map((value) => <span key={value} className="cc-cc-tag">{value}</span>)}
+    </div>
+  );
+}
+
+function CostCenterSearchSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+  noMatches,
+  className = "",
+}: {
+  options: CostCenterOption[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  noMatches: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 260 });
+  const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.id === value);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const belowSpace = window.innerHeight - rect.bottom - 8;
+    const aboveSpace = rect.top - 8;
+    const openUp = belowSpace < 180 && aboveSpace > belowSpace;
+    const maxHeight = Math.max(120, Math.min(260, (openUp ? aboveSpace : belowSpace) - 4));
+    setMenuPosition({
+      top: openUp ? rect.top - maxHeight - 4 : rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        ref.current && !ref.current.contains(target)
+        && menuRef.current && !menuRef.current.contains(target)
+      ) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    if (open) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, query, updateMenuPosition]);
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    const matches = normalized
+      ? options.filter((option) => option.name.toLowerCase().includes(normalized))
+      : options;
+    return matches.slice(0, 50);
+  }, [options, query]);
+
+  const inputValue = open ? query : selected?.name ?? "";
+
+  return (
+    <div className={`cc-combobox ${className}`} ref={ref}>
+      <input
+        className="cc-combobox-input"
+        type="text"
+        value={inputValue}
+        placeholder={selected ? selected.name : placeholder}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+      />
+      <span className="cc-combobox-arrow">{open ? "^" : "v"}</span>
+      {open && createPortal(
+        <div
+          className="cc-combobox-menu"
+          ref={menuRef}
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            width: menuPosition.width,
+            maxHeight: menuPosition.maxHeight,
+          }}
+        >
+          {filtered.length ? filtered.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`cc-combobox-option ${option.id === value ? "cc-combobox-option-active" : ""}`}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onChange(option.id);
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <span>{option.name}</span>
+              <span className="cc-user-muted">{option.member_count}</span>
+            </button>
+          )) : (
+            <div className="cc-combobox-empty">{noMatches}</div>
+          )}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -207,14 +334,14 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
 
       <div className="cc-batch-bar">
         <span className="cc-user-muted">{selectedList.length} {t("ccUnassigned.selected")}</span>
-        <select
-          className="cc-native-select cc-batch-select"
+        <CostCenterSearchSelect
+          className="cc-batch-select"
+          options={costCenters}
           value={batchCostCenterId}
-          onChange={(event) => setBatchCostCenterId(event.target.value)}
-        >
-          <option value="">{t("ccUnassigned.selectCostCenter")}</option>
-          {costCenters.map((cc) => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
-        </select>
+          onChange={setBatchCostCenterId}
+          placeholder={t("ccUnassigned.searchCostCenter")}
+          noMatches={t("ccUnassigned.noCostCenterMatches")}
+        />
         <button
           className="btn btn-small btn-primary"
           disabled={!selectedList.length || !selectedCostCenter}
@@ -267,14 +394,14 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
                     </td>
                     <td className="cc-td">
                       <div className="cc-row-actions">
-                        <select
-                          className="cc-native-select cc-row-select"
+                        <CostCenterSearchSelect
+                          className="cc-row-select"
+                          options={costCenters}
                           value={rowCostCenterId}
-                          onChange={(event) => setRowCostCenters((prev) => ({ ...prev, [user.login]: event.target.value }))}
-                        >
-                          <option value="">{t("ccUnassigned.selectCostCenter")}</option>
-                          {costCenters.map((cc) => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
-                        </select>
+                          onChange={(costCenterId) => setRowCostCenters((prev) => ({ ...prev, [user.login]: costCenterId }))}
+                          placeholder={t("ccUnassigned.searchCostCenter")}
+                          noMatches={t("ccUnassigned.noCostCenterMatches")}
+                        />
                         <button
                           className="btn btn-small"
                           disabled={!rowCostCenterId}
