@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { usePATs } from "../hooks/usePATs";
+import type { PATInfo } from "../types";
 
 interface Props {
   onClose: () => void;
@@ -40,10 +41,11 @@ function describeCron(cron: string): string {
 
 export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const { t } = useI18n();
-  const { pats, loading, error, addPAT, removePAT, clearError, settings, updateSettings } = usePATs();
+  const { pats, loading, error, addPAT, removePAT, updatePAT, clearError, settings, updateSettings } = usePATs();
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
   const [enterpriseSlug, setEnterpriseSlug] = useState("");
+  const [includeOrganizations, setIncludeOrganizations] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const handleAdd = async () => {
@@ -52,11 +54,19 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
     const slugs = enterpriseSlug.trim()
       ? enterpriseSlug.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
-    const result = await addPAT(label.trim() || "Untitled", token.trim(), slugs);
+    const result = await addPAT(label.trim() || "Untitled", token.trim(), slugs, includeOrganizations);
     if (result) {
       setLabel("");
       setToken("");
       setEnterpriseSlug("");
+      setIncludeOrganizations(true);
+      onPATChange?.();
+    }
+  };
+
+  const handleToggleIncludeOrganizations = async (pat: PATInfo) => {
+    const ok = await updatePAT(pat.id, { include_organizations: !pat.include_organizations });
+    if (ok) {
       onPATChange?.();
     }
   };
@@ -124,6 +134,17 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                     <div className="pat-item-meta">
                       {pat.label} &middot; {pat.token_masked}
                     </div>
+                    <div className="pat-item-include-orgs">
+                      <label className="toggle-switch toggle-switch-small">
+                        <input
+                          type="checkbox"
+                          checked={pat.include_organizations !== false}
+                          onChange={() => handleToggleIncludeOrganizations(pat)}
+                        />
+                        <span className="toggle-slider" />
+                      </label>
+                      <span>{t("settings.patIncludeOrganizations")}</span>
+                    </div>
                   </div>
                 </div>
                 <button
@@ -169,6 +190,17 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
               />
             </div>
             <p className="pat-form-hint pat-enterprise-hint">{t("settings.patEnterpriseHint")}</p>
+            <div className="pat-form-row pat-form-row-checkbox">
+              <label className="pat-form-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={includeOrganizations}
+                  onChange={(e) => setIncludeOrganizations(e.target.checked)}
+                />
+                <span>{t("settings.patIncludeOrganizations")}</span>
+              </label>
+            </div>
+            <p className="pat-form-hint">{t("settings.patIncludeOrganizationsHint")}</p>
             <button
               className="btn btn-primary"
               onClick={handleAdd}

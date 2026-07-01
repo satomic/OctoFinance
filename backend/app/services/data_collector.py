@@ -7,11 +7,11 @@ Uses APIManager to route API calls to the correct PAT.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-from ..config import config
+from ..config import COPILOT_PRICING, config
 
 if TYPE_CHECKING:
     from .api_manager import APIManager
@@ -19,6 +19,18 @@ if TYPE_CHECKING:
 
 # Type alias for the optional log callback: log_fn(level, message)
 LogFn = Callable[[str, str], None] | None
+
+
+def enterprise_pseudo_org(slug: str) -> str:
+    """Return the pseudo-org key used to store enterprise-level Copilot data.
+
+    Used for enterprises that have no organizations (Copilot granted purely via
+    enterprise teams, or organization scanning was disabled for the owning PAT).
+    Storing enterprise data under this key lets it flow through the existing
+    org-keyed dashboard aggregation (seats/billing/usage/usage_users/ai_credits)
+    without any changes to that logic.
+    """
+    return f"{slug}-enterprise"
 
 
 class DataCollector:
@@ -292,7 +304,163 @@ class DataCollector:
         summary["synced"].extend(cc_summary["synced"] + bd_summary["synced"])
         summary["errors"].extend(cc_summary["errors"] + bd_summary["errors"])
 
+        # Enterprise-level Copilot data (seats/usage) for enterprises with no
+        # organizations — either genuinely orgless, or organization scanning was
+        # disabled for the owning PAT.
+        pseudo_orgs = self._api_manager.get_enterprise_pseudo_orgs()
+        for ent in pseudo_orgs:
+            ent_summary = await self.sync_enterprise_copilot_data(ent, log_fn=log_fn)
+            summary["synced"].extend(ent_summary["synced"])
+            summary["errors"].extend(ent_summary["errors"])
+
         return summary
+
+    async def sync_enterprise_copilot_data(self, enterprise: dict, log_fn: LogFn = None) -> dict:
+        """Sync enterprise-level Copilot seats/usage data for an enterprise without
+        organizations, using the enterprise-scoped Copilot APIs. Data is stored
+        under a pseudo-org key (see `enterprise_pseudo_org`) so it flows through
+        the existing org-keyed dashboard aggregation unchanged.
+        """
+        slug = enterprise["slug"]
+        summary: dict = {"org": slug, "synced": [], "errors": []}
+        if not self._api_manager:
+            return summary
+
+        api = self._api_manager.get_api_for_enterprise(slug)
+        if api is None:
+            msg = f"No API client available for enterprise {slug}"
+            summary["errors"].append(msg)
+            if log_fn:
+                log_fn("error", f"  {slug}: {msg}")
+            return summary
+
+        pseudo_org = enterprise_pseudo_org(slug)
+
+        if log_fn:
+            log_fn("info", f"Syncing {slug} (enterprise-level, no organizations)...")
+
+        # Seats (across enterprise teams)
+        seats = None
+        try:
+            seats = await api.get_enterprise_billing_seats(slug)
+            if seats:
+                self._save_json("seats", pseudo_org, seats)
+                summary["synced"].append(f"seats ({seats.get('total_seats', 0)} total)")
+                if log_fn:
+                    log_fn("info", f"  {slug}: enterprise seats synced ({seats.get('total_seats', 0)} total)")
+        except Exception as e:
+            summary["errors"].append(f"seats: {e}")
+            if log_fn:
+                log_fn("error", f"  {slug}: enterprise seats error - {e}")
+
+        # Billing overview: there is no enterprise-wide equivalent of
+        # /orgs/{org}/copilot/billing, so synthesize a compatible summary from seats.
+        if seats:
+            try:
+                billing = self._build_synthetic_enterprise_billing(seats)
+                self._save_json("billing", pseudo_org, billing)
+                summary["synced"].append("billing (synthesized from seats)")
+            except Exception as e:
+                summary["errors"].append(f"billing: {e}")
+                if log_fn:
+                    log_fn("error", f"  {slug}: billing synthesis error - {e}")
+
+        # Usage Report (enterprise-level 28-day)
+        try:
+            usage_report = await api.get_enterprise_usage_report_28day(slug)
+            if usage_report:
+                self._save_json("usage", pseudo_org, usage_report)
+                n = usage_report.get("total_records", 0)
+                summary["synced"].append(f"usage ({n} records)")
+                if log_fn:
+                    log_fn("info", f"  {slug}: enterprise usage report synced ({n} records)")
+        except Exception as e:
+            summary["errors"].append(f"usage: {e}")
+            if log_fn:
+                log_fn("error", f"  {slug}: enterprise usage report error - {e}")
+
+        # Usage Users Report (enterprise user-level 28-day)
+        try:
+            users_report = await api.get_enterprise_users_usage_report_28day(slug)
+            if users_report:
+                self._save_json("usage_users", pseudo_org, users_report)
+                n = users_report.get("total_records", 0)
+                summary["synced"].append(f"usage_users ({n} records)")
+                if log_fn:
+                    log_fn("info", f"  {slug}: enterprise usage users report synced ({n} records)")
+        except Exception as e:
+            summary["errors"].append(f"usage_users: {e}")
+            if log_fn:
+                log_fn("error", f"  {slug}: enterprise usage users report error - {e}")
+
+        # AI Credit Usage (enterprise-level, UBB)
+        try:
+            ai_credits = await api.get_enterprise_ai_credit_usage(slug)
+            if ai_credits:
+                self._save_json("ai_credits", pseudo_org, ai_credits)
+                n = len(ai_credits.get("usageItems", []))
+                summary["synced"].append(f"ai_credits ({n} items)")
+                if log_fn:
+                    log_fn("info", f"  {slug}: enterprise AI credit usage synced ({n} items)")
+        except Exception as e:
+            summary["errors"].append(f"ai_credits: {e}")
+            if log_fn:
+                log_fn("error", f"  {slug}: enterprise AI credit usage error - {e}")
+
+        if log_fn:
+            log_fn("info", f"  {slug}: done ({len(summary['synced'])} synced, {len(summary['errors'])} errors)")
+
+        return summary
+
+    def _build_synthetic_enterprise_billing(self, seats: dict) -> dict:
+        """Build an org-billing-shaped summary from enterprise seat data.
+
+        Enterprises without organizations have no equivalent of the
+        `/orgs/{org}/copilot/billing` overview endpoint, so we approximate the
+        seat_breakdown (active/inactive counts, plan type) from the raw seats list
+        to keep the existing billing-based dashboard/KPI logic working unchanged.
+        """
+        seat_list = seats.get("seats", [])
+        total = seats.get("total_seats", len(seat_list))
+        active_cutoff = datetime.now(timezone.utc) - timedelta(days=28)
+
+        active = 0
+        pending_cancellation = 0
+        plan_counts: dict[str, int] = {}
+        for s in seat_list:
+            plan = s.get("plan_type") or "unknown"
+            plan_counts[plan] = plan_counts.get(plan, 0) + 1
+            if s.get("pending_cancellation_date"):
+                pending_cancellation += 1
+            last_activity = s.get("last_activity_at")
+            if last_activity:
+                try:
+                    dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+                    if dt >= active_cutoff:
+                        active += 1
+                except ValueError:
+                    pass
+
+        plan_type = max(plan_counts, key=plan_counts.get) if plan_counts else "enterprise"
+        if plan_type not in COPILOT_PRICING:
+            plan_type = "enterprise" if "enterprise" in COPILOT_PRICING else "business"
+
+        return {
+            "seat_breakdown": {
+                "total": total,
+                "added_this_cycle": 0,
+                "pending_cancellation": pending_cancellation,
+                "pending_invitation": 0,
+                "active_this_cycle": active,
+                "inactive_this_cycle": total - active,
+            },
+            "public_code_suggestions": "unconfigured",
+            "plan_type": plan_type,
+            "_detected_plan_type": plan_type,
+            "_detected_price_per_seat": COPILOT_PRICING.get(plan_type, COPILOT_PRICING.get("business", 19.0)),
+            "_synthetic": True,
+            "_source": "enterprise_seats_aggregate",
+        }
 
     async def sync_dataset(self, dataset: str, log_fn: LogFn = None) -> dict:
         """Sync a single enterprise-scoped dataset only ('cost_centers' or 'budgets').

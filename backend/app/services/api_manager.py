@@ -58,11 +58,19 @@ class APIManager:
                     user_avatar=user.get("avatar_url", ""),
                 )
 
-                # Discover orgs
-                orgs = await api.discover_orgs()
+                # Discover orgs (unless this PAT opted out of organization scanning,
+                # e.g. an enterprise that grants Copilot access via enterprise teams
+                # rather than organizations)
+                include_organizations = pat.get("include_organizations", True)
+                if include_organizations:
+                    orgs = await api.discover_orgs()
+                else:
+                    orgs = []
+                    print(f"[APIManager] PAT '{pat['label']}' has organization scanning disabled, skipping org discovery")
                 org_logins = [o["login"] for o in orgs]
                 pat_manager.update(pat_id, orgs=org_logins)
-                print(f"[APIManager] PAT '{pat['label']}' has {len(orgs)} orgs: {org_logins}")
+                if include_organizations:
+                    print(f"[APIManager] PAT '{pat['label']}' has {len(orgs)} orgs: {org_logins}")
 
                 # Map orgs to this PAT (first PAT wins if org appears in multiple)
                 for org_info in orgs:
@@ -153,10 +161,14 @@ class APIManager:
             user_avatar=user.get("avatar_url", ""),
         )
 
-        # Discover orgs
-        try:
-            orgs = await api.discover_orgs()
-        except Exception:
+        # Discover orgs (unless this PAT opted out of organization scanning)
+        include_organizations = pat.get("include_organizations", True)
+        if include_organizations:
+            try:
+                orgs = await api.discover_orgs()
+            except Exception:
+                orgs = []
+        else:
             orgs = []
 
         org_logins = [o["login"] for o in orgs]
@@ -246,6 +258,26 @@ class APIManager:
     def get_all_enterprises(self) -> list[dict]:
         """Return all discovered enterprises (slug, name, role, pat_id)."""
         return list(self._all_enterprises)
+
+    def get_enterprise_pseudo_orgs(self) -> list[dict]:
+        """Return enterprises whose owning PAT has no discovered organizations.
+
+        This covers both cases: the PAT owner unchecked "include organizations"
+        when configuring the PAT, or the enterprise genuinely has no orgs and
+        grants Copilot access purely through enterprise teams. These enterprises
+        are synced using enterprise-level Copilot endpoints and their data is
+        stored under a pseudo-org key so it flows through the existing
+        org-based dashboard aggregation.
+        """
+        orgs_per_pat: dict[str, int] = {}
+        for o in self._all_orgs:
+            pat_id = o.get("pat_id")
+            if pat_id:
+                orgs_per_pat[pat_id] = orgs_per_pat.get(pat_id, 0) + 1
+        return [
+            ent for ent in self._all_enterprises
+            if orgs_per_pat.get(ent.get("pat_id"), 0) == 0
+        ]
 
     def get_api_for_enterprise(self, enterprise_slug: str) -> GitHubAPI | None:
         """Get the API client that has access to this enterprise."""

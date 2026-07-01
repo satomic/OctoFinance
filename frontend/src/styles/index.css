@@ -1797,6 +1797,15 @@ body {
   white-space: nowrap;
 }
 
+.pat-item-include-orgs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* PAT Form */
 
 .pat-form {
@@ -1867,6 +1876,26 @@ body {
   color: var(--text-muted);
 }
 
+.pat-form-row-checkbox {
+  margin-top: 4px;
+}
+
+.pat-form-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pat-form-checkbox-label input[type="checkbox"] {
+  width: auto;
+  flex: none;
+  cursor: pointer;
+}
+
 /* Sync Settings */
 
 .sync-settings {
@@ -1935,6 +1964,20 @@ body {
 
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(18px);
+}
+
+.toggle-switch-small {
+  width: 28px;
+  height: 16px;
+}
+
+.toggle-switch-small .toggle-slider::before {
+  width: 12px;
+  height: 12px;
+}
+
+.toggle-switch-small input:checked + .toggle-slider::before {
+  transform: translateX(12px);
 }
 
 /* Cron input */

@@ -33,6 +33,7 @@ export interface PATInfo {
   user_avatar: string;
   orgs: string[];
   enterprise_slugs: string[];
+  include_organizations: boolean;
   created_at: string;
   last_synced_at: string;
 }

@@ -58,14 +58,14 @@ export function usePATs() {
     loadSettings();
   }, [loadPATs, loadSettings]);
 
-  const addPAT = useCallback(async (label: string, token: string, enterprise_slugs: string[] = []) => {
+  const addPAT = useCallback(async (label: string, token: string, enterprise_slugs: string[] = [], include_organizations: boolean = true) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/pats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label, token, enterprise_slugs }),
+        body: JSON.stringify({ label, token, enterprise_slugs, include_organizations }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -99,13 +99,13 @@ export function usePATs() {
     }
   }, [loadPATs]);
 
-  const updatePAT = useCallback(async (id: string, label: string) => {
+  const updatePAT = useCallback(async (id: string, updates: { label?: string; include_organizations?: boolean }) => {
     setError(null);
     try {
       const res = await fetch(`/api/pats/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label }),
+        body: JSON.stringify(updates),
       });
       if (!res.ok) {
         const data = await res.json();

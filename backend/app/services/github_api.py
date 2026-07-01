@@ -310,6 +310,35 @@ class GitHubAPI:
         except httpx.HTTPStatusError:
             return None
 
+    async def get_enterprise_billing_seats(self, enterprise: str) -> dict | None:
+        """Get all Copilot seat assignments for an enterprise (across organizations
+        and enterprise teams). Used when an enterprise grants Copilot access via
+        enterprise teams rather than organizations.
+        API: GET /enterprises/{enterprise}/copilot/billing/seats
+        """
+        try:
+            all_seats = []
+            page = 1
+            total = 0
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/copilot/billing/seats",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return None
+                resp.raise_for_status()
+                data = resp.json()
+                total = data.get("total_seats", 0)
+                seats = data.get("seats", [])
+                if not seats:
+                    break
+                all_seats.extend(seats)
+                page += 1
+            return {"total_seats": total, "seats": all_seats}
+        except httpx.HTTPStatusError:
+            return None
+
     # =========================================================================
     # Copilot Metrics (legacy /copilot/metrics endpoint)
     # =========================================================================
@@ -357,6 +386,37 @@ class GitHubAPI:
                 params["day"] = day
             resp = await self.client.get(
                 f"/organizations/{org}/settings/billing/ai_credit/usage",
+                params=params,
+                headers={"X-GitHub-Api-Version": "2026-03-10"},
+            )
+            if resp.status_code in (404, 403):
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError:
+            return None
+
+    async def get_enterprise_ai_credit_usage(
+        self,
+        enterprise: str,
+        year: int | None = None,
+        month: int | None = None,
+        day: int | None = None,
+    ) -> dict | None:
+        """Get Copilot AI credit usage for an enterprise (UBB - Usage-Based Billing).
+        API: GET /enterprises/{enterprise}/settings/billing/ai_credit/usage
+        Used when the enterprise has no organizations (Copilot granted via enterprise teams).
+        """
+        try:
+            params: dict = {}
+            if year is not None:
+                params["year"] = year
+            if month is not None:
+                params["month"] = month
+            if day is not None:
+                params["day"] = day
+            resp = await self.client.get(
+                f"/enterprises/{enterprise}/settings/billing/ai_credit/usage",
                 params=params,
                 headers={"X-GitHub-Api-Version": "2026-03-10"},
             )

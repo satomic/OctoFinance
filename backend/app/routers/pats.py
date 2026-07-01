@@ -17,10 +17,12 @@ class AddPATRequest(BaseModel):
     label: str
     token: str
     enterprise_slugs: list[str] = []
+    include_organizations: bool = True
 
 
 class UpdatePATRequest(BaseModel):
-    label: str
+    label: str | None = None
+    include_organizations: bool | None = None
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -48,7 +50,12 @@ async def add_pat(request: AddPATRequest):
 
     # Add to persistent storage
     try:
-        pat = pat_manager.add(label, token, enterprise_slugs=enterprise_slugs)
+        pat = pat_manager.add(
+            label,
+            token,
+            enterprise_slugs=enterprise_slugs,
+            include_organizations=request.include_organizations,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -63,7 +70,10 @@ async def add_pat(request: AddPATRequest):
     # Kick off background sync for newly discovered orgs and enterprises
     updated_pat = pat_manager.find_by_id(pat["id"])
     has_orgs = bool(updated_pat and updated_pat.get("orgs"))
-    has_enterprises = bool(updated_pat and updated_pat.get("enterprise_slugs"))
+    # Check actual discovered enterprises (manual slugs or auto-discovery), not
+    # just manually-specified slugs — important when org scanning is disabled
+    # and the enterprise is only found via auto-discovery.
+    has_enterprises = any(e.get("pat_id") == pat["id"] for e in api_manager.get_all_enterprises())
 
     if has_orgs or has_enterprises:
         orgs_to_sync = list(updated_pat.get("orgs", []))
@@ -71,8 +81,9 @@ async def add_pat(request: AddPATRequest):
         async def _sync_new_orgs(log_fn):
             for org in orgs_to_sync:
                 await data_collector.sync_org(org, log_fn=log_fn)
-            # Refresh enterprise list and cost centers so data/enterprise/
-            # and data/cost_centers/ stay in sync with the new PAT.
+            # Refresh enterprise list, cost centers, and (when applicable)
+            # enterprise-level Copilot data so data/enterprise/, data/cost_centers/,
+            # and the enterprise-only Copilot data stay in sync with the new PAT.
             await data_collector.sync_enterprises(log_fn=log_fn)
 
         sync_manager.run_in_background(_sync_new_orgs)
@@ -89,10 +100,37 @@ async def add_pat(request: AddPATRequest):
 
 @router.put("/pats/{pat_id}")
 async def update_pat(pat_id: str, request: UpdatePATRequest):
-    """Update a PAT's label."""
-    result = pat_manager.update(pat_id, label=request.label.strip())
+    """Update a PAT's label and/or organization-scanning preference.
+
+    Changing `include_organizations` re-runs discovery for all PATs and
+    triggers a background sync so the dashboard reflects the new setting.
+    """
+    existing = pat_manager.find_by_id(pat_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="PAT not found")
+
+    kwargs: dict = {}
+    if request.label is not None:
+        kwargs["label"] = request.label.strip()
+    include_orgs_changed = (
+        request.include_organizations is not None
+        and request.include_organizations != existing.get("include_organizations", True)
+    )
+    if request.include_organizations is not None:
+        kwargs["include_organizations"] = request.include_organizations
+
+    result = pat_manager.update(pat_id, **kwargs) if kwargs else existing
     if not result:
         raise HTTPException(status_code=404, detail="PAT not found")
+
+    if include_orgs_changed:
+        await api_manager.rebuild()
+
+        async def _resync(log_fn):
+            await data_collector.sync_all(log_fn=log_fn)
+
+        sync_manager.run_in_background(_resync)
+
     # Return masked version
     masked = pat_manager.get_all_masked()
     updated = next((p for p in masked if p["id"] == pat_id), None)

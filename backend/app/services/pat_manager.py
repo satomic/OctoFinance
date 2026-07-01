@@ -71,6 +71,8 @@ class PATManager:
                 "user_login": "",
                 "user_avatar": "",
                 "orgs": [],
+                "enterprise_slugs": [],
+                "include_organizations": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "last_synced_at": "",
             }
@@ -133,7 +135,13 @@ class PATManager:
                 return p["token"]
         return None
 
-    def add(self, label: str, token: str, enterprise_slugs: list[str] | None = None) -> dict:
+    def add(
+        self,
+        label: str,
+        token: str,
+        enterprise_slugs: list[str] | None = None,
+        include_organizations: bool = True,
+    ) -> dict:
         """Add a new PAT entry. Returns the new PAT dict (with token)."""
         # Check for duplicate tokens
         for p in self._pats:
@@ -148,6 +156,7 @@ class PATManager:
             "user_avatar": "",
             "orgs": [],
             "enterprise_slugs": enterprise_slugs or [],
+            "include_organizations": include_organizations,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_synced_at": "",
         }
