@@ -52,6 +52,7 @@
 - **Auto-detection** of Copilot plan type (Business $19/seat vs. Enterprise $39/seat)
 - **Cross-org filtering** in dashboard with multi-select dropdown
 - **Enterprise-level** usage report support
+- **Enterprises without organizations** — some enterprises grant Copilot access purely via Enterprise Teams with zero organizations underneath. Each PAT has an **"Include Organizations"** toggle (default on); when disabled, organization discovery/sync is skipped for that PAT and enterprise-level Copilot data is synced instead (seats via `GET /enterprises/{ent}/copilot/billing/seats`, usage/user usage reports, and AI credit usage). This data is stored under a pseudo-org key so it flows through the existing dashboard aggregation unchanged — the Organizations list stays empty (as expected) while KPIs/charts remain fully populated. Since GitHub has no enterprise-wide billing overview endpoint, seat KPIs (active/inactive, plan type) are synthesized from the seats list
 
 ## Real-Time Data Synchronization
 
@@ -60,6 +61,7 @@
 - **SSE streaming** of sync progress to frontend
 - **Per-organization** sync capability
 - **Dual-write**: syncs to both global data store and per-session working directory
+- **Incremental historical merge**: GitHub's usage-metrics and legacy-metrics endpoints always return a rolling window (e.g. the latest 28 days), so previously `_latest.json` was fully overwritten on every sync and could never show data older than that window even with daily syncs. `_latest.json` is now merged day-by-day (or day+user, or date, depending on category) with the previously synced data — the newest sync always wins on overlapping days, while older days no longer covered by the API window are preserved. Timestamped snapshot files still store the raw payload from each individual sync, unchanged
 
 ## Human-in-the-Loop Operations
 

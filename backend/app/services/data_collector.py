@@ -33,6 +33,140 @@ def enterprise_pseudo_org(slug: str) -> str:
     return f"{slug}-enterprise"
 
 
+# ---------------------------------------------------------------------------
+# `_latest.json` merge strategies
+#
+# GitHub's Copilot usage-metrics/legacy-metrics endpoints always return a
+# rolling window (the latest 28 days for usage reports, the default window for
+# legacy metrics) — never the full history. If every sync simply overwrote
+# `_latest.json` with the freshly fetched payload, the dashboard could never
+# show data older than ~28 days even when synced daily for months.
+#
+# To fix this, categories with day-level granularity merge the newly fetched
+# data into whatever was previously stored in `_latest.json`: days present in
+# the new payload always win (freshest data), while days no longer covered by
+# the new rolling window are preserved from the previous file. This lets
+# `_latest.json` grow into a full history over time through incremental syncs.
+# ---------------------------------------------------------------------------
+
+def _merge_usage_report(old_data: dict | list | None, new_data: dict | list) -> dict | list:
+    """Merge an org/enterprise-level 28-day usage report (category 'usage').
+
+    Each payload has a ``records`` list (normally a single record) with a
+    ``day_totals`` array — one entry per day in the report window. Merges
+    `day_totals` across old and new data keyed by ``day``; new data wins on
+    overlapping days, older days are preserved.
+    """
+    if not isinstance(new_data, dict):
+        return new_data
+    if not isinstance(old_data, dict) or not old_data.get("records"):
+        return new_data
+
+    def collect(data: dict) -> tuple[dict[str, dict], dict]:
+        days: dict[str, dict] = {}
+        meta: dict = {}
+        for rec in data.get("records", []) or []:
+            meta = {k: v for k, v in rec.items() if k != "day_totals"}
+            for dt in rec.get("day_totals", []) or []:
+                day = dt.get("day")
+                if day:
+                    days[day] = dt
+        return days, meta
+
+    old_days, old_meta = collect(old_data)
+    new_days, new_meta = collect(new_data)
+    if not old_days:
+        return new_data
+
+    merged_days = {**old_days, **new_days}
+    sorted_keys = sorted(merged_days.keys())
+
+    merged_record = {**old_meta, **new_meta}
+    merged_record["day_totals"] = [merged_days[d] for d in sorted_keys]
+    if sorted_keys:
+        merged_record["report_start_day"] = sorted_keys[0]
+        merged_record["report_end_day"] = sorted_keys[-1]
+
+    merged = {**old_data, **new_data}
+    merged["records"] = [merged_record]
+    merged["total_records"] = 1
+    if sorted_keys:
+        merged["report_start_day"] = sorted_keys[0]
+        merged["report_end_day"] = sorted_keys[-1]
+    return merged
+
+
+def _merge_usage_users_report(old_data: dict | list | None, new_data: dict | list) -> dict | list:
+    """Merge a user-level 28-day usage report (category 'usage_users').
+
+    Records are flat (day, user) rows. Merges old and new records keyed by
+    ``(day, user_login or user_id)``; new data wins on overlapping keys, older
+    (day, user) rows outside the new rolling window are preserved.
+    """
+    if not isinstance(new_data, dict):
+        return new_data
+    if not isinstance(old_data, dict) or not old_data.get("records"):
+        return new_data
+
+    def rec_key(rec: dict) -> tuple:
+        return (rec.get("day", ""), rec.get("user_login") or rec.get("user_id") or "")
+
+    merged_map: dict[tuple, dict] = {}
+    for rec in old_data.get("records", []) or []:
+        merged_map[rec_key(rec)] = rec
+    for rec in new_data.get("records", []) or []:
+        merged_map[rec_key(rec)] = rec
+
+    merged_records = sorted(
+        merged_map.values(),
+        key=lambda r: (r.get("day", ""), r.get("user_login", "")),
+    )
+    days = [r.get("day") for r in merged_records if r.get("day")]
+
+    merged = {**old_data, **new_data}
+    merged["records"] = merged_records
+    merged["total_records"] = len(merged_records)
+    if days:
+        merged["report_start_day"] = min(days)
+        merged["report_end_day"] = max(days)
+    return merged
+
+
+def _merge_metrics_list(old_data: dict | list | None, new_data: dict | list) -> dict | list:
+    """Merge legacy Copilot metrics entries (category 'metrics').
+
+    The legacy `/copilot/metrics` endpoint returns a list of daily entries,
+    each with a top-level ``date`` key, and (like the usage-report endpoints)
+    only covers a rolling window by default. Merges old and new entries keyed
+    by ``date``; new data wins on overlapping dates, older dates are preserved.
+    """
+    if not isinstance(new_data, list):
+        return new_data
+    if not isinstance(old_data, list) or not old_data:
+        return new_data
+
+    merged: dict[str, dict] = {}
+    for entry in old_data:
+        if isinstance(entry, dict) and entry.get("date"):
+            merged[entry["date"]] = entry
+    for entry in new_data:
+        if isinstance(entry, dict) and entry.get("date"):
+            merged[entry["date"]] = entry
+    if not merged:
+        return new_data
+    return [merged[d] for d in sorted(merged.keys())]
+
+
+# Maps category -> merge function used when updating `_latest.json`. Categories
+# not listed here (billing, seats, enterprise, cost_centers, budgets, ai_credits)
+# represent current point-in-time state and are overwritten as before.
+_LATEST_MERGE_STRATEGIES: dict[str, Callable[[dict | list | None, dict | list], dict | list]] = {
+    "usage": _merge_usage_report,
+    "usage_users": _merge_usage_users_report,
+    "metrics": _merge_metrics_list,
+}
+
+
 class DataCollector:
     """Collects Copilot data from GitHub API and stores as JSON files.
 
@@ -67,15 +201,41 @@ class DataCollector:
         return None
 
     def _save_json(self, category: str, org: str, data: dict | list) -> Path:
-        """Save data to a JSON file. Returns the file path."""
+        """Save data to a JSON file. Returns the file path.
+
+        Writes an immutable timestamped snapshot containing exactly the
+        newly-fetched payload, then updates `_latest.json` separately: for
+        categories with a registered merge strategy (see
+        `_LATEST_MERGE_STRATEGIES`), the new data is merged with whatever was
+        previously in `_latest.json` instead of overwriting it, so historical
+        days aren't lost when the GitHub API only ever returns a rolling
+        window. Other categories are overwritten as before (they represent
+        current point-in-time state, e.g. billing/seats snapshots).
+        """
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filepath = self._data_dir / category / f"{org}_{ts}.json"
         filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
 
-        # Also save a "latest" copy for easy access
+        # Update the "latest" copy, merging with prior history where applicable
         latest = self._data_dir / category / f"{org}_latest.json"
-        latest.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        to_write = data
+        merge_fn = _LATEST_MERGE_STRATEGIES.get(category)
+        if merge_fn is not None:
+            old_data = None
+            if latest.exists():
+                try:
+                    old_data = json.loads(latest.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    old_data = None
+            try:
+                to_write = merge_fn(old_data, data)
+            except Exception:
+                # If merging fails for any reason, fall back to the raw new
+                # data rather than losing the sync entirely.
+                to_write = data
+
+        latest.write_text(json.dumps(to_write, indent=2, default=str), encoding="utf-8")
         return filepath
 
     def load_latest(self, category: str, org: str) -> dict | list | None:
