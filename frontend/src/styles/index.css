@@ -1583,6 +1583,99 @@ body {
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+/* ---- Cost Center share column & modal ---- */
+
+.cc-td-share {
+  white-space: nowrap;
+}
+
+.cc-share-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cc-share-open-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  text-decoration: none;
+}
+
+.cc-share-open-link:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.cc-share-gear {
+  padding: 2px 7px;
+}
+
+.cc-share-modal .cc-share-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 12px 0 6px;
+}
+
+.cc-share-link-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cc-share-link {
+  flex: 1;
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+}
+
+.cc-share-modes {
+  display: flex;
+  gap: 8px;
+}
+
+.cc-share-mode {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.cc-share-mode-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.cc-share-password {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.cc-share-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
 .cc-member-info {
   display: flex;
   align-items: center;

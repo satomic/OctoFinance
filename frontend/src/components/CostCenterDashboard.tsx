@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useCostCenterDashboard, useDatasetSync } from "../hooks/useData";
-import type { CostCenter, UserCostCenterEntry } from "../types";
+import type { CostCenter, CostCenterShareInfo, UserCostCenterEntry } from "../types";
 
 interface Props {
   refreshKey: number;
@@ -84,8 +84,139 @@ function Section({ sectionKey, title, defaultOpen = true, children }: {
   );
 }
 
+/* ---------- Share settings modal ---------- */
+function ShareModal({
+  cc, share, onSave, onDisable, onClose,
+}: {
+  cc: CostCenter;
+  share: CostCenterShareInfo | null;
+  onSave: (mode: "public" | "password", password: string) => Promise<string | null>;
+  onDisable: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [mode, setMode] = useState<"public" | "password">(share?.mode ?? "public");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = share ? `${window.location.origin}${share.url}` : "";
+
+  const handleSave = async () => {
+    if (mode === "password" && !share && !password.trim()) {
+      setError(t("ccDash.sharePasswordRequired"));
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const err = await onSave(mode, password.trim());
+    setBusy(false);
+    if (err) setError(err);
+    else onClose();
+  };
+
+  const handleDisable = async () => {
+    setBusy(true);
+    await onDisable();
+    setBusy(false);
+    onClose();
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
+
+  return (
+    <div className="settings-modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="settings-modal cc-share-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-modal-header">
+          <h2>{t("ccDash.shareModalTitle")} · {cc.name}</h2>
+          <button className="settings-close-btn" onClick={onClose}>×</button>
+        </div>
+        <div className="settings-modal-body">
+          {error && <div className="settings-error">{error}</div>}
+
+          {share && (
+            <div className="cc-share-link-row">
+              <label className="cc-share-label">{t("ccDash.shareLink")}</label>
+              <div className="cc-share-link-box">
+                <a href={share.url} target="_blank" rel="noopener noreferrer" className="cc-share-link">
+                  {shareUrl}
+                </a>
+                <button className="btn btn-small" onClick={handleCopy}>
+                  {copied ? t("ccDash.shareCopied") : t("ccDash.shareCopy")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <label className="cc-share-label">{t("ccDash.shareMode")}</label>
+          <div className="cc-share-modes">
+            <label className={`cc-share-mode ${mode === "public" ? "cc-share-mode-active" : ""}`}>
+              <input
+                type="radio"
+                name="cc-share-mode"
+                checked={mode === "public"}
+                onChange={() => setMode("public")}
+              />
+              <span>🌐 {t("ccDash.shareModePublic")}</span>
+            </label>
+            <label className={`cc-share-mode ${mode === "password" ? "cc-share-mode-active" : ""}`}>
+              <input
+                type="radio"
+                name="cc-share-mode"
+                checked={mode === "password"}
+                onChange={() => setMode("password")}
+              />
+              <span>🔒 {t("ccDash.shareModePassword")}</span>
+            </label>
+          </div>
+
+          {mode === "password" && (
+            <input
+              type="password"
+              className="cc-search-input cc-share-password"
+              placeholder={
+                share && share.mode === "password"
+                  ? t("ccDash.sharePasswordKeep")
+                  : t("ccDash.sharePasswordPlaceholder")
+              }
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          )}
+
+          <div className="cc-share-actions">
+            {share && (
+              <button className="btn btn-small btn-danger" onClick={handleDisable} disabled={busy}>
+                {t("ccDash.shareDisable")}
+              </button>
+            )}
+            <button className="btn btn-small" style={{ marginLeft: "auto" }} onClick={onClose} disabled={busy}>
+              {t("ccDash.shareCancel")}
+            </button>
+            <button className="btn btn-small btn-approve" onClick={handleSave} disabled={busy}>
+              {share ? t("ccDash.shareUpdate") : t("ccDash.shareEnable")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Cost Center row (expandable members) ---------- */
-function CostCenterRow({ cc }: { cc: CostCenter }) {
+function CostCenterRow({ cc, share, onOpenShare }: {
+  cc: CostCenter;
+  share: CostCenterShareInfo | null;
+  onOpenShare: (cc: CostCenter) => void;
+}) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -115,6 +246,32 @@ function CostCenterRow({ cc }: { cc: CostCenter }) {
         <td className="cc-td cc-td-num">
           <strong>{cc.member_count}</strong>
         </td>
+        <td className="cc-td cc-td-share" onClick={(e) => e.stopPropagation()}>
+          {share ? (
+            <div className="cc-share-cell">
+              <a
+                href={share.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-share-open-link"
+                title={`${window.location.origin}${share.url}`}
+              >
+                {share.mode === "password" ? "🔒" : "🌐"} {t("ccDash.shareOpen")}
+              </a>
+              <button
+                className="btn btn-small cc-share-gear"
+                onClick={() => onOpenShare(cc)}
+                title={t("ccDash.shareModalTitle")}
+              >
+                ⚙
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-small" onClick={() => onOpenShare(cc)}>
+              ↗ {t("ccDash.shareBtn")}
+            </button>
+          )}
+        </td>
       </tr>
       {expanded && cc.members.map((m) => (
         <tr key={m.login} className="cc-member-row">
@@ -137,6 +294,7 @@ function CostCenterRow({ cc }: { cc: CostCenter }) {
               {m.source_name}
             </span>
           </td>
+          <td className="cc-td" />
           <td className="cc-td" />
         </tr>
       ))}
@@ -243,6 +401,65 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
   const handleSync = useCallback(() => {
     runSync("cost_centers", refetch);
   }, [runSync, refetch]);
+
+  // ---- Share settings ----
+  const [shares, setShares] = useState<Record<string, CostCenterShareInfo>>({});
+  const [shareModalCC, setShareModalCC] = useState<CostCenter | null>(null);
+  const effectiveEnterprise = data?.selected_enterprise || enterprise;
+
+  const fetchShares = useCallback(async (ent: string) => {
+    if (!ent) return;
+    try {
+      const res = await fetch(`/api/data/cost-center-shares?enterprise=${encodeURIComponent(ent)}`);
+      const json = await res.json();
+      setShares(json.shares ?? {});
+    } catch {
+      setShares({});
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchShares(effectiveEnterprise);
+  }, [effectiveEnterprise, fetchShares]);
+
+  const handleShareSave = useCallback(
+    async (cc: CostCenter, mode: "public" | "password", password: string): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/data/cost-center-share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enterprise: effectiveEnterprise,
+            cc_id: cc.id,
+            cc_name: cc.name,
+            mode,
+            password,
+          }),
+        });
+        const json = await res.json();
+        if (json.error) return json.error;
+        await fetchShares(effectiveEnterprise);
+        return null;
+      } catch (e) {
+        return String(e);
+      }
+    },
+    [effectiveEnterprise, fetchShares],
+  );
+
+  const handleShareDisable = useCallback(
+    async (cc: CostCenter) => {
+      try {
+        await fetch(
+          `/api/data/cost-center-share?enterprise=${encodeURIComponent(effectiveEnterprise)}&cc_id=${encodeURIComponent(cc.id)}`,
+          { method: "DELETE" },
+        );
+      } finally {
+        await fetchShares(effectiveEnterprise);
+      }
+    },
+    [effectiveEnterprise, fetchShares],
+  );
 
   const setEnterprise = useCallback(
     (v: string) => ui.patch({ ccDashEnterprise: v }),
@@ -371,16 +588,33 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
                 <th className="cc-th">{t("ccDash.colState")}</th>
                 <th className="cc-th">{t("ccDash.colResources")}</th>
                 <th className="cc-th cc-th-num">{t("ccDash.colMembers")}</th>
+                <th className="cc-th">{t("ccDash.colShare")}</th>
               </tr>
             </thead>
             <tbody>
               {data.cost_centers.map((cc) => (
-                <CostCenterRow key={cc.id} cc={cc} />
+                <CostCenterRow
+                  key={cc.id}
+                  cc={cc}
+                  share={shares[cc.id] ?? null}
+                  onOpenShare={setShareModalCC}
+                />
               ))}
             </tbody>
           </table>
         </div>
       </Section>
+
+      {/* Share settings modal */}
+      {shareModalCC && (
+        <ShareModal
+          cc={shareModalCC}
+          share={shares[shareModalCC.id] ?? null}
+          onSave={(mode, password) => handleShareSave(shareModalCC, mode, password)}
+          onDisable={() => handleShareDisable(shareModalCC)}
+          onClose={() => setShareModalCC(null)}
+        />
+      )}
 
       {/* User → Cost Centers mapping */}
       <Section sectionKey="usermap" title={t("ccDash.sectionUserMap")}>

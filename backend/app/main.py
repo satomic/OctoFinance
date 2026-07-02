@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routers import actions, auth, chat, data, pats, sessions, sync
+from .routers import actions, auth, chat, data, pats, sessions, share, sync
 from .routers.auth import AUTH_PUBLIC_PATHS, is_authenticated
 from .services.api_manager import api_manager
 from .services.copilot_engine import copilot_engine
@@ -122,6 +122,9 @@ app.include_router(sync.router, prefix="/api")
 app.include_router(data.router, prefix="/api")
 app.include_router(actions.router, prefix="/api")
 app.include_router(pats.router, prefix="/api")
+app.include_router(share.admin_router, prefix="/api")
+# Public share pages (no OctoFinance auth) — must register before the SPA catch-all
+app.include_router(share.public_router)
 
 # Serve frontend static files
 _dist = Path(__file__).parent.parent.parent / "frontend" / "dist"

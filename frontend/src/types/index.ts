@@ -258,6 +258,16 @@ export interface UserCostCenterEntry {
   cost_centers: { name: string; id: string; source_type: string; source_name: string }[];
 }
 
+export interface CostCenterShareInfo {
+  cc_id: string;
+  cc_name: string;
+  token: string;
+  mode: "public" | "password";
+  url: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CostCenterDashboardData {
   enterprises: { slug: string; name: string }[];
   selected_enterprise: string;

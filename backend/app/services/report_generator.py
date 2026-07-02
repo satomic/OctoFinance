@@ -774,6 +774,7 @@ def _render_html(
     usage: dict,
     generated_at: str,
     chart_id: str,
+    download_url: str | None = None,
 ) -> str:
     name         = cc.get("name", "Unknown")
     state        = cc.get("state", "active")
@@ -794,6 +795,12 @@ def _render_html(
         total_cost += float(ai_usage.get("kpi", {}).get("total_cost", 0) or 0)
     if usage.get("has_data"):
         total_cost += float(usage.get("kpi", {}).get("total_gross", 0) or 0)
+
+    download_btn = (
+        f'<a class="theme-btn" style="text-decoration:none;display:inline-block;'
+        f'margin-left:8px" href="{_e(download_url)}">\u2b07 Download</a>'
+        if download_url else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -826,7 +833,7 @@ def _render_html(
       <div class="header-cost-label">Total Cost</div>
       <div class="header-cost-value">{_money(total_cost)}</div>
       <div class="header-gen">Generated {_e(generated_at)}</div>
-      <button id="theme-btn" class="theme-btn" onclick="toggleTheme()">🌙 Dark</button>
+      <button id="theme-btn" class="theme-btn" onclick="toggleTheme()">🌙 Dark</button>{download_btn}
     </div>
   </div>
 </header>
@@ -861,6 +868,37 @@ function toggleTheme() {{
 
 
 # ── public API ────────────────────────────────────────────────────────────────
+
+def generate_single_report_html(
+    enterprise: str,
+    enterprise_name: str,
+    cc: dict,
+    all_ai_usage_records: list[dict],
+    all_usage_records: list[dict],
+    download_url: str | None = None,
+) -> str:
+    """Render a single self-contained HTML report for one cost center.
+
+    When ``download_url`` is given, a Download button is rendered in the
+    header (used by the public share page).
+    """
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    cc_name = cc.get("name", "")
+
+    pr_records = [r for r in all_ai_usage_records if r.get("cost_center_name") == cc_name]
+    ur_records = [r for r in all_usage_records  if r.get("cost_center_name") == cc_name]
+
+    return _render_html(
+        enterprise=enterprise,
+        enterprise_name=enterprise_name,
+        cc=cc,
+        ai_usage=_build_ai_usage_section(pr_records),
+        usage=_build_usage_section(ur_records),
+        generated_at=generated_at,
+        chart_id="0",
+        download_url=download_url,
+    )
+
 
 def generate_report_zip(
     enterprise: str,
