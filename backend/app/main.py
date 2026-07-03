@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .routers import actions, auth, chat, data, pats, sessions, share, sync
 from .routers.auth import AUTH_PUBLIC_PATHS, is_authenticated
+from .config import APP_VERSION
 from .services.api_manager import api_manager
 from .services.copilot_engine import copilot_engine
 from .services.data_collector import data_collector
@@ -101,9 +102,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="OctoFinance V2",
+    title="OctoFinance",
     description="GitHub Copilot AI FinOps Platform",
-    version="2.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -126,6 +127,28 @@ app.include_router(share.admin_router, prefix="/api")
 # Public share pages (no OctoFinance auth) — must register before the SPA catch-all
 app.include_router(share.public_router)
 
+
+# NOTE: must be registered BEFORE the SPA catch-all route below, otherwise the
+# catch-all swallows /api/health and returns index.html instead of JSON.
+@app.get("/api/health")
+async def health():
+    users = api_manager.get_discovered_users()
+    user_logins = [u.get("login", "") for u in users.values()]
+    all_orgs = api_manager.get_all_orgs()
+    pat_count = len(pat_manager.get_all())
+
+    return {
+        "status": "ok",
+        "version": APP_VERSION,
+        "users": user_logins,
+        "user": user_logins[0] if user_logins else None,
+        "orgs": [o["login"] for o in all_orgs],
+        "pat_count": pat_count,
+        "copilot_engine": copilot_engine.is_ready(),
+        "is_syncing": sync_manager.is_syncing,
+    }
+
+
 # Serve frontend static files
 _dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 if _dist.exists():
@@ -133,7 +156,12 @@ if _dist.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
-        return FileResponse(_dist / "index.html")
+        # index.html must never be cached, otherwise browsers keep loading
+        # stale hashed asset bundles after a redeploy
+        return FileResponse(
+            _dist / "index.html",
+            headers={"Cache-Control": "no-cache, must-revalidate"},
+        )
 
 
 @app.middleware("http")
@@ -145,21 +173,3 @@ async def auth_middleware(request: Request, call_next):
         if not is_authenticated(token):
             return JSONResponse(status_code=401, content={"error": "Authentication required"})
     return await call_next(request)
-
-
-@app.get("/api/health")
-async def health():
-    users = api_manager.get_discovered_users()
-    user_logins = [u.get("login", "") for u in users.values()]
-    all_orgs = api_manager.get_all_orgs()
-    pat_count = len(pat_manager.get_all())
-
-    return {
-        "status": "ok",
-        "users": user_logins,
-        "user": user_logins[0] if user_logins else None,
-        "orgs": [o["login"] for o in all_orgs],
-        "pat_count": pat_count,
-        "copilot_engine": copilot_engine.is_ready(),
-        "is_syncing": sync_manager.is_syncing,
-    }

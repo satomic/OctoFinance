@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useI18n } from "../contexts/I18nContext";
 
 interface Props {
@@ -13,6 +13,14 @@ export function LoginPage({ setupRequired, onLogin }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((r) => r.json())
+      .then((d) => setVersion(d.version || ""))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +68,10 @@ export function LoginPage({ setupRequired, onLogin }: Props) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>OctoFinance</h1>
+          <h1>
+            OctoFinance
+            {version && <span className="app-version">v{version}</span>}
+          </h1>
           <p>{setupRequired ? t("auth.createAccount") : t("auth.welcome")}</p>
         </div>
 

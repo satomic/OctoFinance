@@ -82,10 +82,13 @@ class LoginParams(BaseModel):
 @router.get("/status")
 async def auth_status(octofinance_session: str | None = Cookie(default=None)):
     """Check if auth is set up and if current request is authenticated."""
+    from ..config import APP_VERSION
+
     auth_data = _load_auth()
     return {
         "setup_required": auth_data is None,
         "authenticated": is_authenticated(octofinance_session),
+        "version": APP_VERSION,
     }
 
 

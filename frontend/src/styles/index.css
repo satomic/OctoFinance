@@ -111,6 +111,25 @@ body {
   margin-right: 12px;
 }
 
+.app-version {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  margin-left: -6px;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+.login-header .app-version {
+  margin-left: 8px;
+  margin-right: 0;
+  vertical-align: middle;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -367,6 +386,15 @@ body {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-small { padding: 4px 10px; font-size: 11px; }
+
+/* Anchor styled as a button with a leading icon (e.g. GitHub links in the status bar) */
+.btn-link-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+}
+.btn-link-icon:hover { color: var(--text-primary); }
 
 .btn-approve {
   background: #238636;

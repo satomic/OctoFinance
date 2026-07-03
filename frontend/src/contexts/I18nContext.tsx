@@ -296,6 +296,10 @@ const translations = {
     "auth.logout": "Logout",
     "auth.error": "Username and password are required",
 
+    // External links
+    "nav.sourceCode": "Source Code",
+    "nav.feedback": "Report an Issue",
+
     // Loading
     "loading": "Loading...",
     "loading.actions": "Loading actions...",
@@ -593,6 +597,10 @@ const translations = {
     "auth.logout": "\u9000\u51fa",
     "auth.error": "\u7528\u6237\u540d\u548c\u5bc6\u7801\u4e0d\u80fd\u4e3a\u7a7a",
 
+    // External links
+    "nav.sourceCode": "\u67e5\u770b\u6e90\u7801",
+    "nav.feedback": "\u95ee\u9898\u53cd\u9988",
+
     // Loading
     "loading": "\u52a0\u8f7d\u4e2d...",
     "loading.actions": "\u52a0\u8f7d\u64cd\u4f5c\u4e2d...",
@@ -889,6 +897,10 @@ const translations = {
     "auth.loginBtn": "Đăng nhập",
     "auth.logout": "Đăng xuất",
     "auth.error": "Tên đăng nhập và mật khẩu không được để trống",
+
+    // External links
+    "nav.sourceCode": "Mã nguồn",
+    "nav.feedback": "Báo lỗi",
 
     // Loading
     "loading": "Đang tải...",
