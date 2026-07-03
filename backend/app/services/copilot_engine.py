@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import AsyncIterator, TYPE_CHECKING
 
-from copilot import CopilotClient, CopilotSession
+from copilot import CopilotClient, CopilotSession, PermissionHandler
 from copilot.generated.session_events import SessionEvent, SessionEventType
 
 from .data_collector import create_session_collector
@@ -80,6 +80,7 @@ class CopilotAIEngine:
 
     def __init__(self):
         self._client: CopilotClient | None = None
+        self._client_started: bool = False
         self._sessions: dict[str, CopilotSession] = {}
         self._api_manager: APIManager | None = None
 
@@ -89,31 +90,50 @@ class CopilotAIEngine:
 
     async def start(self):
         """Start the Copilot SDK client."""
-        self._client = CopilotClient(self._client_options())
+        self._client = CopilotClient(**self._client_options())
         try:
             await self._client.start()
+            self._client_started = True
         except BaseException:
             self._client = None
+            self._client_started = False
             raise
 
     async def stop(self):
         """Stop all sessions and the client."""
         for session in self._sessions.values():
             try:
-                await session.destroy()
+                await session.disconnect()
             except Exception:
                 pass
         self._sessions.clear()
         if self._client:
             await self._client.stop()
             self._client = None
+        self._client_started = False
 
     def is_ready(self) -> bool:
-        return self._client is not None and self._client.get_state() == "connected"
+        return self._client is not None and self._client_started
 
     @staticmethod
     def _client_options() -> dict:
-        """Build Copilot SDK client options from the configured application PAT."""
+        """Build Copilot SDK client options for authenticating the Copilot CLI.
+
+        Token env vars are dedicated to Copilot CLI/SDK authentication (data-sync
+        PATs are configured via the web UI only). Resolution order:
+        1. COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN env vars (see
+           https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-environment-variables)
+        2. Fallback: the first PAT configured in the app (Settings UI)
+        3. Fallback: the CLI's own logged-in user (interactive `copilot` login)
+        """
+        import os
+
+        for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
+            token = os.environ.get(env_var, "").strip()
+            if token:
+                logger.info("Using %s environment variable for Copilot CLI authentication", env_var)
+                return {"github_token": token, "use_logged_in_user": False}
+
         try:
             from .pat_manager import pat_manager
 
@@ -192,14 +212,16 @@ class CopilotAIEngine:
     async def _restart_client(self):
         """Restart the Copilot SDK client after a transport/session failure."""
         self._sessions.clear()
+        self._client_started = False
         if self._client:
             try:
                 await self._client.stop()
             except Exception:
                 logger.exception("Failed to stop Copilot SDK client during restart")
-        self._client = CopilotClient(self._client_options())
+        self._client = CopilotClient(**self._client_options())
         try:
             await self._client.start()
+            self._client_started = True
         except BaseException:
             self._client = None
             raise
@@ -216,18 +238,18 @@ class CopilotAIEngine:
 
         session_tools = self._build_tools_for_session(working_directory)
 
-        resume_config: dict = {
+        resume_kwargs: dict = {
             "tools": session_tools,
             "system_message": {
                 "mode": "append",
                 "content": FINOPS_SYSTEM_PROMPT,
             },
-            "on_permission_request": self._auto_approve,
+            "on_permission_request": PermissionHandler.approve_all,
         }
         if working_directory:
-            resume_config["working_directory"] = working_directory
+            resume_kwargs["working_directory"] = working_directory
 
-        session = await self._client.resume_session(sdk_session_id, resume_config)
+        session = await self._client.resume_session(sdk_session_id, **resume_kwargs)
         self._sessions[session_id] = session
         # Update the persisted ID (it should be the same, but be safe)
         self._write_sdk_session_id(working_directory, session.session_id)
@@ -242,18 +264,18 @@ class CopilotAIEngine:
 
         session_tools = self._build_tools_for_session(working_directory)
 
-        session_config: dict = {
+        session_kwargs: dict = {
             "tools": session_tools,
             "system_message": {
                 "mode": "append",
                 "content": FINOPS_SYSTEM_PROMPT,
             },
-            "on_permission_request": self._auto_approve,
+            "on_permission_request": PermissionHandler.approve_all,
         }
         if working_directory:
-            session_config["working_directory"] = working_directory
+            session_kwargs["working_directory"] = working_directory
 
-        session = await self._client.create_session(session_config)
+        session = await self._client.create_session(**session_kwargs)
         self._sessions[session_id] = session
 
         # Persist SDK session ID so we can resume after restart
@@ -268,7 +290,7 @@ class CopilotAIEngine:
         old = self._sessions.pop(session_id, None)
         if old:
             try:
-                await old.destroy()
+                await old.disconnect()
             except Exception:
                 pass
         return await self._create_session(session_id, working_directory)
@@ -340,7 +362,7 @@ class CopilotAIEngine:
                     "content": getattr(event.data, "content", ""),
                 })
             elif event.type == SessionEventType.ASSISTANT_REASONING_DELTA:
-                text = getattr(event.data, "reasoning_text", None)
+                text = getattr(event.data, "delta_content", None) or getattr(event.data, "reasoning_text", None)
                 if text:
                     queue.put_nowait({
                         "type": "thinking_delta",
@@ -357,7 +379,9 @@ class CopilotAIEngine:
                     "detail": _serialize_args(arguments),
                 })
             elif event.type == SessionEventType.TOOL_EXECUTION_COMPLETE:
-                tool_name = getattr(event.data, "tool_name", None)
+                tool_name = getattr(event.data, "tool_name", None) or getattr(
+                    getattr(event.data, "tool_description", None), "name", None
+                )
                 tool_call_id = getattr(event.data, "tool_call_id", None)
                 result_obj = getattr(event.data, "result", None)
                 result_text = None
@@ -393,7 +417,7 @@ class CopilotAIEngine:
         unsubscribe = session.on(on_event)
         try:
             try:
-                await session.send({"prompt": message})
+                await session.send(message)
             except Exception as send_err:
                 if "Session not found" in str(send_err):
                     # Session expired or SDK restarted — create fresh and retry
@@ -401,7 +425,7 @@ class CopilotAIEngine:
                     unsubscribe()
                     session = await self._retry_with_new_session(session_id, working_directory)
                     unsubscribe = session.on(on_event)
-                    await session.send({"prompt": message})
+                    await session.send(message)
                 else:
                     raise
 
@@ -423,12 +447,12 @@ class CopilotAIEngine:
         """Send a message and return the final response text."""
         session = await self.get_or_create_session(session_id, working_directory)
         try:
-            response = await session.send_and_wait({"prompt": message}, timeout=300)
+            response = await session.send_and_wait(message, timeout=300)
         except Exception as e:
             if "Session not found" in str(e):
                 logger.warning("Session not found for %s, creating new session", session_id)
                 session = await self._retry_with_new_session(session_id, working_directory)
-                response = await session.send_and_wait({"prompt": message}, timeout=300)
+                response = await session.send_and_wait(message, timeout=300)
             else:
                 raise
         if response:
@@ -436,18 +460,19 @@ class CopilotAIEngine:
         return ""
 
     async def destroy_session(self, session_id: str):
-        """Destroy a specific Copilot SDK session."""
+        """Destroy a specific Copilot SDK session (disconnect + delete server-side state)."""
         session = self._sessions.pop(session_id, None)
         if session:
+            sdk_session_id = session.session_id
             try:
-                await session.destroy()
+                await session.disconnect()
             except Exception:
                 pass
-
-    @staticmethod
-    async def _auto_approve(request, context):
-        """Auto-approve tool permission requests."""
-        return {"kind": "approved"}
+            if self._client:
+                try:
+                    await self._client.delete_session(sdk_session_id)
+                except Exception:
+                    pass
 
 
 # Global instance

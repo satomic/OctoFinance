@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[OctoFinance] Warning: Failed to setup logging: {e}")
 
-    # Load PATs from file (auto-migrates GITHUB_PAT env var if needed)
+    # Load PATs from file (data-sync PATs are configured via the web UI only)
     pats_list = pat_manager.load()
     print(f"[OctoFinance] Loaded {len(pats_list)} PAT(s)")
 

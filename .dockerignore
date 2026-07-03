@@ -1,0 +1,43 @@
+# VCS / CI
+.git
+.github
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+.venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Node
+frontend/node_modules
+frontend/dist
+
+# Runtime data (may contain PATs / billing info — never bake into image)
+data
+data_*
+
+# Docs & assets not needed in the image
+docs
+docs_cn
+images
+presentations
+tmp
+samples
+*.md
+!backend/**/*.md
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+
+# Env files
+.env
+.env.*
+
+# Docker
+Dockerfile
+.dockerignore

@@ -4,7 +4,6 @@ PATs and app settings are stored in data/pats.json.
 """
 
 import json
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,25 +59,6 @@ class PATManager:
         else:
             self._pats = []
             self._settings = {**DEFAULT_SETTINGS}
-
-        # Auto-migrate GITHUB_PAT env var if no PATs configured
-        env_pat = os.environ.get("GITHUB_PAT", "").strip()
-        if not self._pats and env_pat:
-            migrated = {
-                "id": f"pat_{uuid.uuid4().hex[:8]}",
-                "label": "Migrated from GITHUB_PAT env",
-                "token": env_pat,
-                "user_login": "",
-                "user_avatar": "",
-                "orgs": [],
-                "enterprise_slugs": [],
-                "include_organizations": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "last_synced_at": "",
-            }
-            self._pats.append(migrated)
-            self._save()
-            print(f"[PATManager] Auto-migrated GITHUB_PAT env var as PAT '{migrated['id']}'")
 
         return self._pats
 

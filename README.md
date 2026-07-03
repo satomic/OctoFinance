@@ -122,6 +122,82 @@ cd backend && ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
+## Docker Deployment
+
+OctoFinance ships as a single self-contained image: FastAPI backend + pre-built React frontend + GitHub Copilot CLI (standalone binary, no Node.js runtime needed). Images are published to GitHub Container Registry (GHCR) on every release tag.
+
+### Run from GHCR
+
+```bash
+# Pull the latest release (or a specific version, e.g. :2.1.0)
+docker pull ghcr.io/satomic/octofinance:latest
+
+# Start the container
+docker run -d \
+  --name octofinance \
+  -p 8000:8000 \
+  -v octofinance-data:/app/data \
+  -e COPILOT_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxx \
+  ghcr.io/satomic/octofinance:latest
+```
+
+Then open http://localhost:8000, create admin credentials, and add your org-admin data-sync PAT(s) in **Settings**.
+
+
+### Configuration
+
+| Item | Description |
+|------|-------------|
+| Port `8000` | HTTP port serving both the web UI and the API |
+| Volume `/app/data` | **Required for persistence.** Holds all runtime state: admin credentials (`auth.json`), PATs (`pats.json`), synced GitHub data, chat sessions, and logs. Mount a host directory or named volume |
+| Env `COPILOT_GITHUB_TOKEN` | Token used to authenticate the **Copilot CLI / SDK** ([Authenticating with environment variables](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-environment-variables)). Must belong to a user with an active Copilot subscription |
+| Env `GH_TOKEN` / `GITHUB_TOKEN` | Standard GitHub CLI token env vars — same purpose as `COPILOT_GITHUB_TOKEN`, lower precedence |
+| Env `COPILOT_CLI_PATH` | Pre-set to `/usr/local/bin/copilot` inside the image — do not override |
+
+**Separation of concerns**:
+
+- **Data-sync PATs** (org-admin PATs used to pull seats/usage/billing from the GitHub API) are configured **via the web UI only** (Settings → PAT Manager) and persisted in `/app/data/pats.json`. They are *not* configurable through Docker environment variables.
+- **Docker env vars are only for Copilot CLI / SDK authentication.** The container is headless, so interactive `copilot` login is not possible — pass a token from a Copilot-subscribed user instead. Resolution order:
+  1. `COPILOT_GITHUB_TOKEN` > `GH_TOKEN` > `GITHUB_TOKEN` environment variables
+  2. Fallback: the first PAT configured in the web UI (only works if that PAT's user has a Copilot subscription)
+
+
+
+> **Notes**
+> - The container runs as non-root user `octofinance` (UID 1000). If you bind-mount a host directory on Linux, make sure it is writable by UID 1000 (`chown -R 1000:1000 ./data`).
+> - The token used for Copilot CLI auth must belong to a user with an active Copilot subscription, otherwise the AI chat will not work (data sync and dashboards still will).
+> - PATs and billing data live in `/app/data`. Never publish an image or volume containing this directory.
+> - Changes to token env vars require recreating the container (`docker rm -f octofinance` + `docker run ...`).
+
+### Build locally
+
+```bash
+# Build octofinance:dev for your local architecture
+./scripts/docker-build.sh
+
+# Build with a specific tag
+./scripts/docker-build.sh v2.1.0
+
+# Cross-build for another platform
+PLATFORM=linux/amd64 ./scripts/docker-build.sh
+```
+
+### Release via GitHub Actions
+
+Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
+
+```bash
+git tag v2.1.0
+git push origin v2.1.0
+# → publishes ghcr.io/<owner>/<repo>:v2.1.0, :2.1.0, :2.1, :2 and :latest
+```
+
+Every tagged build also updates the `latest` tag.
+
+> **Image internals**: the image bundles the standalone Copilot CLI binary (pinned via the `COPILOT_CLI_VERSION` build arg in the [Dockerfile](Dockerfile), currently `1.0.68`) and points the Copilot Python SDK (`github-copilot-sdk>=1.0.5`) at it via `COPILOT_CLI_PATH`, so no CLI download happens at container runtime. CLI and SDK must speak the same SDK protocol version (both currently v3).
+
+---
+
 ## Documentation
 
 | Document | Description |

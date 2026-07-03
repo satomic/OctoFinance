@@ -205,7 +205,7 @@ def _build_tools_for_session(self, working_directory):
 ### Environment
 - **Python 3.13+** with FastAPI
 - **GitHub Copilot CLI** must be installed and authenticated
-- **GitHub PATs** configured via the web UI or `GITHUB_PAT` env var
+- **GitHub PATs** configured via the web UI (stored in `data/pats.json`)
 
 ### Key Files
 | File | Purpose |
