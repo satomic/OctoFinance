@@ -1,6 +1,8 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 httpx>=0.28.0
+# Requires Python >= 3.11 (project targets 3.13+). On older Pythons pip only
+# sees the incompatible 0.1.x releases and fails to resolve this constraint.
 github-copilot-sdk>=1.0.5
 sse-starlette>=2.2.0
 pydantic>=2.0
