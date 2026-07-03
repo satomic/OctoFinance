@@ -5,16 +5,34 @@
 
 OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 23 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
 
-![alt text](images/chat-budget.png)
+### Screenshots
 
+#### Chat
+> Do you think the current budget setting is reasonable?
 ![alt text](images/chat.png)
 
+> Who consumed the most AI Credits in the past week?
+![alt text](images/chat2.png)
+
+#### Dashboards
+
+> Usage Metrics
 ![alt text](images/metrics.png)
 
+> AI Usage
 ![alt text](images/aiusage.png)
 
+> Cost Centers
+![alt text](images/cc.png)
 
+> Cost Centers
+![alt text](images/cc_shares.png)
+
+> Unassigned Users
 ![alt text](images/unassigned_users.png)
+
+> Budgets
+![alt text](images/budgets.png)
 
 ---
 
