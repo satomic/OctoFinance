@@ -6,6 +6,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useDashboard } from "../hooks/useData";
+import { currentMonthRange } from "../utils/period";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
 const TOOLTIP_STYLE = { background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 };
@@ -43,9 +44,10 @@ export function Dashboard({ refreshKey }: Props) {
   }, [ui.patch, ui.dashboardSelectedOrgs]);
   const { data, loading } = useDashboard(selectedOrgs ?? []);
 
-  const dateFrom = ui.dashboardDateFrom;
+  const period = ui.periodMode;
+  const dateFrom = period === "current_month" ? currentMonthRange().start : ui.dashboardDateFrom;
   const setDateFrom = useCallback((v: string) => ui.patch({ dashboardDateFrom: v }), [ui.patch]);
-  const dateTo = ui.dashboardDateTo;
+  const dateTo = period === "current_month" ? currentMonthRange().end : ui.dashboardDateTo;
   const setDateTo = useCallback((v: string) => ui.patch({ dashboardDateTo: v }), [ui.patch]);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

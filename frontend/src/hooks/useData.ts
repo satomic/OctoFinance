@@ -314,17 +314,22 @@ export function useBudgetsDashboard(params: {
   enterprise: string;
   scope: string;
   search: string;
+  period?: "all" | "current_month";
 }) {
   const [data, setData] = useState<BudgetsDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (live = false) => {
     setLoading(true);
     try {
       const qp = new URLSearchParams();
       if (params.enterprise) qp.set("enterprise", params.enterprise);
       if (params.scope) qp.set("scope", params.scope);
       if (params.search) qp.set("search", params.search);
+      if (params.period) qp.set("period", params.period);
+      // Budgets are the one dataset where staleness is misleading, so the
+      // current-month view always pulls live numbers from the GitHub API.
+      if (live || params.period === "current_month") qp.set("live", "true");
       const res = await fetch(`/api/data/budgets-dashboard?${qp}`);
       const json = await res.json();
       setData(json);
@@ -333,7 +338,7 @@ export function useBudgetsDashboard(params: {
     } finally {
       setLoading(false);
     }
-  }, [params.enterprise, params.scope, params.search]);
+  }, [params.enterprise, params.scope, params.search, params.period]);
 
   useEffect(() => {
     fetchData();

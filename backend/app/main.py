@@ -13,8 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routers import actions, auth, chat, data, pats, sessions, share, sync
-from .routers.auth import AUTH_PUBLIC_PATHS, is_authenticated
+from .routers import actions, auth, budget_requests, chat, data, me, pats, sessions, share, sync
+from .routers.auth import (
+    ADMIN_ONLY_PATHS,
+    AUTH_PUBLIC_PATHS,
+    NON_ADMIN_PATH_PREFIXES,
+    get_current_user,
+)
 from .config import APP_VERSION
 from .services.api_manager import api_manager
 from .services.copilot_engine import copilot_engine
@@ -45,6 +50,14 @@ async def lifespan(app: FastAPI):
     copilot_engine.set_api_manager(api_manager)
     ops_executor.set_api_manager(api_manager)
     ops_executor.set_data_collector(data_collector)
+
+    # Drop legacy per-sync snapshot files; only `_latest.json` is ever read
+    try:
+        removed = data_collector.purge_snapshots()
+        if removed:
+            print(f"[OctoFinance] Removed {removed} legacy data snapshot file(s)")
+    except Exception as e:
+        print(f"[OctoFinance] Snapshot cleanup warning: {e}")
 
     # Read settings
     settings = pat_manager.get_settings()
@@ -117,6 +130,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(me.router, prefix="/api")
+app.include_router(budget_requests.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
@@ -166,10 +181,26 @@ if _dist.exists():
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    """Require authentication for all /api/* routes except public auth endpoints."""
+    """Authentication + role gate for /api/* routes.
+
+    - Public auth endpoints are always reachable.
+    - Any logged-in user may reach their own data (/api/me/*) and the budget
+      request workflow (/api/budget-requests).
+    - Everything else requires an administrator session.
+    """
     path = request.url.path
     if path.startswith("/api") and path not in AUTH_PUBLIC_PATHS:
-        token = request.cookies.get("octofinance_session")
-        if not is_authenticated(token):
+        user = get_current_user(request.cookies.get("octofinance_session"))
+        if user is None:
             return JSONResponse(status_code=401, content={"error": "Authentication required"})
+
+        if not user.get("is_admin"):
+            allowed = (
+                path not in ADMIN_ONLY_PATHS
+                and any(path.startswith(prefix) for prefix in NON_ADMIN_PATH_PREFIXES)
+            )
+            if not allowed:
+                return JSONResponse(
+                    status_code=403, content={"error": "Administrator access required"}
+                )
     return await call_next(request)

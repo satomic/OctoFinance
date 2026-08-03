@@ -6,6 +6,7 @@ import { CsvDashboard } from "./CsvDashboard";
 import { CostCenterDashboard } from "./CostCenterDashboard";
 import { UnassignedCostCenterUsersDashboard } from "./UnassignedCostCenterUsersDashboard";
 import { BudgetsDashboard } from "./BudgetsDashboard";
+import { BudgetRequestsAdmin } from "./BudgetRequestsAdmin";
 interface Props {
   refreshKey: number;
 }
@@ -15,7 +16,7 @@ export function UnifiedDashboard({ refreshKey }: Props) {
   const ui = useUIState();
   const tab = ui.dashboardTab ?? "metrics";
   const setTab = useCallback(
-    (v: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets") => ui.patch({ dashboardTab: v }),
+    (v: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests") => ui.patch({ dashboardTab: v }),
     [ui],
   );
 
@@ -59,6 +60,12 @@ export function UnifiedDashboard({ refreshKey }: Props) {
           >
             {t("budgetsDash.tab")}
           </button>
+          <button
+            className={`btn btn-small btn-toggle ${tab === "requests" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("requests")}
+          >
+            {t("budgetReq.tab")}
+          </button>
         </div>
       </div>
 
@@ -70,6 +77,8 @@ export function UnifiedDashboard({ refreshKey }: Props) {
         <UnassignedCostCenterUsersDashboard refreshKey={refreshKey} />
       ) : tab === "budgets" ? (
         <BudgetsDashboard refreshKey={refreshKey} />
+      ) : tab === "requests" ? (
+        <BudgetRequestsAdmin refreshKey={refreshKey} />
       ) : (
         <CsvDashboard refreshKey={refreshKey} tab={tab as "ai" | "usage"} />
       )}

@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSync, useCsvInfo } from "../hooks/useData";
 import { useTheme } from "../contexts/ThemeContext";
 import { useI18n } from "../contexts/I18nContext";
+import { useUIState } from "../contexts/UIStateContext";
 import { PATSettingsModal } from "./PATSettingsModal";
+import { PeriodToggle } from "./PeriodToggle";
+import { LanguageSelector } from "./LanguageSelector";
+import type { AuthUser } from "../types";
 
 interface Props {
   consoleOpen: boolean;
@@ -12,12 +16,14 @@ interface Props {
   currentView: "chat" | "dashboard";
   onViewChange: (view: "chat" | "dashboard") => void;
   onLogout: () => void;
+  user?: AuthUser | null;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user }: Props) {
   const { sync } = useSync();
   const { theme, toggleTheme } = useTheme();
-  const { lang, toggleLang, t } = useI18n();
+  const { t } = useI18n();
+  const ui = useUIState();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { info: csvInfo, uploadCsv } = useCsvInfo();
@@ -109,6 +115,10 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         )}
       </div>
       <div className="status-right">
+        <PeriodToggle
+          value={ui.periodMode ?? "all"}
+          onChange={(v) => ui.patch({ periodMode: v })}
+        />
         <div className="view-toggle">
           <button
             className={`btn btn-small btn-toggle ${currentView === "chat" ? "btn-toggle-active" : ""}`}
@@ -137,9 +147,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         >
           {t("console.title")}
         </button>
-        <button className="btn btn-small btn-toggle" onClick={toggleLang} title="Switch language">
-          {lang === "en" ? "🇺🇸 EN" : lang === "zh" ? "🇨🇳 中文" : "🇻🇳 VI"}
-        </button>
+        <LanguageSelector />
         <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
           {theme === "dark" ? "Light" : "Dark"}
         </button>
@@ -194,6 +202,13 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           </svg>
           {t("nav.feedback")}
         </a>
+        {user && (
+          <div className="user-chip" title={`${user.login}${user.is_admin ? " · admin" : ""}`}>
+            {user.avatar_url && <img src={user.avatar_url} alt="" className="user-chip-avatar" />}
+            <span>{user.name || user.login}</span>
+            {user.is_admin && <span className="user-chip-role">{t("auth.roleAdmin")}</span>}
+          </div>
+        )}
         <button
           className="btn btn-small btn-ghost"
           onClick={async () => {

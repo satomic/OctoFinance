@@ -4,7 +4,8 @@ const STORAGE_KEY = "octofinance-ui-state";
 
 export interface UIState {
   currentView: "chat" | "dashboard";
-  dashboardTab: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets";
+  periodMode: "all" | "current_month";
+  dashboardTab: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests";
   consoleOpen: boolean;
   sidebarWidth: number;
   sidebarCollapsed: Record<string, boolean>;
@@ -35,6 +36,7 @@ export interface UIState {
 
 const DEFAULTS: UIState = {
   currentView: "chat",
+  periodMode: "all",
   dashboardTab: "metrics",
   consoleOpen: false,
   sidebarWidth: 320,

@@ -2684,3 +2684,418 @@ body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
+
+/* ==========================================================================
+   GitHub SSO login, personal portal & budget requests
+   ========================================================================== */
+
+.btn-github-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #24292f;
+  color: #ffffff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.btn-github-login:hover {
+  background: #32383f;
+}
+
+.btn-github-login:active {
+  transform: translateY(1px);
+}
+
+.login-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.login-toggle-local {
+  width: 100%;
+}
+
+/* Signed-in user chip in the status bar */
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.user-chip-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.user-chip-role {
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* AI credit quota bar (personal dashboard) */
+.me-quota {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.me-quota-bar {
+  flex: 1;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.me-quota-fill {
+  height: 100%;
+  border-radius: 7px 0 0 7px;
+  transition: width 0.3s ease;
+}
+
+.me-quota-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.me-split {
+  width: 100%;
+}
+
+/* Budget request form */
+.budget-req-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.budget-req-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.budget-req-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.budget-req-field-wide {
+  width: 100%;
+}
+
+.budget-req-field input,
+.budget-req-field textarea,
+.budget-req-field select {
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.budget-req-field input:focus,
+.budget-req-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.budget-req-form .btn-primary {
+  align-self: flex-start;
+}
+
+.budget-req-success {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: color-mix(in srgb, #3fb950 15%, transparent);
+  color: #3fb950;
+  border: 1px solid color-mix(in srgb, #3fb950 40%, transparent);
+}
+
+.budget-req-withdraw-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Budget request admin table */
+.budget-req-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.budget-req-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.budget-req-reviewer {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.budget-req-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.budget-req-amount-input {
+  width: 92px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.budget-req-comment-input {
+  width: 140px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.dash-badge-success {
+  background: color-mix(in srgb, #3fb950 18%, transparent);
+  color: #3fb950;
+  border: 1px solid color-mix(in srgb, #3fb950 45%, transparent);
+}
+
+.dash-badge-warning {
+  background: color-mix(in srgb, #d29922 18%, transparent);
+  color: #d29922;
+  border: 1px solid color-mix(in srgb, #d29922 45%, transparent);
+}
+
+/* SSO settings section */
+.sso-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* ==========================================================================
+   Period switch, real GitHub budget meters, approval audit
+   ========================================================================== */
+
+.period-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.period-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.period-live-badge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, #3fb950 20%, transparent);
+  color: #3fb950;
+  border: 1px solid color-mix(in srgb, #3fb950 45%, transparent);
+  white-space: nowrap;
+}
+
+.dash-section-extra {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.me-budget-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cc-subtle {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.budget-req-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.budget-req-gh-error {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--danger, #f85149);
+  max-width: 220px;
+}
+
+/* ==========================================================================
+   Language dropdown
+   ========================================================================== */
+
+.lang-select {
+  position: relative;
+  display: inline-block;
+}
+
+.lang-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.lang-select-flag {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.lang-select-label {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lang-select-caret {
+  font-size: 8px;
+  opacity: 0.6;
+}
+
+.lang-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1000;
+  min-width: 168px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.lang-select-menu-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.lang-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lang-select-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.lang-select-item-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.lang-select-check {
+  margin-left: auto;
+  font-size: 11px;
+}

@@ -37,8 +37,9 @@ export function BudgetsDashboard({ refreshKey }: Props) {
   const [searchInput, setSearchInput] = useState(ui.budgetsDashSearch);
   const commitSearch = useCallback((v: string) => ui.patch({ budgetsDashSearch: v }), [ui.patch]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const period = ui.periodMode ?? "all";
   const { data, loading, refetch } = useBudgetsDashboard({
-    enterprise, scope, search: ui.budgetsDashSearch,
+    enterprise, scope, search: ui.budgetsDashSearch, period,
   });
   const { syncing, runSync } = useDatasetSync();
   const handleSync = useCallback(() => runSync("budgets", refetch), [runSync, refetch]);
@@ -118,10 +119,19 @@ export function BudgetsDashboard({ refreshKey }: Props) {
           onKeyDown={(e) => { if (e.key === "Enter") commitSearch(searchInput); }}
         />
 
-        {/* Sync */}
+        {/* Live refresh + sync */}
+        {data.live && <span className="period-live-badge" style={{ marginLeft: "auto" }}>{t("budgetsDash.liveBadge")}</span>}
         <button
           className="btn btn-small"
-          style={{ marginLeft: "auto" }}
+          style={data.live ? undefined : { marginLeft: "auto" }}
+          onClick={() => refetch(true)}
+          disabled={loading}
+          title={t("budgetsDash.refreshLive")}
+        >
+          {loading ? t("status.syncing") : `⟳ ${t("budgetsDash.refreshLive")}`}
+        </button>
+        <button
+          className="btn btn-small"
           onClick={handleSync}
           disabled={syncing}
           title={t("budgetsDash.syncHint")}
@@ -147,6 +157,14 @@ export function BudgetsDashboard({ refreshKey }: Props) {
         <div className="stat-card">
           <div className="stat-value">{data.alerting_count}</div>
           <div className="stat-label">{t("budgetsDash.alerting")}</div>
+        </div>
+        <div className="stat-card cost">
+          <div className="stat-value cost">${(data.total_consumed ?? 0).toLocaleString()}</div>
+          <div className="stat-label">{t("budgetsDash.totalConsumed")}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">${(data.total_remaining ?? 0).toLocaleString()}</div>
+          <div className="stat-label">{t("budgetsDash.totalRemaining")}</div>
         </div>
         <div className="stat-card">
           <div className="stat-value">{data.enterprise_name || data.selected_enterprise}</div>
@@ -194,6 +212,8 @@ export function BudgetsDashboard({ refreshKey }: Props) {
                   <th className="cc-th">{t("budgetsDash.colType")}</th>
                   <th className="cc-th">{t("budgetsDash.colSkus")}</th>
                   <th className="cc-th cc-th-num">{t("budgetsDash.colAmount")}</th>
+                  <th className="cc-th cc-th-num">{t("budgetsDash.colConsumed")}</th>
+                  <th className="cc-th cc-th-num">{t("budgetsDash.colRemaining")}</th>
                   <th className="cc-th">{t("budgetsDash.colHardLimit")}</th>
                   <th className="cc-th">{t("budgetsDash.colAlerting")}</th>
                 </tr>
@@ -219,6 +239,17 @@ export function BudgetsDashboard({ refreshKey }: Props) {
                       </div>
                     </td>
                     <td className="cc-td cc-td-num"><strong>${b.amount.toLocaleString()}</strong></td>
+                    <td className="cc-td cc-td-num">
+                      {b.consumed_amount != null ? (
+                        <span className={b.usage_pct != null && b.usage_pct >= 90 ? "stat-value warning" : undefined}>
+                          ${b.consumed_amount.toFixed(2)}
+                          {b.usage_pct != null && <span className="cc-subtle"> ({b.usage_pct}%)</span>}
+                        </span>
+                      ) : "—"}
+                    </td>
+                    <td className="cc-td cc-td-num">
+                      {b.remaining_amount != null ? `$${b.remaining_amount.toFixed(2)}` : "—"}
+                    </td>
                     <td className="cc-td">
                       {b.prevent_further_usage
                         ? <span className="dash-badge dash-badge-danger">{t("budgetsDash.hardLimit")}</span>

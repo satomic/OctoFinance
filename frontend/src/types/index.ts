@@ -327,6 +327,9 @@ export interface Budget {
   entity_name: string;
   skus: string[];
   amount: number;
+  consumed_amount: number | null;
+  remaining_amount: number | null;
+  usage_pct: number | null;
   prevent_further_usage: boolean;
   will_alert: boolean;
   alert_recipients: string[];
@@ -343,5 +346,238 @@ export interface BudgetsDashboardData {
   alerting_count: number;
   scope_breakdown: { scope: string; count: number; amount: number }[];
   scopes: string[];
+  live?: boolean;
+  period?: string;
+  current_month?: { start: string; end: string };
+  total_consumed: number;
+  total_remaining: number;
+  tracked_budgets: number;
   no_data: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Auth / identity
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+  login: string;
+  name: string;
+  avatar_url: string;
+  auth_type: "local" | "github";
+  is_admin: boolean;
+  github_id?: number | null;
+}
+
+export interface AuthStatus {
+  setup_required: boolean;
+  authenticated: boolean;
+  user: AuthUser | null;
+  is_admin: boolean;
+  github_enabled: boolean;
+  version?: string;
+}
+
+export interface GithubOAuthConfig {
+  client_id: string;
+  client_secret_set: boolean;
+  client_secret_masked: string;
+  callback_url: string;
+  admins: string[];
+  allow_all_users: boolean;
+  enabled: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Budget requests
+// ---------------------------------------------------------------------------
+
+export type BudgetRequestStatus = "pending" | "approved" | "rejected";
+
+export interface BudgetRequestHistoryEntry {
+  action: string;
+  by: string;
+  at: string;
+  amount?: number | null;
+  comment?: string;
+}
+
+export interface GithubBudgetSync {
+  status: "created" | "updated" | "failed" | "skipped";
+  entity_type?: string;
+  entity_name?: string;
+  budget_id?: string;
+  amount?: number;
+  scope?: string;
+  error?: string;
+  reason?: string;
+  synced_at?: string;
+}
+
+export interface BudgetRequest {
+  id: string;
+  user_login: string;
+  user_name: string;
+  avatar_url: string;
+  requested_amount: number;
+  approved_amount: number | null;
+  currency: string;
+  period: string;
+  org: string;
+  cost_center: string;
+  reason: string;
+  status: BudgetRequestStatus;
+  created_at: string;
+  updated_at: string;
+  reviewed_by: string;
+  reviewed_at: string;
+  review_comment: string;
+  history: BudgetRequestHistoryEntry[];
+  github_budget?: GithubBudgetSync | null;
+}
+
+export interface BudgetAuditEntry {
+  request_id: string;
+  user_login: string;
+  avatar_url: string;
+  requested_amount: number;
+  org: string;
+  cost_center: string;
+  reason: string;
+  action: string;
+  by: string;
+  at: string;
+  amount: number | null;
+  comment: string;
+  github_budget_status?: string | null;
+  github_budget_error?: string | null;
+}
+
+/** A budget as reported by the GitHub Billing Budgets API. */
+export interface UserBudget {
+  id: string;
+  scope: string;
+  entity_type: string;
+  entity_name: string;
+  target_name: string;
+  skus: string[];
+  amount: number;
+  consumed_amount: number | null;
+  remaining_amount: number | null;
+  usage_pct: number | null;
+  prevent_further_usage: boolean;
+  will_alert: boolean;
+}
+
+export interface MyCostCenter {
+  id: string;
+  name: string;
+  enterprise: string;
+  enterprise_name: string;
+  state: string;
+  ai_credit_pool_enabled: boolean;
+  member_count: number;
+  membership_source: string;
+  membership_source_name: string;
+  resources: { type: string; name: string }[];
+  budget: UserBudget | null;
+}
+
+export interface BudgetRequestsData {
+  requests: BudgetRequest[];
+  is_admin: boolean;
+  summary: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    approved_amount: number;
+    pending_amount: number;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Personal ("me") dashboard
+// ---------------------------------------------------------------------------
+
+export interface MySeat {
+  org: string;
+  plan_type: string;
+  price_per_seat: number;
+  created_at: string;
+  last_activity_at: string;
+  last_activity_editor: string;
+  days_inactive: number | null;
+  assigning_team: string;
+  pending_cancellation_date: string | null;
+}
+
+export interface MyDashboardData {
+  profile: AuthUser;
+  seats: MySeat[];
+  seat_summary: { seat_count: number; monthly_seat_cost: number; orgs: string[] };
+  activity: {
+    has_data: boolean;
+    orgs: string[];
+    kpi: {
+      total_interactions: number;
+      code_generated: number;
+      code_accepted: number;
+      acceptance_rate: number;
+      active_days: number;
+    };
+    daily_trend: { day: string; interactions: number; generated: number; accepted: number }[];
+    feature_breakdown: { feature: string; interactions: number; generated: number; accepted: number }[];
+    language_breakdown: { language: string; generated: number; accepted: number; loc_added: number }[];
+    model_breakdown: { model: string; generated: number; accepted: number }[];
+    editor_breakdown: { ide: string; interactions: number; generated: number; accepted: number }[];
+  };
+  ai_usage: {
+    has_data: boolean;
+    org?: string;
+    cost_center?: string;
+    date_range: { start?: string; end?: string };
+    kpi: {
+      total_requests: number;
+      total_cost: number;
+      net_cost: number;
+      quota: number;
+      usage_pct: number;
+      active_days: number;
+      models_used: number;
+    };
+    daily_trend: { day: string; requests: number; amount: number }[];
+    model_breakdown: { model: string; requests: number; amount: number }[];
+  };
+  spend: {
+    has_data: boolean;
+    date_range: { start?: string; end?: string };
+    kpi: { total_gross: number; total_net: number; active_days: number };
+    daily_trend: { day: string; gross_amount: number; net_amount: number }[];
+    sku_breakdown: { sku: string; gross_amount: number; net_amount: number; quantity: number }[];
+    product_breakdown: { product: string; gross_amount: number; net_amount: number; quantity: number }[];
+  };
+  period: { mode: "all" | "current_month"; date_from: string; date_to: string; label: string };
+  budget: {
+    live: boolean;
+    personal: UserBudget | null;
+    universal: UserBudget | null;
+    effective: UserBudget | null;
+    effective_source: "personal" | "universal" | null;
+    amount: number;
+    consumed: number;
+    consumed_source: "github" | "usage_data";
+    remaining: number | null;
+    usage_pct: number | null;
+    error?: string;
+  };
+  cost_centers: MyCostCenter[];
+  totals: {
+    monthly_seat_cost: number;
+    ai_credit_cost: number;
+    estimated_total: number;
+    budget_amount: number;
+    budget_remaining: number | null;
+  };
+  budget_requests: BudgetRequest[];
+  has_any_data: boolean;
 }

@@ -14,7 +14,8 @@ import { OrgSelector } from "./components/OrgSelector";
 import { ActionPanel } from "./components/ActionPanel";
 import { StatusBar } from "./components/StatusBar";
 import { LoginPage } from "./components/LoginPage";
-import type { Recommendation } from "./types";
+import { UserPortal } from "./components/UserPortal";
+import type { AuthStatus, AuthUser, Recommendation } from "./types";
 import "./styles/index.css";
 
 const MIN_SIDEBAR = 240;
@@ -49,7 +50,7 @@ function SidebarPanel({ title, collapsed, onToggle, extra, children }: SidebarPa
   );
 }
 
-function AppLayout({ onLogout }: { onLogout: () => void }) {
+function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => void }) {
   const { t } = useI18n();
   const ui = useUIState();
   const sidebarWidth = ui.sidebarWidth;
@@ -233,6 +234,7 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
         currentView={currentView}
         onViewChange={setCurrentView}
         onLogout={onLogout}
+        user={user}
       />
       <div className="app-body">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
@@ -304,31 +306,60 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
 }
 
 function AuthGate() {
-  const [authStatus, setAuthStatus] = useState<{
-    setup_required: boolean;
-    authenticated: boolean;
-  } | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
 
   const checkAuth = useCallback(() => {
     fetch("/api/auth/status")
       .then((r) => r.json())
       .then(setAuthStatus)
-      .catch(() => setAuthStatus({ setup_required: false, authenticated: false }));
+      .catch(() =>
+        setAuthStatus({
+          setup_required: false,
+          authenticated: false,
+          user: null,
+          is_admin: false,
+          github_enabled: false,
+        }),
+      );
   }, []);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
+  // Strip the ?login=github marker once the session is established
+  useEffect(() => {
+    if (!authStatus?.authenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("login")) {
+      params.delete("login");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+  }, [authStatus?.authenticated]);
+
   if (!authStatus) {
     return null; // loading
   }
 
   if (!authStatus.authenticated) {
-    return <LoginPage setupRequired={authStatus.setup_required} onLogin={checkAuth} />;
+    return (
+      <LoginPage
+        setupRequired={authStatus.setup_required}
+        githubEnabled={authStatus.github_enabled}
+        onLogin={checkAuth}
+      />
+    );
   }
 
-  return <AppLayout onLogout={checkAuth} />;
+  // Regular GitHub users only see their own data + the budget request flow.
+  if (authStatus.user && !authStatus.user.is_admin) {
+    return (
+      <UserPortal user={authStatus.user} version={authStatus.version} onLogout={checkAuth} />
+    );
+  }
+
+  return <AppLayout user={authStatus.user} onLogout={checkAuth} />;
 }
 
 function App() {

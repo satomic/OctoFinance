@@ -84,8 +84,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 - **Human-in-the-Loop** — Recommendation → Review → Approve/Reject workflow
 - **Real-Time Sync** — Auto-sync, cron scheduling, SSE progress streaming, with **incremental historical merge** so usage data accumulates beyond GitHub's rolling 28-day reporting window instead of being overwritten on every sync
 - **AI Credit Tracking** — Org-level API data + per-user CSV upload
-- **Security** — Cookie auth, PBKDF2 hashing, audit logging
-- **i18n** — English and Chinese (Simplified)
+- **GitHub SSO Login** — Sign in with GitHub (OAuth App) alongside the local admin username/password. Admins get the full platform; every other GitHub user gets a self-service portal scoped to their **own** Copilot seat, activity, AI credit consumption and spend. Configure it in Settings → GitHub SSO (persisted in `data/oauth.json`)
+- **Budget Requests (provisioned for real)** — Non-admin users submit budget requests; admins review them in Dashboard → Requests and approve with an editable amount. Approving **creates or updates a real GitHub `user`-scope AI-credit budget** via the Billing Budgets API — it is not a number that only lives in OctoFinance. Every decision is recorded with its GitHub sync result (created / updated / failed) and is visible in the **Approval History** tab, with a one-click retry for failed syncs. Persisted in `data/budget_requests.json`
+- **Current-month switch** — A top-bar toggle flips every dashboard between full history and the running billing cycle. In current-month mode budgets are read **live from the GitHub API**, so admins and users see the real consumed / remaining amount that decides how much allowance is left this month
+- **Personal budget view** — Regular users see their own effective budget (individual, or the universal fallback) with live `consumed_amount`, plus every cost center they belong to and that cost center's budget
+- **Security** — Cookie auth, PBKDF2 hashing, role-based API gating (non-admins can only reach `/api/me/*` and `/api/budget-requests`), audit logging
+- **i18n** — 7 languages via a dropdown selector: English, 简体中文, 繁體中文, 日本語, 한국어, Tiếng Việt, ไทย. The initial language is auto-detected from the browser; each locale lives in its own file under `frontend/src/locales/`
 - **Theming** — Dark and Light modes
 
 See [docs/FEATURES.md](docs/FEATURES.md) for detailed feature descriptions and full API reference.
@@ -138,6 +142,37 @@ cd frontend && npm run build && cd ..
 cd backend && ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+### GitHub SSO Login (optional)
+
+Let every Copilot user check their own usage without giving them admin access.
+
+1. [Create a GitHub OAuth App](https://github.com/settings/applications/new): **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**
+   - **Homepage URL**: your OctoFinance URL, e.g. `http://localhost:8000`
+   - **Authorization callback URL**: `<your OctoFinance URL>/api/auth/github/callback`
+     ![github-oauth](images/github-oauth.png)
+2. Log in to OctoFinance as the local admin, open **Settings → GitHub SSO (OAuth App)**, paste the **Client ID** and **Client Secret**, and save.
+   (Alternatively set `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` environment variables.)
+3. A **Sign in with GitHub** button now appears on the login page.
+
+**Roles**
+
+| Role | How it is determined | What they see |
+|------|----------------------|---------------|
+| Admin | Local username/password login, a GitHub login listed in **Admin GitHub logins**, or the owner of any configured PAT | The full platform — identical for local and SSO logins |
+| Regular user | Any other GitHub account | Personal portal only: their own seats, activity, AI credits, spend, **their effective GitHub budget and the cost centers they belong to**, plus the budget request form and history |
+
+Set **Allow any GitHub user to sign in** to off to restrict login to admins and PAT owners only.
+
+**Troubleshooting SSO** — if GitHub authorizes you but you land back on the login page:
+
+- **Browse OctoFinance on exactly the host in the OAuth callback URL.** The session cookie is stored on the callback origin, so opening the app on `http://localhost:8000` while the callback points at `https://octofinance.example.com` cannot work. Leaving **Callback URL** blank auto-detects the browsing origin (reverse-proxy `X-Forwarded-Proto` / `X-Forwarded-Host` headers are honoured). A mismatch is logged as a warning on `/api/auth/github/login`.
+- **Behind a reverse proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips="*"`** so the scheme/host are detected correctly and the cookie is marked `Secure` on HTTPS.
+- **Multiple workers must share the same `data/` directory** — sessions live in `data/auth_sessions.json`. A `Session cookie presented but not found` warning in the log means the worker serving the request could not see the session.
+
+**Budget requests** — regular users submit a request (amount, period, org / cost center, reason) and follow its status. Admins review them under **Dashboard → Requests**, where the approved amount can be edited before approving and adjusted again afterwards.
+
+Approving calls the GitHub Billing Budgets API (`POST`/`PATCH /enterprises/{slug}/settings/billing/budgets`) to create or update a `budget_scope: "user"`, `ai_credits` budget for the requester. The PAT therefore needs the **`manage_billing:copilot`** scope; without it the request is still approved in OctoFinance but flagged **GitHub sync failed**, and the admin can retry with the ⟳ button. Untick *"Create the real GitHub budget on approve"* to record an approval without touching GitHub. All records live in `data/budget_requests.json`.
+
 ---
 
 ## Docker Deployment
@@ -167,10 +202,13 @@ Then open http://localhost:8000, create admin credentials, and add your org-admi
 | Item | Description |
 |------|-------------|
 | Port `8000` | HTTP port serving both the web UI and the API |
-| Volume `/app/data` | **Required for persistence.** Holds all runtime state: admin credentials (`auth.json`), PATs (`pats.json`), synced GitHub data, chat sessions, and logs. Mount a host directory or named volume |
+| Volume `/app/data` | **Required for persistence.** Holds all runtime state: admin credentials (`auth.json`), PATs (`pats.json`), synced GitHub data (one `_latest.json` per category/org — no per-sync snapshots, so the directory does not grow over time), chat sessions, and logs. Mount a host directory or named volume |
 | Env `COPILOT_GITHUB_TOKEN` | Token used to authenticate the **Copilot CLI / SDK** ([Authenticating with environment variables](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-environment-variables)). Must belong to a user with an active Copilot subscription |
 | Env `GH_TOKEN` / `GITHUB_TOKEN` | Standard GitHub CLI token env vars — same purpose as `COPILOT_GITHUB_TOKEN`, lower precedence |
 | Env `COPILOT_CLI_PATH` | Pre-set to `/usr/local/bin/copilot` inside the image — do not override |
+| Env `GITHUB_OAUTH_CLIENT_ID` | Optional. GitHub OAuth App client ID for SSO login (can also be set in Settings → GitHub SSO) |
+| Env `GITHUB_OAUTH_CLIENT_SECRET` | Optional. GitHub OAuth App client secret for SSO login |
+| Env `GITHUB_OAUTH_CALLBACK_URL` | Optional. Overrides the auto-detected OAuth callback URL (`<origin>/api/auth/github/callback`) |
 
 **Separation of concerns**:
 

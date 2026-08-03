@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { usePATs } from "../hooks/usePATs";
+import { GithubSSOSettings } from "./GithubSSOSettings";
 import type { PATInfo } from "../types";
 
 interface Props {
@@ -256,6 +257,8 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
             </div>
             <p className="pat-form-hint">{t("settings.cronHint")}</p>
           </div>
+
+          <GithubSSOSettings />
         </div>
       </div>
     </div>

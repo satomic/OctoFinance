@@ -7,6 +7,7 @@ Uses APIManager to route API calls to the correct PAT.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
 
 # Type alias for the optional log callback: log_fn(level, message)
 LogFn = Callable[[str, str], None] | None
+
+# Legacy per-sync snapshot files: "{org}_20260803_121500.json"
+_SNAPSHOT_NAME_RE = re.compile(r".*_\d{8}_\d{6}\.json$")
 
 
 def enterprise_pseudo_org(slug: str) -> str:
@@ -201,24 +205,25 @@ class DataCollector:
         return None
 
     def _save_json(self, category: str, org: str, data: dict | list) -> Path:
-        """Save data to a JSON file. Returns the file path.
+        """Save data to `{category}/{org}_latest.json`. Returns the file path.
 
-        Writes an immutable timestamped snapshot containing exactly the
-        newly-fetched payload, then updates `_latest.json` separately: for
-        categories with a registered merge strategy (see
-        `_LATEST_MERGE_STRATEGIES`), the new data is merged with whatever was
-        previously in `_latest.json` instead of overwriting it, so historical
-        days aren't lost when the GitHub API only ever returns a rolling
-        window. Other categories are overwritten as before (they represent
-        current point-in-time state, e.g. billing/seats snapshots).
+        Only the `_latest.json` file is kept — timestamped snapshots used to be
+        written on every sync, which made `data/` grow without bound while
+        nothing ever read them back.
+
+        For categories with a registered merge strategy (see
+        `_LATEST_MERGE_STRATEGIES`) the new payload is merged into whatever was
+        previously stored instead of overwriting it, so historical days aren't
+        lost when the GitHub API only returns a rolling window. Other
+        categories are overwritten (they are point-in-time state, e.g.
+        billing/seats snapshots).
+
+        The write goes through a temp file + atomic replace so a crash or a
+        concurrent reader can never observe a half-written file.
         """
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filepath = self._data_dir / category / f"{org}_{ts}.json"
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
-
-        # Update the "latest" copy, merging with prior history where applicable
         latest = self._data_dir / category / f"{org}_latest.json"
+        latest.parent.mkdir(parents=True, exist_ok=True)
+
         to_write = data
         merge_fn = _LATEST_MERGE_STRATEGIES.get(category)
         if merge_fn is not None:
@@ -235,8 +240,35 @@ class DataCollector:
                 # data rather than losing the sync entirely.
                 to_write = data
 
-        latest.write_text(json.dumps(to_write, indent=2, default=str), encoding="utf-8")
-        return filepath
+        tmp = latest.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(to_write, indent=2, default=str), encoding="utf-8")
+        tmp.replace(latest)
+        return latest
+
+    def purge_snapshots(self, log_fn=None) -> int:
+        """Delete legacy timestamped snapshot files (``{org}_YYYYmmdd_HHMMSS.json``).
+
+        Only `_latest.json` is used at runtime; the snapshots are dead weight
+        left behind by older versions. Returns the number of files removed.
+        """
+        removed = 0
+        freed = 0
+        if not self._data_dir.exists():
+            return 0
+        for path in self._data_dir.glob("*/*.json"):
+            if path.name.endswith("_latest.json"):
+                continue
+            if not _SNAPSHOT_NAME_RE.match(path.name):
+                continue
+            try:
+                freed += path.stat().st_size
+                path.unlink()
+                removed += 1
+            except OSError:
+                continue
+        if removed and log_fn:
+            log_fn(f"Removed {removed} legacy snapshot file(s), freed {freed / 1024 / 1024:.1f} MB")
+        return removed
 
     def load_latest(self, category: str, org: str) -> dict | list | None:
         """Load the latest data file. Checks primary dir first, then fallback."""

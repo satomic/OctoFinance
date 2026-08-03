@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..services.api_manager import api_manager
+from ..services.budget_provisioner import current_month_range, fetch_budgets
 from ..services.data_collector import data_collector, enterprise_pseudo_org
 from ..services.report_generator import generate_report_zip
 
@@ -1425,6 +1426,8 @@ async def get_budgets_dashboard(
     enterprise: str = Query(default=""),
     scope: str = Query(default="all"),
     search: str = Query(default=""),
+    live: bool = Query(default=False, description="Fetch budgets straight from the GitHub API"),
+    period: str = Query(default="all", description="all | current_month"),
 ):
     """Return budgets dashboard data from synced JSON files.
 
@@ -1446,6 +1449,10 @@ async def get_budgets_dashboard(
         "alerting_count": 0,
         "scope_breakdown": [],
         "scopes": [],
+        "total_consumed": 0,
+        "total_remaining": 0,
+        "tracked_budgets": 0,
+        "live": False,
         "no_data": True,
     }
 
@@ -1456,10 +1463,19 @@ async def get_budgets_dashboard(
     selected_slug = enterprise if enterprise in available_slugs else available_slugs[0]
 
     budgets_data = data_collector.load_latest("budgets", selected_slug)
-    if not budgets_data:
-        return {**empty, "selected_enterprise": selected_slug}
+    raw_budgets: list[dict] = (budgets_data or {}).get("budgets", []) or []
 
-    raw_budgets: list[dict] = budgets_data.get("budgets", [])
+    # Live mode goes straight to GitHub so consumed amounts reflect the running
+    # billing cycle instead of whatever the last sync captured.
+    live_fetched = False
+    if live:
+        fresh = await fetch_budgets("enterprise", selected_slug)
+        if fresh:
+            raw_budgets = fresh
+            live_fetched = True
+
+    if not raw_budgets:
+        return {**empty, "selected_enterprise": selected_slug}
 
     # Normalize each budget to a stable shape for the frontend
     def _normalize(b: dict) -> dict:
@@ -1468,13 +1484,19 @@ async def get_budgets_dashboard(
             single = b.get("budget_product_sku")
             skus = [single] if single else []
         alerting = b.get("budget_alerting") or {}
+        amount = float(b.get("budget_amount", 0) or 0)
+        consumed_raw = b.get("consumed_amount")
+        consumed = float(consumed_raw) if consumed_raw is not None else None
         return {
             "id": b.get("id", ""),
             "budget_type": b.get("budget_type", ""),
             "scope": b.get("budget_scope", ""),
             "entity_name": b.get("budget_entity_name", "") or "",
             "skus": [s for s in skus if s],
-            "amount": b.get("budget_amount", 0) or 0,
+            "amount": amount,
+            "consumed_amount": round(consumed, 4) if consumed is not None else None,
+            "remaining_amount": round(amount - consumed, 4) if consumed is not None else None,
+            "usage_pct": round(consumed / amount * 100, 1) if consumed is not None and amount > 0 else None,
             "prevent_further_usage": bool(b.get("prevent_further_usage", False)),
             "will_alert": bool(alerting.get("will_alert", False)),
             "alert_recipients": alerting.get("alert_recipients", []) or [],
@@ -1514,11 +1536,23 @@ async def get_budgets_dashboard(
     total_amount = round(sum(float(b["amount"] or 0) for b in budgets), 2)
     hard_limit_count = sum(1 for b in budgets if b["prevent_further_usage"])
     alerting_count = sum(1 for b in budgets if b["will_alert"])
+    total_consumed = round(
+        sum(float(b["consumed_amount"] or 0) for b in budgets if b["consumed_amount"] is not None), 4
+    )
+    tracked = [b for b in budgets if b["consumed_amount"] is not None and b["amount"]]
+    total_remaining = round(sum(float(b["remaining_amount"] or 0) for b in tracked), 4)
+    month_start, month_end = current_month_range()
 
     return {
         "enterprises": enterprise_list,
         "selected_enterprise": selected_slug,
-        "enterprise_name": budgets_data.get("enterprise_name", selected_slug),
+        "enterprise_name": (budgets_data or {}).get("enterprise_name", selected_slug),
+        "live": live_fetched,
+        "period": period,
+        "current_month": {"start": month_start, "end": month_end},
+        "total_consumed": total_consumed,
+        "total_remaining": total_remaining,
+        "tracked_budgets": len(tracked),
         "budgets": budgets,
         "total_budgets": len(budgets),
         "total_amount": total_amount,
