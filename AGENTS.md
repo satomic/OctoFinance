@@ -56,7 +56,7 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 
 ---
 
-## Tool Catalog (17 Tools)
+## Tool Catalog (31 Tools)
 
 ### Seat Management Tools (`backend/app/tools/seat_tools.py`)
 
@@ -94,6 +94,32 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 | 15 | `batch_remove_seats` | Write | Batch remove Copilot seats. Auto-detects org-level vs. team-level. Records action in audit log. Requires admin confirmation. |
 | 16 | `record_recommendation` | Write | Record an AI-generated recommendation for admin review. Supports types: remove_seats, send_reminder, upgrade_plan, downgrade_plan. Stored in Action Panel. |
 | 17 | `get_recommendations` | Read | Get recorded recommendations filtered by status (pending, approved, rejected, executed, all). |
+
+### Cost Center Tools (`backend/app/tools/cost_center_tools.py`)
+
+| # | Tool | Type | Description |
+|---|------|------|-------------|
+| 18 | `get_synced_enterprise_data` | Read (Cached) | Get enterprise list and cost center data captured by the last sync. |
+| 19 | `list_cost_centers` | Read (Live) | List an enterprise's cost centers with members and resources. |
+| 20 | `create_cost_center` | Write | Create a new enterprise cost center. |
+| 21 | `get_cost_center` | Read (Live) | Get a single cost center by ID, including its members. |
+| 22 | `update_cost_center` | Write | Rename or otherwise update a cost center. |
+| 23 | `delete_cost_center` | Write | Delete a cost center. Destructive — requires admin confirmation. |
+| 24 | `add_cost_center_resources` | Write | Add users, orgs or repos to a cost center. |
+| 25 | `remove_cost_center_resources` | Write | Remove resources from a cost center. |
+
+### Budget Tools — UBB (`backend/app/tools/budget_tools.py`)
+
+| # | Tool | Type | Description |
+|---|------|------|-------------|
+| 26 | `get_all_budgets` | Read (Live) | List budgets for an enterprise/org. Filterable by scope: `multi_user_customer` (universal), `user`, `enterprise`, `cost_center`, `organization`, `repository`. Includes `consumed_amount` for user-scope budgets. |
+| 27 | `get_budget_detail` | Read (Live) | Get one budget by ID. |
+| 28 | `create_user_budget` | Write | Create a universal (all users) or individual user AI-credit budget. |
+| 29 | `update_budget` | Write | Change a budget's amount or hard-limit flag. Scope cannot be changed. |
+| 30 | `delete_budget` | Write | Delete a budget. Destructive — requires admin confirmation. |
+| 31 | `batch_create_user_budgets` | Write | Create individual budgets for many users in one call. |
+
+> Budget writes require the PAT to carry the `manage_billing:copilot` scope.
 
 ---
 
@@ -211,7 +237,12 @@ def _build_tools_for_session(self, working_directory):
 | File | Purpose |
 |------|---------|
 | `backend/app/services/copilot_engine.py` | SDK client, session management, system prompt |
-| `backend/app/tools/*.py` | All 17 custom tools |
+| `backend/app/tools/*.py` | All 31 custom tools |
+| `backend/app/routers/auth.py` | Local login + GitHub OAuth SSO, role helpers |
+| `backend/app/routers/me.py` | Per-user ("me") data — a regular user's own usage/budget |
+| `backend/app/routers/budget_requests.py` | Budget request → approval → real GitHub budget |
+| `backend/app/services/auth_store.py` | Credentials, OAuth config, persisted sessions |
+| `backend/app/services/budget_provisioner.py` | Creates/updates real GitHub user budgets |
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
 | `backend/app/services/github_api.py` | GitHub REST API client |
 | `backend/app/services/api_manager.py` | Multi-PAT API management |

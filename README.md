@@ -3,7 +3,7 @@
 
 ## Project Summary
 
-OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 23 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
+OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 31 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
 
 ### Screenshots
 
@@ -42,7 +42,7 @@ OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot
 
 **Solution**: An AI-first FinOps platform built on the GitHub Copilot SDK with:
 - **Conversational interface** — Ask questions in natural language, get data-driven answers
-- **23 custom tools** — Autonomous data analysis via `define_tool()` API including budget management
+- **31 custom tools** — Autonomous data analysis via `define_tool()` API including budget management
 - **Human-in-the-loop** — AI recommends, admin approves before destructive operations
 - **Multi-dashboard analytics** — Rich usage, AI credits, budgets, and Cost Center views
 - **Multi-org management** — Multiple PATs, auto-discovery, cross-org analysis
@@ -59,7 +59,7 @@ OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot
                 SSE / REST │
 ┌──────────────────────────┴─────────────────────────────────────────┐
 │              FastAPI Backend (Python 3.13+)                         │
-│   Copilot SDK AI Engine (23 tools) · Auth · Sync · PAT Manager     │
+│   Copilot SDK AI Engine (31 tools) · Auth · Sync · PAT Manager     │
 │   Data Collector · Audit Log · Budget Management                   │
 └──────────────────────────┬─────────────────────────────────────────┘
                            │
@@ -74,7 +74,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 
 ## Key Features
 
-- **Copilot SDK Agentic AI** — 23 custom tools including budget management, SSE streaming, session management
+- **Copilot SDK Agentic AI** — 31 custom tools including budget management, SSE streaming, session management
 - **Budget Management** — UBB (Usage-Based Billing) AI credits budget controls (Universal/Individual user-level, Enterprise, Cost center)
 - **Analytics Dashboard** — Usage, AI credits, budgets, and Cost Center dashboards
 - **Cost Center Assignment** — List Copilot users not assigned to any Cost Center, then assign one or many users with confirmation
@@ -186,7 +186,7 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
-docker run -d \
+docker run -itd --restart=always \
   --name octofinance \
   -p 8000:8000 \
   -v octofinance-data:/app/data \
