@@ -7,7 +7,7 @@ All org/enterprise info is auto-discovered via GitHub API.
 from pathlib import Path
 
 # Application version (single source of truth, exposed via /api/health and the UI)
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent

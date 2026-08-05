@@ -1,6 +1,6 @@
 # OctoFinance — Feature Details & API Reference
 
-> Applies to **v1.1.0**.
+> Applies to **v1.1.1**.
 
 ## Copilot SDK Agentic AI (Core)
 
@@ -74,18 +74,36 @@ Regular users signing in with GitHub get a portal scoped strictly to themselves:
 - **My budget** — the budget that actually applies to them (individual, or the universal fallback) with live `consumed_amount` / remaining straight from the GitHub Billing Budgets API
 - **My cost centers** — every cost center they belong to, how they joined (User / Org / Team), whether the AI credit pool is enabled, and that cost center's budget with consumption
 
-## Budget Requests (provisioned for real)
+## User Requests (applied for real)
+
+Regular users can raise two kinds of request. Both are reviewed by an administrator, and approving applies the change against the real GitHub API.
+
+### Budget requests
 
 | Step | Behaviour |
 |------|-----------|
-| **Submit** | A user files a request: amount, period (monthly / quarterly / yearly / one-time), optional org and cost center, and a justification |
+| **Submit** | A user files an amount plus an optional org and a justification. GitHub Copilot budgets run on a **single monthly billing cycle**, so there is no period to choose — the amount is the monthly allowance |
 | **Review** | Admins see all requests in **Dashboard → Requests**, filter by status, edit the approved amount inline, and add a comment |
 | **Approve** | Creates or updates a real GitHub `budget_scope: "user"`, `ai_credits` budget via `POST`/`PATCH /enterprises/{slug}/settings/billing/budgets`. Enterprises are preferred over organizations because that is where Copilot budgets are administered |
 | **Verify** | The sync result (`created` / `updated` / `failed` / `skipped`) plus budget ID and entity are stored on the request and shown as a badge to both admin and requester |
-| **Recover** | A failed sync can be retried with one click (`/api/budget-requests/resync`). Unticking *"Create the real GitHub budget on approve"* records an approval without touching GitHub |
-| **Audit** | An **Approval History** tab renders a flat, newest-first trail of every submission, approval, rejection, amount change and re-sync, each with its GitHub outcome |
+| **Recover** | A failed sync can be retried with one click (`/api/budget-requests/resync`). Unticking *"Apply the change to GitHub on approve"* records an approval without touching GitHub |
 
-Requires the PAT to carry the `manage_billing:copilot` scope. All records live in `data/budget_requests.json`.
+The budget is personal (`user` scope), so cost centers are deliberately not part of this request — they have their own request type below.
+
+### Cost center requests
+
+| Step | Behaviour |
+|------|-----------|
+| **Submit** | A user picks the cost center they should belong to from a dropdown, pre-selected with their current one. **GitHub assigns each user to at most one cost center**, so this is a single choice; picking `Unassigned` removes them from their current one |
+| **Inherited membership** | A user who lands in a cost center because their whole *organization* or *team* is a resource of it is shown read-only — that membership cannot be changed per user, so it is excluded from the dropdown |
+| **Approve** | Calls `POST /enterprises/{slug}/settings/billing/cost-centers/{id}/resource` to assign the user. GitHub moves them out of their previous cost center automatically and reports it in `reassigned_resources`; leaving without joining uses the matching `DELETE` |
+| **Verify** | The result (`applied` / `partial` / `failed` / `noop` / `skipped`) with the from → to move is stored on the request and badged in the UI |
+
+### Shared
+
+An **Approval History** tab renders a flat, newest-first trail of every submission, approval, rejection, amount change and re-sync, each with its request type and GitHub outcome.
+
+Both types require the PAT to carry the `manage_billing:copilot` scope. All records live in `data/budget_requests.json`.
 
 ## Current-Month Switch
 
@@ -181,16 +199,17 @@ The dashboard is split into seven tabs.
 |----------|--------|--------|-------------|
 | `/api/me/dashboard` | GET | any user | Own seats, activity, AI credits, spend, budget, cost centers. Params: `period`, `date_from`, `date_to`, `live` |
 | `/api/me/budget` | GET | any user | Live budget snapshot + current-month AI cost |
+| `/api/me/cost-centers` | GET | any user | Selectable cost centers, flagged with current/inherited membership |
 
 ### Budget requests
 
 | Endpoint | Method | Access | Description |
 |----------|--------|--------|-------------|
 | `/api/budget-requests` | GET | any user | Own requests; admins see all. Param: `status` |
-| `/api/budget-requests` | POST | any user | Submit a request |
-| `/api/budget-requests/review` | POST | admin | Approve (provisioning a real GitHub budget) or reject |
+| `/api/budget-requests` | POST | any user | Submit a request (`request_type`: `budget` \| `cost_center`) |
+| `/api/budget-requests/review` | POST | admin | Approve (provisioning the real GitHub budget or cost center move) or reject |
 | `/api/budget-requests/amount` | POST | admin | Change an approved amount and re-apply to GitHub |
-| `/api/budget-requests/resync` | POST | admin | Retry pushing an approved amount to GitHub |
+| `/api/budget-requests/resync` | POST | admin | Retry applying an approved request to GitHub |
 | `/api/budget-requests/audit` | GET | admin | Flat approval audit trail |
 | `/api/budget-requests/{id}` | DELETE | owner/admin | Withdraw a pending request / delete any request |
 

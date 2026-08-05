@@ -251,6 +251,36 @@ class GitHubAPI:
         resp.raise_for_status()
         return resp.json() if resp.content else {"success": True}
 
+    async def remove_cost_center_resources(
+        self,
+        enterprise: str,
+        cost_center_id: str,
+        users: list[str] | None = None,
+        organizations: list[str] | None = None,
+        repositories: list[str] | None = None,
+    ) -> dict:
+        """Remove users, organizations, or repositories from an enterprise cost center.
+
+        The API uses DELETE with a request body on the same `/resource` path
+        that `add_cost_center_resources` posts to.
+        """
+        body: dict = {}
+        if users:
+            body["users"] = users
+        if organizations:
+            body["organizations"] = organizations
+        if repositories:
+            body["repositories"] = repositories
+
+        resp = await self.client.request(
+            "DELETE",
+            f"/enterprises/{enterprise}/settings/billing/cost-centers/{cost_center_id}/resource",
+            json=body,
+            headers={"X-GitHub-Api-Version": "2026-03-10"},
+        )
+        resp.raise_for_status()
+        return resp.json() if resp.content else {"success": True}
+
     # =========================================================================
     # Copilot Billing & Plan Detection
     # =========================================================================

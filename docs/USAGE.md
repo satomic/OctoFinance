@@ -1,6 +1,6 @@
 # OctoFinance Usage Guide
 
-> Applies to **v1.1.0**.
+> Applies to **v1.1.1**.
 
 OctoFinance has two experiences, chosen automatically by role:
 
@@ -63,10 +63,24 @@ After signing in with GitHub, a non-admin sees a two-tab portal.
 
 ### Budget Requests
 
-1. Fill in the amount, period (monthly / quarterly / yearly / one-time), optionally an org and cost center, and a justification
+Pick a request type at the top of the form.
+
+**Budget** — ask for a personal AI-credit allowance.
+
+1. Enter the amount and optionally an org, plus a justification
 2. Click **Submit Request**
-3. Track it in **My Request History** — the status column shows pending / approved / rejected, and a **GitHub Budget** column tells you whether the approved amount actually landed on GitHub
-4. Pending requests can be withdrawn
+
+GitHub Copilot budgets run on a single monthly billing cycle, so there is no period to pick — the amount is your monthly allowance. The budget is personal, so cost centers are not part of this form.
+
+**Cost Center** — ask to be moved to a different cost center.
+
+1. The dropdown is pre-selected with your current cost center
+2. Choose another one, or **Unassigned** to leave without joining another
+3. A preview shows the move (`current → requested`) before you submit
+
+GitHub assigns each user to at most one cost center, so picking a new one moves you out of the current one. If you belong to a cost center because your whole organization or team is attached to it, that membership is listed as **Inherited** and cannot be changed for you individually.
+
+**Tracking** — both types appear in **My Request History** with status (pending / approved / rejected) and a **GitHub Budget** column telling you whether the change actually landed on GitHub. Pending requests can be withdrawn.
 
 ---
 
@@ -209,13 +223,13 @@ All enterprise budgets by scope (enterprise / universal / individual user / cost
 
 Two sub-tabs:
 
-- **Review** — pending and historical requests. Edit the approved amount inline, add a comment, then **Approve** or **Reject**. Two switches control the write-back:
-  - *Create the real GitHub budget on approve* (default on) — untick to record an approval without touching GitHub
-  - *Hard limit* (default on) — block usage once the budget is exhausted
-  Approved requests show a **GitHub Budget** badge (Created / Updated / Failed / Not synced). Failures show the error and offer a **⟳** retry.
+- **Review** — pending and historical requests of both types. A **Type** column distinguishes Budget from Cost Center, and **Details** shows either the monthly amount or the `current → requested` move. For budget requests the approved amount is editable inline. Two switches control the write-back:
+  - *Apply the change to GitHub on approve* (default on) — untick to record an approval without touching GitHub
+  - *Hard limit* (default on, budgets only) — block usage once the budget is exhausted
+  Approved requests show a badge (Created / Updated / Applied / Partially applied / Failed / Not synced). Failures show the error and offer a **⟳** retry.
 - **History** — a flat, newest-first audit trail of every submission, approval, rejection, amount change and re-sync, with who did it and the GitHub outcome.
 
-> Approving writes a real `budget_scope: "user"` AI-credit budget to GitHub. The PAT needs the **`manage_billing:copilot`** scope, otherwise the approval is recorded but flagged **GitHub sync failed**.
+> Approving writes to GitHub for real — either a `budget_scope: "user"` AI-credit budget, or a cost center assignment. The PAT needs the **`manage_billing:copilot`** scope, otherwise the approval is recorded but flagged **GitHub sync failed**.
 
 ---
 

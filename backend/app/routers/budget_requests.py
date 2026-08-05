@@ -1,8 +1,15 @@
 """
-Budget request workflow.
+User request workflow.
 
-Regular (non-admin) GitHub SSO users can submit budget requests; administrators
-review them and may approve (optionally amending the amount) or reject.
+Regular (non-admin) GitHub SSO users can submit two kinds of request:
+
+- ``budget``      — a personal Copilot AI-credit budget. GitHub budgets run on a
+                    single monthly billing cycle, so there is no period to pick.
+- ``cost_center`` — move to a different enterprise cost center. GitHub allows a
+                    user to belong to at most one, so this is a single choice.
+
+Administrators review them and may approve (amending the amount where relevant)
+or reject. Approving applies the change against the real GitHub API.
 
 All data is persisted as JSON in ``data/budget_requests.json``.
 """
@@ -20,11 +27,16 @@ from pydantic import BaseModel, Field
 
 from ..config import DATA_DIR
 from ..services.budget_provisioner import provision_user_budget
+from ..services.cost_center_provisioner import apply_membership_change, diff_membership
 from .auth import require_user
 
 router = APIRouter(tags=["budget-requests"])
 
 REQUESTS_FILE = DATA_DIR / "budget_requests.json"
+
+TYPE_BUDGET = "budget"
+TYPE_COST_CENTER = "cost_center"
+VALID_TYPES = {TYPE_BUDGET, TYPE_COST_CENTER}
 
 STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
@@ -71,10 +83,19 @@ def load_requests_for(login: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 class CreateBudgetRequest(BaseModel):
-    amount: float = Field(gt=0, description="Requested budget amount in USD")
-    period: str = Field(default="monthly", description="monthly | quarterly | yearly | one_time")
+    """A new user request.
+
+    ``request_type="budget"`` uses ``amount`` (+ optional ``org``);
+    ``request_type="cost_center"`` uses ``cost_center_id`` — the single cost
+    center the user wants to be assigned to ("" to be unassigned).
+    """
+
+    request_type: str = Field(default=TYPE_BUDGET, description="budget | cost_center")
+    # Copilot budgets are always per monthly billing cycle — no period to choose.
+    amount: float | None = Field(default=None, description="Requested budget amount in USD")
     org: str = Field(default="")
-    cost_center: str = Field(default="")
+    # A user belongs to at most one cost center; "" means "unassign me".
+    cost_center_id: str = Field(default="")
     reason: str = Field(default="")
 
 
@@ -85,7 +106,7 @@ class ReviewBudgetRequest(BaseModel):
     comment: str = Field(default="")
     apply_to_github: bool = Field(
         default=True,
-        description="Create/update the real GitHub user budget when approving",
+        description="Apply the approved change to GitHub (budget or cost center membership)",
     )
     prevent_further_usage: bool = Field(
         default=True,
@@ -139,6 +160,12 @@ async def list_budget_requests(request: Request, status: str = Query(default="al
             ),
             2,
         ),
+        "budget_requests": sum(
+            1 for r in all_for_stats if r.get("request_type", TYPE_BUDGET) == TYPE_BUDGET
+        ),
+        "cost_center_requests": sum(
+            1 for r in all_for_stats if r.get("request_type") == TYPE_COST_CENTER
+        ),
     }
 
     return {"requests": requests, "is_admin": admin, "summary": summary}
@@ -146,26 +173,52 @@ async def list_budget_requests(request: Request, status: str = Query(default="al
 
 @router.post("/budget-requests")
 async def create_budget_request(payload: CreateBudgetRequest, request: Request):
-    """Submit a new budget request for the currently logged-in user."""
+    """Submit a new budget or cost center request for the logged-in user."""
     user = require_user(request)
     if not user:
         return JSONResponse(status_code=401, content={"error": "Authentication required"})
 
-    period = payload.period.strip() or "monthly"
-    if period not in {"monthly", "quarterly", "yearly", "one_time"}:
-        return {"error": "Invalid period. Use monthly, quarterly, yearly or one_time."}
+    login = user.get("login", "")
+    request_type = (payload.request_type or TYPE_BUDGET).strip().lower()
+    if request_type not in VALID_TYPES:
+        return {"error": "request_type must be 'budget' or 'cost_center'"}
+
+    requested_amount = None
+    cost_center_id = ""
+    cost_center_plan: dict | None = None
+
+    if request_type == TYPE_BUDGET:
+        if payload.amount is None or float(payload.amount) <= 0:
+            return {"error": "A budget amount greater than 0 is required."}
+        requested_amount = round(float(payload.amount), 2)
+    else:
+        cost_center_id = payload.cost_center_id.strip()
+        plan = diff_membership(login, cost_center_id)
+        if plan.get("invalid"):
+            return {"error": "The selected cost center no longer exists."}
+        if not plan["add"] and not plan["remove"]:
+            return {"error": "Your cost center selection matches your current assignment."}
+
+        def _entry(c):
+            return {"id": c["id"], "name": c["name"], "enterprise": c["enterprise"]}
+
+        cost_center_plan = {
+            "from": _entry(plan["current"]) if plan["current"] else None,
+            "to": _entry(plan["target"]) if plan["target"] else None,
+        }
 
     entry = {
         "id": uuid.uuid4().hex[:12],
-        "user_login": user.get("login", ""),
+        "request_type": request_type,
+        "user_login": login,
         "user_name": user.get("name", ""),
         "avatar_url": user.get("avatar_url", ""),
-        "requested_amount": round(float(payload.amount), 2),
+        "requested_amount": requested_amount,
         "approved_amount": None,
         "currency": "USD",
-        "period": period,
         "org": payload.org.strip(),
-        "cost_center": payload.cost_center.strip(),
+        "cost_center_id": cost_center_id,
+        "cost_center_plan": cost_center_plan,
         "reason": payload.reason.strip(),
         "status": STATUS_PENDING,
         "created_at": _now(),
@@ -176,9 +229,9 @@ async def create_budget_request(payload: CreateBudgetRequest, request: Request):
         "history": [
             {
                 "action": "created",
-                "by": user.get("login", ""),
+                "by": login,
                 "at": _now(),
-                "amount": round(float(payload.amount), 2),
+                "amount": requested_amount,
             }
         ],
     }
@@ -215,25 +268,39 @@ async def review_budget_request(payload: ReviewBudgetRequest, request: Request):
         return JSONResponse(status_code=404, content={"error": "Request not found"})
 
     github_result: dict | None = None
+    cost_center_result: dict | None = None
     approved_amount: float | None = None
+    request_type = target.get("request_type", TYPE_BUDGET)
 
     if decision == "approve":
-        amount = payload.approved_amount
-        if amount is None:
-            amount = float(target.get("requested_amount") or 0)
-        if float(amount) < 0:
-            return {"error": "Approved amount cannot be negative"}
-        approved_amount = round(float(amount), 2)
-
-        if payload.apply_to_github:
-            github_result = await provision_user_budget(
-                target.get("user_login", ""),
-                approved_amount,
-                preferred_org=target.get("org", ""),
-                prevent_further_usage=payload.prevent_further_usage,
-            )
+        if request_type == TYPE_COST_CENTER:
+            if payload.apply_to_github:
+                cost_center_result = await apply_membership_change(
+                    target.get("user_login", ""),
+                    target.get("cost_center_id", "") or "",
+                )
+            else:
+                cost_center_result = {
+                    "status": "skipped", "added": [], "removed": [], "errors": [],
+                    "reason": "apply_to_github=false", "synced_at": _now(),
+                }
         else:
-            github_result = {"status": "skipped", "reason": "apply_to_github=false", "synced_at": _now()}
+            amount = payload.approved_amount
+            if amount is None:
+                amount = float(target.get("requested_amount") or 0)
+            if float(amount) < 0:
+                return {"error": "Approved amount cannot be negative"}
+            approved_amount = round(float(amount), 2)
+
+            if payload.apply_to_github:
+                github_result = await provision_user_budget(
+                    target.get("user_login", ""),
+                    approved_amount,
+                    preferred_org=target.get("org", ""),
+                    prevent_further_usage=payload.prevent_further_usage,
+                )
+            else:
+                github_result = {"status": "skipped", "reason": "apply_to_github=false", "synced_at": _now()}
 
     with _lock:
         requests = _load()
@@ -243,12 +310,16 @@ async def review_budget_request(payload: ReviewBudgetRequest, request: Request):
 
         if decision == "approve":
             target["status"] = STATUS_APPROVED
-            target["approved_amount"] = approved_amount
-            target["github_budget"] = github_result
+            if request_type == TYPE_COST_CENTER:
+                target["cost_center_result"] = cost_center_result
+            else:
+                target["approved_amount"] = approved_amount
+                target["github_budget"] = github_result
         else:
             target["status"] = STATUS_REJECTED
             target["approved_amount"] = None
 
+        applied = github_result or cost_center_result or {}
         target["reviewed_by"] = user.get("login", "")
         target["reviewed_at"] = _now()
         target["review_comment"] = payload.comment.strip()
@@ -259,8 +330,8 @@ async def review_budget_request(payload: ReviewBudgetRequest, request: Request):
             "at": _now(),
             "amount": target.get("approved_amount"),
             "comment": payload.comment.strip(),
-            "github_budget_status": (github_result or {}).get("status"),
-            "github_budget_error": (github_result or {}).get("error"),
+            "github_budget_status": applied.get("status"),
+            "github_budget_error": applied.get("error"),
         })
         _save(requests)
 
@@ -271,6 +342,15 @@ async def review_budget_request(payload: ReviewBudgetRequest, request: Request):
             "warning": (
                 "Approved in OctoFinance, but the GitHub budget could not be created: "
                 f"{github_result.get('error')}"
+            ),
+        }
+    if cost_center_result and cost_center_result.get("status") in ("failed", "partial"):
+        return {
+            "ok": True,
+            "request": target,
+            "warning": (
+                "Approved, but the cost center membership change did not fully apply: "
+                f"{cost_center_result.get('error')}"
             ),
         }
 
@@ -294,6 +374,8 @@ async def update_budget_amount(payload: ReviewBudgetRequest, request: Request):
     target = next((r for r in _load() if r.get("id") == payload.request_id), None)
     if target is None:
         return JSONResponse(status_code=404, content={"error": "Request not found"})
+    if target.get("request_type", TYPE_BUDGET) != TYPE_BUDGET:
+        return {"error": "Only budget requests have an amount"}
 
     amount = round(float(payload.approved_amount), 2)
     github_result: dict
@@ -357,32 +439,42 @@ async def resync_budget_request(payload: ReviewBudgetRequest, request: Request):
     if target.get("status") != STATUS_APPROVED:
         return {"error": "Only approved requests can be synced to GitHub"}
 
+    is_cost_center = target.get("request_type", TYPE_BUDGET) == TYPE_COST_CENTER
     amount = float(target.get("approved_amount") or 0)
-    github_result = await provision_user_budget(
-        target.get("user_login", ""),
-        amount,
-        preferred_org=target.get("org", ""),
-        prevent_further_usage=payload.prevent_further_usage,
-    )
+
+    if is_cost_center:
+        result = await apply_membership_change(
+            target.get("user_login", ""), target.get("cost_center_id", "") or ""
+        )
+    else:
+        result = await provision_user_budget(
+            target.get("user_login", ""),
+            amount,
+            preferred_org=target.get("org", ""),
+            prevent_further_usage=payload.prevent_further_usage,
+        )
 
     with _lock:
         requests = _load()
         target = next((r for r in requests if r.get("id") == payload.request_id), None)
         if target is None:
             return JSONResponse(status_code=404, content={"error": "Request not found"})
-        target["github_budget"] = github_result
+        if is_cost_center:
+            target["cost_center_result"] = result
+        else:
+            target["github_budget"] = result
         target["updated_at"] = _now()
         target.setdefault("history", []).append({
             "action": "github_resync",
             "by": user.get("login", ""),
             "at": _now(),
-            "amount": amount,
-            "github_budget_status": github_result.get("status"),
-            "github_budget_error": github_result.get("error"),
+            "amount": None if is_cost_center else amount,
+            "github_budget_status": result.get("status"),
+            "github_budget_error": result.get("error"),
         })
         _save(requests)
 
-    return {"ok": True, "request": target, "github_budget": github_result}
+    return {"ok": True, "request": target, "github_budget": result}
 
 
 @router.get("/budget-requests/audit")
@@ -399,11 +491,12 @@ async def budget_request_audit(request: Request, limit: int = Query(default=200)
         for event in req.get("history", []) or []:
             entries.append({
                 "request_id": req.get("id", ""),
+                "request_type": req.get("request_type", TYPE_BUDGET),
                 "user_login": req.get("user_login", ""),
                 "avatar_url": req.get("avatar_url", ""),
                 "requested_amount": req.get("requested_amount"),
                 "org": req.get("org", ""),
-                "cost_center": req.get("cost_center", ""),
+                "cost_center_plan": req.get("cost_center_plan"),
                 "reason": req.get("reason", ""),
                 "action": event.get("action", ""),
                 "by": event.get("by", ""),

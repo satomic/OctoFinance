@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useBudgetAudit, useBudgetRequests } from "../hooks/useMe";
 import { statusBadgeClass } from "../utils/budgetRequests";
+import { CostCenterChangeCell } from "./BudgetRequestPanel";
 import type { BudgetRequest, GithubBudgetSync } from "../types";
 
 interface Props {
@@ -13,6 +14,9 @@ const STATUS_FILTERS = ["all", "pending", "approved", "rejected"] as const;
 const GH_BADGE: Record<string, string> = {
   created: "dash-badge dash-badge-success",
   updated: "dash-badge dash-badge-success",
+  applied: "dash-badge dash-badge-success",
+  noop: "dash-badge dash-badge-muted",
+  partial: "dash-badge dash-badge-warning",
   failed: "dash-badge dash-badge-danger",
   skipped: "dash-badge dash-badge-muted",
 };
@@ -51,7 +55,8 @@ function ReviewTable() {
   const [warning, setWarning] = useState<string>("");
 
   const amountFor = (r: BudgetRequest) =>
-    editing[r.id] ?? String(r.approved_amount ?? r.requested_amount);
+    editing[r.id] ?? String(r.approved_amount ?? r.requested_amount ?? 0);
+  const isCostCenter = (r: BudgetRequest) => r.request_type === "cost_center";
 
   const opts = { applyToGithub, preventFurtherUsage: hardLimit };
 
@@ -64,6 +69,9 @@ function ReviewTable() {
   };
 
   const handleApprove = (r: BudgetRequest) => {
+    if (isCostCenter(r)) {
+      return run(r.id, () => review(r.id, "approve", undefined, comments[r.id] ?? "", opts));
+    }
     const value = parseFloat(amountFor(r));
     if (!Number.isFinite(value) || value < 0) return;
     return run(r.id, () => review(r.id, "approve", value, comments[r.id] ?? "", opts));
@@ -144,8 +152,8 @@ function ReviewTable() {
                   <tr>
                     <th className="cc-th">{t("budgetReq.colDate")}</th>
                     <th className="cc-th">{t("budgetReq.colUser")}</th>
-                    <th className="cc-th cc-th-num">{t("budgetReq.colRequested")}</th>
-                    <th className="cc-th">{t("budgetReq.colPeriod")}</th>
+                    <th className="cc-th">{t("budgetReq.colType")}</th>
+                    <th className="cc-th">{t("budgetReq.colDetails")}</th>
                     <th className="cc-th">{t("budgetReq.colReason")}</th>
                     <th className="cc-th">{t("budgetReq.colStatus")}</th>
                     <th className="cc-th">{t("budgetReq.githubStatus")}</th>
@@ -162,9 +170,20 @@ function ReviewTable() {
                           <strong>{r.user_login}</strong>
                         </div>
                       </td>
-                      <td className="cc-td cc-td-num">${r.requested_amount.toLocaleString()}</td>
                       <td className="cc-td">
-                        {t(`budgetReq.period.${r.period}` as Parameters<typeof t>[0])}
+                        <span className="dash-badge dash-badge-muted">
+                          {t(r.request_type === "cost_center" ? "budgetReq.typeCostCenter" : "budgetReq.typeBudget")}
+                        </span>
+                      </td>
+                      <td className="cc-td">
+                        {r.request_type === "cost_center" ? (
+                          <CostCenterChangeCell request={r} />
+                        ) : (
+                          <>
+                            <strong>${(r.requested_amount ?? 0).toLocaleString()}</strong>
+                            <span className="cc-subtle"> / {t("budgetReq.perMonth")}</span>
+                          </>
+                        )}
                       </td>
                       <td className="cc-td" title={r.reason}>
                         {r.reason ? (r.reason.length > 40 ? `${r.reason.slice(0, 40)}…` : r.reason) : "—"}
@@ -181,26 +200,35 @@ function ReviewTable() {
                         )}
                       </td>
                       <td className="cc-td">
-                        <GithubBudgetBadge sync={r.github_budget} />
-                        {r.github_budget?.error && (
-                          <div className="budget-req-gh-error" title={r.github_budget.error}>
-                            {r.github_budget.error.length > 44
-                              ? `${r.github_budget.error.slice(0, 44)}…`
-                              : r.github_budget.error}
-                          </div>
-                        )}
+                        {(() => {
+                          const sync = isCostCenter(r)
+                            ? (r.cost_center_result as GithubBudgetSync | null | undefined)
+                            : r.github_budget;
+                          return (
+                            <>
+                              <GithubBudgetBadge sync={sync} />
+                              {sync?.error && (
+                                <div className="budget-req-gh-error" title={sync.error}>
+                                  {sync.error.length > 44 ? `${sync.error.slice(0, 44)}…` : sync.error}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </td>
                       <td className="cc-td">
                         <div className="budget-req-actions">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className="budget-req-amount-input"
-                            value={amountFor(r)}
-                            onChange={(e) => setEditing((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                            title={t("budgetReq.approvedAmountHint")}
-                          />
+                          {!isCostCenter(r) && (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="budget-req-amount-input"
+                              value={amountFor(r)}
+                              onChange={(e) => setEditing((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                              title={t("budgetReq.approvedAmountHint")}
+                            />
+                          )}
                           <input
                             type="text"
                             className="budget-req-comment-input"
@@ -229,18 +257,20 @@ function ReviewTable() {
                             </>
                           ) : (
                             <>
-                              <button
-                                className="btn btn-small"
-                                disabled={busy === r.id}
-                                onClick={() => {
-                                  const v = parseFloat(amountFor(r));
-                                  if (!Number.isFinite(v) || v < 0) return;
-                                  return run(r.id, () => updateAmount(r.id, v, comments[r.id] ?? "", opts));
-                                }}
-                              >
-                                {t("budgetReq.updateAmount")}
-                              </button>
-                              {r.status === "approved" && r.github_budget?.status !== "created" && (
+                              {!isCostCenter(r) && (
+                                <button
+                                  className="btn btn-small"
+                                  disabled={busy === r.id}
+                                  onClick={() => {
+                                    const v = parseFloat(amountFor(r));
+                                    if (!Number.isFinite(v) || v < 0) return;
+                                    return run(r.id, () => updateAmount(r.id, v, comments[r.id] ?? "", opts));
+                                  }}
+                                >
+                                  {t("budgetReq.updateAmount")}
+                                </button>
+                              )}
+                              {r.status === "approved" && (
                                 <button
                                   className="btn btn-small btn-ghost"
                                   disabled={busy === r.id}
@@ -294,6 +324,7 @@ function AuditTable({ refreshKey }: { refreshKey: number }) {
               <tr>
                 <th className="cc-th">{t("budgetReq.colDate")}</th>
                 <th className="cc-th">{t("budgetReq.colAction")}</th>
+                <th className="cc-th">{t("budgetReq.colType")}</th>
                 <th className="cc-th">{t("budgetReq.colUser")}</th>
                 <th className="cc-th">{t("budgetReq.colBy")}</th>
                 <th className="cc-th cc-th-num">{t("budgetReq.colRequested")}</th>
@@ -309,6 +340,11 @@ function AuditTable({ refreshKey }: { refreshKey: number }) {
                   <td className="cc-td">
                     <span className={statusBadgeClass(e.action)}>
                       {t(`budgetReq.action.${e.action}` as Parameters<typeof t>[0])}
+                    </span>
+                  </td>
+                  <td className="cc-td">
+                    <span className="dash-badge dash-badge-muted">
+                      {t(e.request_type === "cost_center" ? "budgetReq.typeCostCenter" : "budgetReq.typeBudget")}
                     </span>
                   </td>
                   <td className="cc-td"><strong>{e.user_login}</strong></td>

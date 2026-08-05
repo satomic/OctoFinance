@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from ..services.budget_provisioner import current_month_range, get_user_budget_context
+from ..services.cost_center_provisioner import list_cost_centers_for_user
 from ..services.data_collector import data_collector
 from .auth import require_user
 from .budget_requests import load_requests_for
@@ -443,6 +444,19 @@ async def my_dashboard(
             or budget_ctx.get("effective_budget")
         ),
     }
+
+
+@router.get("/cost-centers")
+async def my_cost_centers(request: Request):
+    """Cost centers the user can select, flagged with current membership.
+
+    Inherited memberships (via an org or team resource) are returned as
+    ``locked`` — they cannot be changed for a single user.
+    """
+    user = require_user(request)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "Authentication required"})
+    return list_cost_centers_for_user(user.get("login", ""))
 
 
 @router.get("/budget")

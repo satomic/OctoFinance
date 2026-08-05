@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { BudgetAuditEntry, BudgetRequestsData, MyDashboardData } from "../types";
+import type { BudgetAuditEntry, BudgetRequestsData, MyCostCentersData, MyDashboardData } from "../types";
 
 /** Personal dashboard data for the currently logged-in GitHub user. */
 export function useMyDashboard(
@@ -32,11 +32,37 @@ export function useMyDashboard(
 }
 
 export interface CreateBudgetRequestPayload {
-  amount: number;
-  period: string;
+  request_type: "budget" | "cost_center";
+  /** Budget requests only. GitHub budgets run on a single monthly cycle. */
+  amount?: number;
   org?: string;
-  cost_center?: string;
+  /** Cost center requests only — the single cost center to move to ("" = unassign). */
+  cost_center_id?: string;
   reason?: string;
+}
+
+/** Cost centers the user may join or leave, with current membership flagged. */
+export function useMyCostCenters(refreshKey = 0) {
+  const [data, setData] = useState<MyCostCentersData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/me/cost-centers");
+      setData(await res.json());
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData, refreshKey]);
+
+  return { data, loading, refetch: fetchData };
 }
 
 /** Budget requests — own requests for regular users, all requests for admins. */

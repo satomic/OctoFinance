@@ -413,17 +413,67 @@ export interface GithubBudgetSync {
   synced_at?: string;
 }
 
+export type UserRequestType = "budget" | "cost_center";
+
+/** A cost center the user could join or leave. */
+export interface SelectableCostCenter {
+  id: string;
+  name: string;
+  enterprise: string;
+  enterprise_name: string;
+  state: string;
+  ai_credit_pool_enabled: boolean;
+  member_count: number;
+  is_member: boolean;
+  is_direct: boolean;
+  /** Membership inherited via an org/team resource — cannot be changed per user. */
+  locked: boolean;
+  source: string;
+  source_name: string;
+}
+
+export interface MyCostCentersData {
+  enterprises: { slug: string; name: string }[];
+  cost_centers: SelectableCostCenter[];
+}
+
+export interface CostCenterPlanEntry {
+  id: string;
+  name: string;
+  enterprise: string;
+}
+
+/** A user belongs to at most one cost center, so a request is a single move. */
+export interface CostCenterPlan {
+  from: CostCenterPlanEntry | null;
+  to: CostCenterPlanEntry | null;
+}
+
+export interface CostCenterSyncResult {
+  status: "applied" | "partial" | "failed" | "noop" | "skipped";
+  added: CostCenterPlanEntry[];
+  removed: CostCenterPlanEntry[];
+  errors: { cost_center?: string; id?: string; action?: string; error: string }[];
+  reassigned?: unknown[];
+  error?: string | null;
+  message?: string;
+  reason?: string;
+  synced_at?: string;
+}
+
 export interface BudgetRequest {
   id: string;
+  request_type: UserRequestType;
   user_login: string;
   user_name: string;
   avatar_url: string;
-  requested_amount: number;
+  requested_amount: number | null;
   approved_amount: number | null;
   currency: string;
-  period: string;
   org: string;
-  cost_center: string;
+  cost_center_id: string;
+  cost_center_plan: CostCenterPlan | null;
+  cost_center_result?: CostCenterSyncResult | null;
   reason: string;
   status: BudgetRequestStatus;
   created_at: string;
@@ -437,11 +487,12 @@ export interface BudgetRequest {
 
 export interface BudgetAuditEntry {
   request_id: string;
+  request_type: UserRequestType;
   user_login: string;
   avatar_url: string;
   requested_amount: number;
   org: string;
-  cost_center: string;
+  cost_center_plan: CostCenterPlan | null;
   reason: string;
   action: string;
   by: string;
@@ -492,6 +543,8 @@ export interface BudgetRequestsData {
     rejected: number;
     approved_amount: number;
     pending_amount: number;
+    budget_requests: number;
+    cost_center_requests: number;
   };
 }
 

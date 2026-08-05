@@ -3099,3 +3099,89 @@ body {
   margin-left: auto;
   font-size: 11px;
 }
+
+/* ==========================================================================
+   Cost center membership picker (user requests)
+   ========================================================================== */
+
+.cc-picker {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+}
+
+.cc-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cc-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.cc-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.cc-picker-item:hover {
+  background: var(--bg-secondary);
+}
+
+.cc-picker-item-locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cc-picker-name {
+  font-weight: 500;
+}
+
+.cc-picker-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cc-change-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.cc-change-arrow {
+  color: var(--text-muted);
+}
+
+.cc-change-preview {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.cc-change-join {
+  color: #3fb950;
+}
+
+.cc-change-leave {
+  color: #f85149;
+}
