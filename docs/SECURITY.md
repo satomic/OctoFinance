@@ -65,5 +65,5 @@ OctoFinance implements a strict human-in-the-loop pattern for all destructive or
 - **Serve over HTTPS.** Session cookies are only marked `Secure` when the effective scheme is HTTPS.
 - **Behind a proxy**, run uvicorn with `--proxy-headers --forwarded-allow-ips="<trusted>"` so the scheme and host are detected correctly. Avoid a blanket `"*"` on untrusted networks.
 - **Restrict who can sign in.** If OctoFinance is internet-reachable, turn **Allow any GitHub user to sign in** off so only listed admins and PAT owners can authenticate.
-- **Scope PATs minimally.** Only grant `manage_billing:copilot` if budget write-back and cost center management are actually needed.
+- **Scope PATs minimally.** Only grant `manage_billing:copilot` if budget write-back and cost center management are actually needed. The Copilot CLI token is separate and needs only the **Copilot Requests: Read** account permission on a fine-grained PAT — never reuse an org-admin PAT for it.
 - **Multiple workers must share one `data/` directory**, otherwise sessions and synced data diverge.

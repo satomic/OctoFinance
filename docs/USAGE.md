@@ -247,12 +247,16 @@ Open **Settings** in the StatusBar.
 
 ### Required PAT permissions
 
+These are the scopes for the **data-sync PAT** you add here — the token that reads seats, billing, usage and budgets from the GitHub API.
+
 | Scope | Purpose |
 |-------|---------|
 | `read:org` | Discover organizations |
 | `admin:org` | Read Copilot billing and seats |
 | `copilot` | Access Copilot usage metrics |
 | `manage_billing:copilot` | AI credit usage, cost centers, and budget writes |
+
+> **This is not the same token that powers the AI chat.** The Copilot CLI / SDK authenticates separately via the `COPILOT_GITHUB_TOKEN` environment variable (or an interactive `copilot` login), and that one must be a **fine-grained PAT** (`github_pat_…`) owned by a **personal account** with an active Copilot subscription and the **Copilot Requests: Read** account permission. Classic PATs (`ghp_…`) are rejected by Copilot CLI. See [Authenticating GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
 
 ### Sync configuration
 
@@ -290,7 +294,8 @@ Uploads are incremental — duplicate rows are ignored.
 | GitHub authorized you but you land back on the login page | Browse OctoFinance on exactly the host in the OAuth callback URL — the cookie is stored on the callback origin. Leave **Callback URL** blank to auto-detect |
 | Behind a reverse proxy, SSO or cookies misbehave | Start uvicorn with `--proxy-headers --forwarded-allow-ips="*"` so scheme/host are detected and cookies are marked `Secure` on HTTPS |
 | `Session cookie presented but not found` in the log | Multiple workers are not sharing the same `data/` directory |
-| Budget approval shows **GitHub sync failed** | The PAT lacks `manage_billing:copilot`, or no enterprise/org is reachable. Fix the PAT and hit the **⟳** retry |
+| Budget approval shows **GitHub sync failed** | The data-sync PAT lacks `manage_billing:copilot`, or no enterprise/org is reachable. Fix the PAT and hit the **⟳** retry |
+| AI chat never becomes ready / `AI Starting...` forever | The Copilot CLI token is missing or the wrong type. It must be a fine-grained PAT with **Copilot Requests: Read**, owned by a personal account with an active Copilot subscription — classic `ghp_…` tokens are not supported. Dashboards and sync are unaffected |
 | Budgets look stale | Switch to **Current Month** (always live) or press **Refresh live** on the Budgets tab |
 
 ---

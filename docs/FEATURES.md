@@ -103,7 +103,7 @@ The budget is personal (`user` scope), so cost centers are deliberately not part
 
 An **Approval History** tab renders a flat, newest-first trail of every submission, approval, rejection, amount change and re-sync, each with its request type and GitHub outcome.
 
-Both types require the PAT to carry the `manage_billing:copilot` scope. All records live in `data/budget_requests.json`.
+Both types require the **data-sync PAT** to carry the `manage_billing:copilot` scope. (This is separate from the Copilot CLI token used for the AI chat, which must be a fine-grained PAT with the **Copilot Requests** account permission.) All records live in `data/budget_requests.json`.
 
 ## Current-Month Switch
 
