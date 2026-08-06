@@ -26,7 +26,9 @@ export function useSessions() {
     }
   }, []);
 
-  const createSession = useCallback(async (title = "New Session"): Promise<SessionInfo | null> => {
+  // An empty title lets the backend name the session from its first user
+  // message; pass an explicit title only for purpose-built sessions.
+  const createSession = useCallback(async (title = ""): Promise<SessionInfo | null> => {
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",

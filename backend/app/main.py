@@ -26,6 +26,7 @@ from .services.copilot_engine import copilot_engine
 from .services.data_collector import data_collector
 from .services.ops_executor import ops_executor
 from .services.pat_manager import pat_manager
+from .services.session_manager import session_manager
 from .services.sync_manager import sync_manager
 
 
@@ -58,6 +59,14 @@ async def lifespan(app: FastAPI):
             print(f"[OctoFinance] Removed {removed} legacy data snapshot file(s)")
     except Exception as e:
         print(f"[OctoFinance] Snapshot cleanup warning: {e}")
+
+    # Name any session still stuck on the "New Session" placeholder
+    try:
+        renamed = session_manager.backfill_titles()
+        if renamed:
+            print(f"[OctoFinance] Named {renamed} untitled chat session(s) from their first message")
+    except Exception as e:
+        print(f"[OctoFinance] Session title backfill warning: {e}")
 
     # Read settings
     settings = pat_manager.get_settings()

@@ -26,12 +26,11 @@ async def chat(request: ChatRequest):
 
     sid = request.session_id
 
-    # Auto-create session if it doesn't exist
+    # Auto-create session if it doesn't exist. The title is left blank so
+    # append_message() names it from this first user message — the same path
+    # sessions created via the sidebar "+" button take.
     if not session_manager.session_exists(sid):
-        title = request.message[:50].strip()
-        if len(request.message) > 50:
-            title += "..."
-        session_manager.create_session(session_id=sid, title=title)
+        session_manager.create_session(session_id=sid, title="")
 
     # Persist user message
     user_msg = {
@@ -101,12 +100,11 @@ async def chat_simple(request: ChatRequest):
     """Send a message and get a simple text response (non-streaming)."""
     sid = request.session_id
 
-    # Auto-create session if it doesn't exist
+    # Auto-create session if it doesn't exist. The title is left blank so
+    # append_message() names it from this first user message — the same path
+    # sessions created via the sidebar "+" button take.
     if not session_manager.session_exists(sid):
-        title = request.message[:50].strip()
-        if len(request.message) > 50:
-            title += "..."
-        session_manager.create_session(session_id=sid, title=title)
+        session_manager.create_session(session_id=sid, title="")
 
     # Persist user message
     user_msg = {

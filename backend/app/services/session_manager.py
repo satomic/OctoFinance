@@ -5,6 +5,7 @@ Manages session folders under data/sessions/ with JSONL message logs.
 
 import json
 import os
+import re
 import shutil
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,39 @@ from typing import Any
 DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 INDEX_FILE = SESSIONS_DIR / "index.json"
+
+# Placeholder used until the first user message gives the session a real name
+DEFAULT_SESSION_TITLE = "New Session"
+TITLE_MAX_LEN = 48
+
+
+def derive_title(text: str) -> str:
+    """Turn the first user message into a short, readable session title.
+
+    Strips code fences and markdown noise, collapses whitespace, and truncates
+    on a word boundary so the sidebar shows a meaningful preview instead of the
+    generic placeholder.
+    """
+    if not text:
+        return DEFAULT_SESSION_TITLE
+
+    cleaned = re.sub(r"```.*?```", " ", text, flags=re.S)      # fenced code blocks
+    cleaned = re.sub(r"`([^`]*)`", r"\1", cleaned)             # inline code
+    cleaned = re.sub(r"^\s*[#>*\-+]+\s*", "", cleaned, flags=re.M)  # md bullets/headings
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+    if not cleaned:
+        return DEFAULT_SESSION_TITLE
+    if len(cleaned) <= TITLE_MAX_LEN:
+        return cleaned
+
+    clipped = cleaned[:TITLE_MAX_LEN]
+    # Prefer breaking at a space, but only if it keeps most of the text
+    # (CJK has no spaces, so fall back to a hard cut).
+    space = clipped.rfind(" ")
+    if space > TITLE_MAX_LEN * 0.6:
+        clipped = clipped[:space]
+    return clipped.rstrip() + "..."
 
 
 class SessionManager:
@@ -53,18 +87,29 @@ class SessionManager:
                 break
         self._write_index(index)
 
-    def create_session(self, session_id: str | None = None, title: str = "New Session") -> dict:
-        """Create a new session folder and register it in the index."""
+    def create_session(self, session_id: str | None = None, title: str = DEFAULT_SESSION_TITLE) -> dict:
+        """Create a new session folder and register it in the index.
+
+        A blank or placeholder title marks the session as *auto-nameable*: the
+        first user message will replace it. An explicit title (e.g. one created
+        for an approved action) is kept as-is.
+        """
         if session_id is None:
             session_id = self.generate_session_id()
 
         session_dir = SESSIONS_DIR / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
 
+        title = (title or "").strip()
+        auto_title = not title or title == DEFAULT_SESSION_TITLE
+        if not title:
+            title = DEFAULT_SESSION_TITLE
+
         now = datetime.now(timezone.utc).isoformat()
         metadata = {
             "session_id": session_id,
             "title": title,
+            "auto_title": auto_title,
             "created_at": now,
             "updated_at": now,
             "message_count": 0,
@@ -112,24 +157,42 @@ class SessionManager:
         # Update message count and timestamp in index
         messages = self.load_messages(session_id)
         now = datetime.now(timezone.utc).isoformat()
-        self._update_index_entry(
-            session_id,
-            message_count=len(messages),
-            updated_at=now,
-        )
+        updates: dict[str, Any] = {"message_count": len(messages), "updated_at": now}
+
+        # Give the session a real name from its first user message. Sessions
+        # created via the sidebar "+" button start as "New Session" and would
+        # otherwise keep that placeholder forever.
+        if message.get("role") == "user" and self._is_auto_titled(session_id):
+            title = derive_title(message.get("content", ""))
+            if title != DEFAULT_SESSION_TITLE:
+                updates["title"] = title
+                updates["auto_title"] = False
+
+        self._update_index_entry(session_id, **updates)
+
         # Also update metadata.json
         meta_path = session_dir / "metadata.json"
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                meta["message_count"] = len(messages)
-                meta["updated_at"] = now
+                meta.update(updates)
                 meta_path.write_text(
                     json.dumps(meta, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
             except Exception:
                 pass
+
+    def _is_auto_titled(self, session_id: str) -> bool:
+        """True when the session still carries a placeholder title.
+
+        Falls back to comparing against the placeholder so sessions created
+        before `auto_title` existed are still picked up.
+        """
+        entry = self.get_session(session_id) or {}
+        if "auto_title" in entry:
+            return bool(entry["auto_title"])
+        return (entry.get("title") or "").strip() in ("", DEFAULT_SESSION_TITLE)
 
     def append_tool_call(self, session_id: str, tool_call: dict):
         """Append a tool call record to the session's tool_calls.jsonl."""
@@ -158,7 +221,7 @@ class SessionManager:
         return messages
 
     def update_session_title(self, session_id: str, title: str) -> dict | None:
-        """Update a session's title."""
+        """Rename a session. A manual rename is never overwritten afterwards."""
         session_dir = SESSIONS_DIR / session_id
         meta_path = session_dir / "metadata.json"
         if not meta_path.exists():
@@ -167,14 +230,52 @@ class SessionManager:
         now = datetime.now(timezone.utc).isoformat()
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         meta["title"] = title
+        meta["auto_title"] = False
         meta["updated_at"] = now
         meta_path.write_text(
             json.dumps(meta, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-        self._update_index_entry(session_id, title=title, updated_at=now)
+        self._update_index_entry(session_id, title=title, auto_title=False, updated_at=now)
         return meta
+
+    def backfill_titles(self) -> int:
+        """Name any existing session still stuck on the placeholder title.
+
+        Older sessions were only titled when `/chat` auto-created them, so ones
+        started from the sidebar "+" button kept "New Session" forever. Returns
+        the number of sessions renamed.
+        """
+        renamed = 0
+        for entry in self._read_index():
+            session_id = entry.get("session_id", "")
+            if not session_id or not self._is_auto_titled(session_id):
+                continue
+
+            first_user = next(
+                (m for m in self.load_messages(session_id) if m.get("role") == "user"), None
+            )
+            if not first_user:
+                continue
+            title = derive_title(first_user.get("content", ""))
+            if title == DEFAULT_SESSION_TITLE:
+                continue
+
+            self._update_index_entry(session_id, title=title, auto_title=False)
+            meta_path = SESSIONS_DIR / session_id / "metadata.json"
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                    meta["title"] = title
+                    meta["auto_title"] = False
+                    meta_path.write_text(
+                        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                except Exception:
+                    pass
+            renamed += 1
+        return renamed
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session folder and remove from index."""

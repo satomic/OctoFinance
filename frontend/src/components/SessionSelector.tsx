@@ -80,12 +80,13 @@ export function SessionSelector({ sessions, currentSessionId, onSwitch, onDelete
                 <div className="session-item-main">
                   <span
                     className="session-item-title"
+                    title={s.title}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       startEdit(s);
                     }}
                   >
-                    {s.title}
+                    {s.title && s.title !== "New Session" ? s.title : t("sessions.new")}
                   </span>
                   <span className="session-item-meta">
                     {s.message_count > 0 && <span>{s.message_count} msgs</span>}
