@@ -20,7 +20,7 @@ docker pull ghcr.io/satomic/octofinance:latest
 docker run -itd --restart=always \
   --name octofinance \
   -p 8000:8000 \
-  -v octofinance-data:/app/data \
+  -v <octofinance-data>:/app/data \
   -e COPILOT_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxx \
   ghcr.io/satomic/octofinance:latest
 ```
@@ -45,7 +45,7 @@ Without a valid token 1, dashboards and data sync still work — only the AI cha
 
 #### Where your data actually lives
 
-`-v octofinance-data:/app/data` mounts a **Docker named volume**. `/app/data` is the path *inside* the container and must not change; `octofinance-data` is the storage on your host, and it is the part you choose.
+`-v <octofinance-data>:/app/data` mounts a **Docker named volume**. `/app/data` is the path *inside* the container and must not change; `<octofinance-data>` is the storage on your host, and it is the part you choose.
 
 | What you write | Where the data ends up on the host |
 |----------------|-------------------------------------|
