@@ -1,6 +1,6 @@
 # OctoFinance Usage Guide
 
-> Applies to **v1.1.2**.
+> Applies to **v1.1.3**.
 
 OctoFinance has two experiences, chosen automatically by role:
 
@@ -112,7 +112,7 @@ GitHub assigns each user to at most one cost center, so picking a new one moves 
 | **Chat / Dashboard** | Toggle between the two main views |
 | **Settings** | PAT management, sync configuration, GitHub SSO |
 | **Console** | Toggle the bottom console panel |
-| **Language dropdown** | English, 简体中文, 繁體中文, 日本語, 한국어, Tiếng Việt, ไทย |
+| **Language dropdown** | English, 简体中文, 繁體中文, 日本語, 한국어, हिन्दी, Tiếng Việt, ไทย |
 | **Dark / Light** | Switch colour theme |
 | **Upload CSV** | Upload an AI Usage or Usage Report CSV (type auto-detected) |
 | **Sync Data** | Manually trigger a full data sync |

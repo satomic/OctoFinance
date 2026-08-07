@@ -1,6 +1,6 @@
 # OctoFinance — Architecture
 
-> Applies to **v1.1.2**.
+> Applies to **v1.1.3**.
 
 ## System Architecture
 
@@ -16,7 +16,7 @@
 │  └────┬─────┘ └───────┬────────┘ └────┬─────┘  │  Budget requests          │ │
 │       │               │               │        └─────────────┬─────────────┘ │
 │  ┌────┴───────────────┴───────────────┴──────────────────────┴─────────────┐ │
-│  │ AuthGate (role routing) · PeriodToggle · LanguageSelector (7 locales)   │ │
+│  │ AuthGate (role routing) · PeriodToggle · LanguageSelector (8 locales)   │ │
 │  │ Session Manager · UI State Persistence · Theme                          │ │
 │  └────────────────────────────────┬───────────────────────────────────────┘ │
 └───────────────────────────────────┼───────────────────────────────────────────┘
@@ -177,7 +177,7 @@ OctoFinance/
 │   │   │   ├── ActionPanel.tsx         # Recommendation review
 │   │   │   ├── StatusBar.tsx           # Status, period toggle, language, sync
 │   │   │   ├── PeriodToggle.tsx        # All Time / Current Month
-│   │   │   ├── LanguageSelector.tsx    # 7-language dropdown
+│   │   │   ├── LanguageSelector.tsx    # 8-language dropdown
 │   │   │   ├── GithubSSOSettings.tsx   # OAuth App configuration
 │   │   │   ├── PATSettingsModal.tsx    # PAT + sync + SSO settings
 │   │   │   ├── ConsolePanel.tsx        # Tool execution console
@@ -185,7 +185,7 @@ OctoFinance/
 │   │   │   ├── OrgSelector.tsx         # Org overview sidebar
 │   │   │   ├── OverviewPanel.tsx       # KPI overview
 │   │   │   └── MessageBubble.tsx       # Chat message renderer
-│   │   ├── locales/                    # en, zh, zh-TW, ja, ko, vi, th
+│   │   ├── locales/                    # en, zh, zh-TW, ja, ko, hi, vi, th
 │   │   ├── contexts/
 │   │   │   ├── I18nContext.tsx         # Locale loading, detection, t()
 │   │   │   ├── ThemeContext.tsx        # Dark/Light theme

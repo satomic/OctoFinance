@@ -4,6 +4,7 @@ import { zh } from "../locales/zh";
 import { zh_TW } from "../locales/zh-TW";
 import { ja } from "../locales/ja";
 import { ko } from "../locales/ko";
+import { hi } from "../locales/hi";
 import { vi } from "../locales/vi";
 import { th } from "../locales/th";
 
@@ -13,6 +14,7 @@ export const LANGS = [
   { code: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
   { code: "ja", label: "日本語", flag: "🇯🇵" },
   { code: "ko", label: "한국어", flag: "🇰🇷" },
+  { code: "hi", label: "हिन्दी", flag: "🇮🇳" },
   { code: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
   { code: "th", label: "ไทย", flag: "🇹🇭" },
 ] as const;
@@ -25,6 +27,7 @@ const translations: Record<Lang, Record<string, string>> = {
   "zh-TW": zh_TW,
   ja,
   ko,
+  hi,
   vi,
   th,
 };

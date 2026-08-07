@@ -1,6 +1,6 @@
 # OctoFinance — Feature Details & API Reference
 
-> Applies to **v1.1.2**.
+> Applies to **v1.1.3**.
 
 ## Copilot SDK Agentic AI (Core)
 
@@ -171,7 +171,7 @@ The dashboard is split into seven tabs.
 
 ## Internationalization & Theming
 
-- **7 languages** selected from a dropdown: English, 简体中文, 繁體中文, 日本語, 한국어, Tiếng Việt, ไทย
+- **8 languages** selected from a dropdown: English, 简体中文, 繁體中文, 日本語, 한국어, हिन्दी, Tiếng Việt, ไทย
 - Initial language is **auto-detected from the browser** (`zh-Hant`/`tw`/`hk`/`mo` resolve to Traditional Chinese); missing keys fall back to English
 - Each locale is a standalone file under `frontend/src/locales/`, all sharing the same key order
 - **Dark and Light** theme toggle

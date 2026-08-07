@@ -13,7 +13,7 @@ The fastest path is Docker — the image is fully self-contained (FastAPI backen
 ### Option A — Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.1.2)
+# Pull the latest release (or pin a version, e.g. :v1.1.3)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -239,7 +239,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 - **Current-month switch** — A top-bar toggle flips every dashboard between full history and the running billing cycle. In current-month mode budgets are read **live from the GitHub API**, so admins and users see the real consumed / remaining amount that decides how much allowance is left this month
 - **Personal budget view** — Regular users see their own effective budget (individual, or the universal fallback) with live `consumed_amount`, plus every cost center they belong to and that cost center's budget
 - **Security** — Cookie auth, PBKDF2 hashing, role-based API gating (non-admins can only reach `/api/me/*` and `/api/budget-requests`), audit logging
-- **i18n** — 7 languages via a dropdown selector: English, 简体中文, 繁體中文, 日本語, 한국어, Tiếng Việt, ไทย. The initial language is auto-detected from the browser; each locale lives in its own file under `frontend/src/locales/`
+- **i18n** — 8 languages via a dropdown selector: English, 简体中文, 繁體中文, 日本語, 한국어, हिन्दी, Tiếng Việt, ไทย. The initial language is auto-detected from the browser; each locale lives in its own file under `frontend/src/locales/`
 - **Theming** — Dark and Light modes
 
 See [docs/FEATURES.md](docs/FEATURES.md) for detailed feature descriptions and full API reference.
@@ -285,7 +285,7 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.1.2
+./scripts/docker-build.sh v1.1.3
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -296,9 +296,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.1.2
-git push origin v1.1.2
-# → publishes ghcr.io/<owner>/<repo>:v1.1.2, :1.1.2, :1.1, :1 and :latest
+git tag v1.1.3
+git push origin v1.1.3
+# → publishes ghcr.io/<owner>/<repo>:v1.1.3, :1.1.3, :1.1, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.
