@@ -13,7 +13,7 @@ The fastest path is Docker — the image is fully self-contained (FastAPI backen
 ### Option A — Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.1.3)
+# Pull the latest release (or pin a version, e.g. :v1.2.0)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -297,7 +297,7 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.1.3
+./scripts/docker-build.sh v1.2.0
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -308,9 +308,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.1.3
-git push origin v1.1.3
-# → publishes ghcr.io/<owner>/<repo>:v1.1.3, :1.1.3, :1.1, :1 and :latest
+git tag v1.2.0
+git push origin v1.2.0
+# → publishes ghcr.io/<owner>/<repo>:v1.2.0, :1.2.0, :1.2, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.

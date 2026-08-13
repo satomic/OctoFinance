@@ -1,6 +1,6 @@
 # OctoFinance Usage Guide
 
-> Applies to **v1.1.3**.
+> Applies to **v1.2.0**.
 
 OctoFinance has two experiences, chosen automatically by role:
 
