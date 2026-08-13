@@ -19,6 +19,7 @@ from ..tools.action_tools import create_action_tools
 from ..tools.billing_tools import create_billing_tools
 from ..tools.budget_tools import create_budget_tools
 from ..tools.cost_center_tools import create_cost_center_tools
+from ..tools.enterprise_team_tools import create_enterprise_team_tools
 from ..tools.seat_tools import create_seat_tools
 from ..tools.usage_tools import create_usage_tools
 
@@ -54,6 +55,14 @@ Available data dimensions:
 - Metrics: detailed IDE completions, chat usage, PR summaries (legacy API)
 - AI Credits: per-model breakdown of AI credit consumption, pricing, and costs (UBB)
 - Budgets: UBB (Usage-Based Billing) AI credits budgets - Universal user-level budgets (default for all users), Individual user-level budgets (user-specific overrides), Enterprise/Cost center budgets (overage controls)
+- Enterprise Teams: enterprise-level groups of users, independent of organizations, that can hold Copilot Business licenses directly
+
+Enterprise Teams:
+None of the Copilot datasets (seats, usage reports, metrics, AI credit CSVs) carry an enterprise-team field.
+To analyze anything per enterprise team, first call list_enterprise_teams / get_enterprise_team to get the member
+roster, then join it against the other datasets on the user login. get_enterprise_team_copilot_usage does this join
+for you. Note that enterprise teams can include unaffiliated users who belong to no organization — those users never
+appear in org seat data, so a team's member count can legitimately exceed the number of seats you can match.
 
 Copilot AI credits (UBB - Usage-Based Billing, effective June 1, 2026):
 Each Copilot plan includes a monthly allowance of AI credits per user; Copilot Enterprise includes
@@ -82,6 +91,7 @@ class CopilotAIEngine:
         self._client: CopilotClient | None = None
         self._client_started: bool = False
         self._sessions: dict[str, CopilotSession] = {}
+        self._session_models: dict[str, str] = {}
         self._api_manager: APIManager | None = None
 
     def set_api_manager(self, api_manager: APIManager):
@@ -90,14 +100,43 @@ class CopilotAIEngine:
 
     async def start(self):
         """Start the Copilot SDK client."""
-        self._client = CopilotClient(**self._client_options())
+        self._client = await self._start_client()
+        self._client_started = True
+
+    async def _start_client(self) -> CopilotClient:
+        """Start a client, falling back to the CLI's own login if the token is rejected.
+
+        A stale COPILOT_GITHUB_TOKEN/GH_TOKEN would otherwise leave every request
+        failing with "Not authenticated" even when `copilot` itself is logged in.
+        """
+        options = self._client_options()
+        client = CopilotClient(**options)
         try:
-            await self._client.start()
-            self._client_started = True
+            await client.start()
         except BaseException:
-            self._client = None
             self._client_started = False
             raise
+
+        if not options.get("github_token"):
+            return client
+
+        try:
+            status = await client.get_auth_status()
+            if status.isAuthenticated:
+                return client
+        except Exception:
+            logger.exception("Failed to read Copilot auth status")
+
+        logger.warning(
+            "Configured Copilot token was rejected; falling back to the Copilot CLI's logged-in user"
+        )
+        try:
+            await client.stop()
+        except Exception:
+            pass
+        fallback = CopilotClient(use_logged_in_user=True)
+        await fallback.start()
+        return fallback
 
     async def stop(self):
         """Stop all sessions and the client."""
@@ -107,6 +146,7 @@ class CopilotAIEngine:
             except Exception:
                 pass
         self._sessions.clear()
+        self._session_models.clear()
         if self._client:
             await self._client.stop()
             self._client = None
@@ -167,6 +207,7 @@ class CopilotAIEngine:
             + create_action_tools(api_manager=self._api_manager, collector=collector)
             + create_cost_center_tools(api_manager=self._api_manager, collector=collector)
             + create_budget_tools(api_manager=self._api_manager, collector=collector)
+            + create_enterprise_team_tools(api_manager=self._api_manager, collector=collector)
         )
         return tools
 
@@ -212,15 +253,15 @@ class CopilotAIEngine:
     async def _restart_client(self):
         """Restart the Copilot SDK client after a transport/session failure."""
         self._sessions.clear()
+        self._session_models.clear()
         self._client_started = False
         if self._client:
             try:
                 await self._client.stop()
             except Exception:
                 logger.exception("Failed to stop Copilot SDK client during restart")
-        self._client = CopilotClient(**self._client_options())
         try:
-            await self._client.start()
+            self._client = await self._start_client()
             self._client_started = True
         except BaseException:
             self._client = None
@@ -288,6 +329,7 @@ class CopilotAIEngine:
     ) -> CopilotSession:
         """Discard stale in-memory session and create a fresh one."""
         old = self._sessions.pop(session_id, None)
+        self._session_models.pop(session_id, None)
         if old:
             try:
                 await old.disconnect()
@@ -326,14 +368,54 @@ class CopilotAIEngine:
         except OSError:
             logger.exception("Failed to delete stale SDK session id file: %s", path)
 
+    # ------------------------------------------------------------------
+    # Model selection
+    # ------------------------------------------------------------------
+
+    async def list_models(self) -> list[dict]:
+        """List the models available to the authenticated Copilot account."""
+        if not self.is_ready():
+            await self._restart_client()
+        if not self._client:
+            return []
+        models = await self._client.list_models()
+        result = []
+        for m in models:
+            billing = getattr(m, "billing", None)
+            result.append({
+                "id": m.id,
+                "name": m.name,
+                "multiplier": getattr(billing, "multiplier", None) if billing else None,
+                "is_premium": getattr(billing, "is_premium", None) if billing else None,
+                "supported_reasoning_efforts": m.supported_reasoning_efforts,
+                "default_reasoning_effort": m.default_reasoning_effort,
+            })
+        return result
+
+    async def _apply_model(self, session: CopilotSession, session_id: str, model: str | None):
+        """Switch the session's model. An empty selection maps to Copilot's own `auto`."""
+        target = model or "auto"
+        if self._session_models.get(session_id) == target:
+            return
+        try:
+            await session.set_model(target)
+            self._session_models[session_id] = target
+        except Exception:
+            logger.exception("Failed to switch session %s to model %s", session_id, target)
+
     async def chat(
-        self, message: str, session_id: str = "default", working_directory: str | None = None
+        self,
+        message: str,
+        session_id: str = "default",
+        working_directory: str | None = None,
+        model: str | None = None,
     ) -> AsyncIterator[dict]:
         """
         Send a message and yield response events as they arrive.
         Yields dicts with: {"type": "delta"|"message"|"tool"|"idle", "content": ...}
         """
         session = await self.get_or_create_session(session_id, working_directory)
+        await self._apply_model(session, session_id, model)
 
         # Use an asyncio.Queue to bridge the sync event handler with async generator
         queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -442,10 +524,15 @@ class CopilotAIEngine:
             unsubscribe()
 
     async def chat_simple(
-        self, message: str, session_id: str = "default", working_directory: str | None = None
+        self,
+        message: str,
+        session_id: str = "default",
+        working_directory: str | None = None,
+        model: str | None = None,
     ) -> str:
         """Send a message and return the final response text."""
         session = await self.get_or_create_session(session_id, working_directory)
+        await self._apply_model(session, session_id, model)
         try:
             response = await session.send_and_wait(message, timeout=300)
         except Exception as e:

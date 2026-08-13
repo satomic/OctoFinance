@@ -4,6 +4,7 @@ import { useUIState } from "../contexts/UIStateContext";
 import { Dashboard } from "./Dashboard";
 import { CsvDashboard } from "./CsvDashboard";
 import { CostCenterDashboard } from "./CostCenterDashboard";
+import { EnterpriseTeamsDashboard } from "./EnterpriseTeamsDashboard";
 import { UnassignedCostCenterUsersDashboard } from "./UnassignedCostCenterUsersDashboard";
 import { BudgetsDashboard } from "./BudgetsDashboard";
 import { BudgetRequestsAdmin } from "./BudgetRequestsAdmin";
@@ -16,7 +17,7 @@ export function UnifiedDashboard({ refreshKey }: Props) {
   const ui = useUIState();
   const tab = ui.dashboardTab ?? "metrics";
   const setTab = useCallback(
-    (v: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests") => ui.patch({ dashboardTab: v }),
+    (v: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests" | "entteams") => ui.patch({ dashboardTab: v }),
     [ui],
   );
 
@@ -55,6 +56,12 @@ export function UnifiedDashboard({ refreshKey }: Props) {
             {t("ccUnassigned.tab")}
           </button>
           <button
+            className={`btn btn-small btn-toggle ${tab === "entteams" ? "btn-toggle-active" : ""}`}
+            onClick={() => setTab("entteams")}
+          >
+            {t("etDash.tab")}
+          </button>
+          <button
             className={`btn btn-small btn-toggle ${tab === "budgets" ? "btn-toggle-active" : ""}`}
             onClick={() => setTab("budgets")}
           >
@@ -75,6 +82,8 @@ export function UnifiedDashboard({ refreshKey }: Props) {
         <CostCenterDashboard refreshKey={refreshKey} />
       ) : tab === "unassigned" ? (
         <UnassignedCostCenterUsersDashboard refreshKey={refreshKey} />
+      ) : tab === "entteams" ? (
+        <EnterpriseTeamsDashboard refreshKey={refreshKey} />
       ) : tab === "budgets" ? (
         <BudgetsDashboard refreshKey={refreshKey} />
       ) : tab === "requests" ? (

@@ -8,13 +8,14 @@ import io
 import json
 import shutil
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..config import COPILOT_PRICING
 from ..services.api_manager import api_manager
 from ..services.budget_provisioner import current_month_range, fetch_budgets
 from ..services.data_collector import data_collector, enterprise_pseudo_org
@@ -29,6 +30,112 @@ class AssignCostCenterUsersRequest(BaseModel):
     enterprise: str = Field(default="")
     cost_center_id: str
     users: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Enterprise team filtering
+#
+# No Copilot dataset carries an enterprise-team field, so filtering by team is
+# done by resolving the team to its member logins and matching every dataset on
+# the user login.
+# ---------------------------------------------------------------------------
+
+# Sentinel slug for "users that belong to no enterprise team at all".
+NO_ENTERPRISE_TEAM = "__no_team__"
+
+
+class _UsersWithoutTeam:
+    """Membership test matching any user that is in no enterprise team.
+
+    Implements `__contains__` so it can be dropped in wherever a set of member
+    logins is expected, without inverting every call site.
+    """
+
+    def __init__(self, team_logins: set[str]):
+        self._team_logins = team_logins
+
+    def __contains__(self, login: str) -> bool:
+        return login not in self._team_logins
+
+
+MemberFilter = set[str] | _UsersWithoutTeam
+
+
+def _enterprise_team_options() -> list[dict]:
+    """List every synced enterprise team, for filter dropdowns."""
+    options: list[dict] = []
+    for _enterprise, data in data_collector.load_all_latest("enterprise_teams").items():
+        if not isinstance(data, dict):
+            continue
+        for team in data.get("teams", []):
+            slug = team.get("slug", "")
+            if slug:
+                options.append({
+                    "slug": slug,
+                    "name": team.get("name", slug),
+                    "enterprise": data.get("enterprise", ""),
+                    "member_count": team.get("member_count", 0),
+                })
+    options.sort(key=lambda t: t["name"].lower())
+    unaffiliated = len(_seat_logins_without_team())
+    options.append({
+        "slug": NO_ENTERPRISE_TEAM,
+        "name": "(No enterprise team)",
+        "enterprise": "",
+        "member_count": unaffiliated,
+    })
+    return options
+
+
+def _seat_logins_without_team() -> set[str]:
+    """Copilot seat holders that belong to no enterprise team."""
+    team_logins = _all_team_member_logins()
+    seat_logins: set[str] = set()
+    for _org, seats_data in data_collector.load_all_latest("seats").items():
+        if not isinstance(seats_data, dict):
+            continue
+        for seat in seats_data.get("seats", []):
+            login = ((seat.get("assignee") or {}).get("login") or "").lower()
+            if login and login not in team_logins:
+                seat_logins.add(login)
+    return seat_logins
+
+
+def _all_team_member_logins() -> set[str]:
+    """Every login that belongs to at least one enterprise team (lowercased)."""
+    logins: set[str] = set()
+    for _enterprise, data in data_collector.load_all_latest("enterprise_teams").items():
+        if not isinstance(data, dict):
+            continue
+        for team in data.get("teams", []):
+            for m in team.get("members", []) or []:
+                if m.get("login"):
+                    logins.add(m["login"].lower())
+    return logins
+
+
+def _team_member_logins(team_slug: str) -> MemberFilter | None:
+    """Resolve an enterprise team slug to a membership test.
+
+    Returns None when no team is requested, and an empty set when the team
+    exists but has no members (which must filter everything out, not nothing).
+    """
+    if not team_slug.strip():
+        return None
+    wanted = team_slug.strip().lower()
+    if wanted == NO_ENTERPRISE_TEAM:
+        return _UsersWithoutTeam(_all_team_member_logins())
+    for _enterprise, data in data_collector.load_all_latest("enterprise_teams").items():
+        if not isinstance(data, dict):
+            continue
+        for team in data.get("teams", []):
+            if team.get("slug", "").lower() == wanted or team.get("name", "").lower() == wanted:
+                return {
+                    m.get("login", "").lower()
+                    for m in team.get("members", [])
+                    if m.get("login")
+                }
+    return set()
 
 
 @router.get("/data/orgs")
@@ -137,19 +244,116 @@ async def get_billing(org: str):
     return data
 
 
+def _aggregate_usage_from_users(selected_orgs: list[str], member_filter: MemberFilter) -> dict:
+    """Rebuild the Usage Metrics aggregates from user-level records.
+
+    The org-level usage report is pre-aggregated and has no user dimension, so it
+    cannot be filtered by enterprise team. The user-level report carries the same
+    per-day breakdowns (ide/feature/language/model) per user, which lets the whole
+    dashboard be recomputed for an arbitrary subset of users.
+    """
+    daily_map: dict[str, dict] = {}
+    day_users: dict[str, set[str]] = defaultdict(set)
+    feature_map: dict[str, dict] = defaultdict(lambda: {
+        "interactions": 0, "code_gen": 0, "code_accept": 0, "loc_suggested": 0, "loc_accepted": 0})
+    model_map: dict[str, dict] = defaultdict(lambda: {
+        "interactions": 0, "code_gen": 0, "code_accept": 0, "loc_suggested": 0, "loc_accepted": 0})
+    ide_map: dict[str, dict] = defaultdict(lambda: {
+        "interactions": 0, "code_gen": 0, "code_accept": 0, "loc_suggested": 0, "loc_accepted": 0})
+    lang_map: dict[str, dict] = defaultdict(lambda: {
+        "code_gen": 0, "code_accept": 0, "loc_suggested": 0, "loc_accepted": 0})
+    date_start = ""
+    date_end = ""
+
+    def accumulate(target: dict, src: dict, with_interactions: bool = True):
+        if with_interactions:
+            target["interactions"] += src.get("user_initiated_interaction_count", 0) or 0
+        target["code_gen"] += src.get("code_generation_activity_count", 0) or 0
+        target["code_accept"] += src.get("code_acceptance_activity_count", 0) or 0
+        target["loc_suggested"] += (src.get("loc_suggested_to_add_sum", 0) or 0) + (src.get("loc_suggested_to_delete_sum", 0) or 0)
+        target["loc_accepted"] += (src.get("loc_added_sum", 0) or 0) + (src.get("loc_deleted_sum", 0) or 0)
+
+    for org_name in selected_orgs:
+        report = data_collector.load_latest("usage_users", org_name)
+        if not isinstance(report, dict):
+            continue
+        for rec in report.get("records", []) or []:
+            login = (rec.get("user_login") or "").lower()
+            if not login or login not in member_filter:
+                continue
+            day = rec.get("day", "")
+            if not day:
+                continue
+            if not date_start or day < date_start:
+                date_start = day
+            if not date_end or day > date_end:
+                date_end = day
+
+            interactions = rec.get("user_initiated_interaction_count", 0) or 0
+            dm = daily_map.setdefault(day, {
+                "day": day, "dau": 0, "wau": 0, "mau": 0,
+                "chat_users": 0, "agent_users": 0,
+                "interactions": 0, "code_gen": 0, "code_accept": 0,
+                "loc_suggested": 0, "loc_accepted": 0,
+            })
+            accumulate(dm, rec)
+            if interactions > 0:
+                day_users[day].add(login)
+            if rec.get("used_chat"):
+                dm["chat_users"] += 1
+            if rec.get("used_agent"):
+                dm["agent_users"] += 1
+
+            for fb in rec.get("totals_by_feature", []) or []:
+                accumulate(feature_map[fb.get("feature", "unknown")], fb)
+            for mb in rec.get("totals_by_model_feature", []) or []:
+                accumulate(model_map[mb.get("model", "unknown")], mb)
+            for ib in rec.get("totals_by_ide", []) or []:
+                accumulate(ide_map[ib.get("ide", "unknown")], ib)
+            for lb in rec.get("totals_by_language_feature", []) or []:
+                accumulate(lang_map[lb.get("language", "unknown")], lb, with_interactions=False)
+
+    # Active-user counts are distinct users over trailing windows, which the
+    # per-user records support but the org-level report only reports pre-rolled.
+    sorted_days = sorted(daily_map)
+    for day in sorted_days:
+        window_7 = [d for d in sorted_days if d <= day][-7:]
+        window_28 = [d for d in sorted_days if d <= day][-28:]
+        daily_map[day]["dau"] = len(day_users.get(day, set()))
+        daily_map[day]["wau"] = len(set().union(*(day_users[d] for d in window_7)) if window_7 else set())
+        daily_map[day]["mau"] = len(set().union(*(day_users[d] for d in window_28)) if window_28 else set())
+
+    return {
+        "daily_trend": [daily_map[d] for d in sorted_days],
+        "feature_usage": [{"feature": k, **v} for k, v in sorted(feature_map.items(), key=lambda x: -x[1]["interactions"])],
+        "model_usage": [{"model": k, **v} for k, v in sorted(model_map.items(), key=lambda x: -x[1]["interactions"])],
+        "ide_usage": [{"ide": k, **v} for k, v in sorted(ide_map.items(), key=lambda x: -x[1]["interactions"])],
+        "language_usage": [{"language": k, **v} for k, v in sorted(lang_map.items(), key=lambda x: -x[1]["code_gen"])],
+        "date_start": date_start,
+        "date_end": date_end,
+    }
+
+
 @router.get("/data/dashboard")
-async def get_dashboard(orgs: str = Query(default="")):
+async def get_dashboard(
+    orgs: str = Query(default=""),
+    enterprise_team: str = Query(default="", description="Enterprise team slug to filter members by"),
+):
     """Aggregated dashboard data for visualization.
 
     Query param ``orgs`` is a comma-separated list of org logins to include.
     Empty means all orgs with Copilot billing data. Also includes pseudo-org
     entries for enterprises with no organizations (see `enterprise_pseudo_org`)
     so the dashboard stays populated even when the organizations list is empty.
+
+    When ``enterprise_team`` is set, every section is restricted to that team's
+    members and the usage aggregates are recomputed from user-level records.
     """
     all_orgs = api_manager.get_all_orgs()
     pseudo_orgs = api_manager.get_enterprise_pseudo_orgs()
     all_org_names = [o["login"] for o in all_orgs] + [enterprise_pseudo_org(e["slug"]) for e in pseudo_orgs]
     selected = [o.strip() for o in orgs.split(",") if o.strip()] if orgs.strip() else all_org_names
+    member_filter = _team_member_logins(enterprise_team)
 
     # --- KPI from billing ---
     total_seats = 0
@@ -171,6 +375,31 @@ async def get_dashboard(orgs: str = Query(default="")):
         active_seats += a
         monthly_cost += s * price
         monthly_waste += (s - a) * price
+
+    if member_filter is not None:
+        # Billing counters are org-wide, so rebuild the KPIs from the team's own
+        # seats. "Active" here means the seat reported activity in the last 30 days.
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        total_seats = 0
+        active_seats = 0
+        monthly_cost = 0.0
+        monthly_waste = 0.0
+        for org_name in selected:
+            billing = data_collector.load_latest("billing", org_name) or {}
+            price = billing.get("_detected_price_per_seat", 19.0)
+            seats_data = data_collector.load_latest("seats", org_name)
+            if not seats_data:
+                continue
+            for seat in seats_data.get("seats", []):
+                login = ((seat.get("assignee") or {}).get("login") or "").lower()
+                if login not in member_filter:
+                    continue
+                total_seats += 1
+                monthly_cost += price
+                if (seat.get("last_activity_at") or "") >= cutoff:
+                    active_seats += 1
+                else:
+                    monthly_waste += price
 
     inactive_seats = total_seats - active_seats
     utilization_pct = round(active_seats / total_seats * 100, 1) if total_seats > 0 else 0
@@ -209,6 +438,8 @@ async def get_dashboard(orgs: str = Query(default="")):
         if seats_data:
             for s in seats_data.get("seats", []):
                 assignee = s.get("assignee", {})
+                if member_filter is not None and (assignee.get("login") or "").lower() not in member_filter:
+                    continue
                 team = s.get("assigning_team")
                 seat_info["seats"].append({
                     "user": assignee.get("login", ""),
@@ -243,7 +474,9 @@ async def get_dashboard(orgs: str = Query(default="")):
     date_start = ""
     date_end = ""
 
-    for org_name in selected:
+    # With a team filter the org-level report is unusable (no user dimension);
+    # the aggregates below are rebuilt from user-level records instead.
+    for org_name in (selected if member_filter is None else []):
         usage = data_collector.load_latest("usage", org_name)
         if not usage:
             continue
@@ -317,12 +550,22 @@ async def get_dashboard(orgs: str = Query(default="")):
     ide_usage = [{"ide": k, **v} for k, v in sorted(ide_map.items(), key=lambda x: -x[1]["interactions"])]
     language_usage = [{"language": k, **v} for k, v in sorted(lang_map.items(), key=lambda x: -x[1]["code_gen"])]
 
+    if member_filter is not None:
+        rebuilt = _aggregate_usage_from_users(selected, member_filter)
+        daily_trend = rebuilt["daily_trend"]
+        feature_usage = rebuilt["feature_usage"]
+        model_usage = rebuilt["model_usage"]
+        ide_usage = rebuilt["ide_usage"]
+        language_usage = rebuilt["language_usage"]
+        date_start = rebuilt["date_start"]
+        date_end = rebuilt["date_end"]
+
     # --- AI credit detail ---
     pr_detail_map: dict[str, dict] = defaultdict(lambda: {
         "gross_qty": 0, "discount_qty": 0, "net_qty": 0,
         "gross_amount": 0.0, "net_amount": 0.0,
     })
-    for org_name in selected:
+    for org_name in (selected if member_filter is None else []):
         pr = data_collector.load_latest("ai_credits", org_name)
         if not pr:
             continue
@@ -333,6 +576,19 @@ async def get_dashboard(orgs: str = Query(default="")):
             pr_detail_map[m]["net_qty"] += item.get("netQuantity", 0)
             pr_detail_map[m]["gross_amount"] += item.get("grossAmount", 0.0)
             pr_detail_map[m]["net_amount"] += item.get("netAmount", 0.0)
+
+    if member_filter is not None:
+        # Cached AI credit data is aggregated per model with no user dimension;
+        # the uploaded AI usage CSV is the only per-user source.
+        for r in _apply_common_filters(_load_all_csv_records(CSV_TYPE_AI), [], [], "", "", member_filter):
+            m = r.get("model", "unknown")
+            try:
+                pr_detail_map[m]["gross_qty"] += float(r.get("quantity") or 0)
+                pr_detail_map[m]["net_qty"] += float(r.get("quantity") or 0)
+                pr_detail_map[m]["gross_amount"] += float(r.get("gross_amount") or 0)
+                pr_detail_map[m]["net_amount"] += float(r.get("net_amount") or 0)
+            except (TypeError, ValueError):
+                continue
 
     ai_credit_detail = [{"model": k, **v} for k, v in sorted(pr_detail_map.items(), key=lambda x: -x[1]["gross_qty"])]
 
@@ -358,6 +614,8 @@ async def get_dashboard(orgs: str = Query(default="")):
         for rec in uu.get("records", []):
             login = rec.get("user_login", "")
             if not login:
+                continue
+            if member_filter is not None and login.lower() not in member_filter:
                 continue
             u = user_agg[login]
             u["interactions"] += rec.get("user_initiated_interaction_count", 0)
@@ -435,8 +693,12 @@ async def get_dashboard(orgs: str = Query(default="")):
         "chat_stats": chat_stats,
         "top_users": top_users,
         "orgs": all_org_names,
+        "enterprise_teams": _enterprise_team_options(),
+        "selected_enterprise_team": enterprise_team or None,
+        "team_filtered": member_filter is not None,
+        "team_member_count": len(member_filter) if isinstance(member_filter, set) else None,
         "date_range": {"start": date_start, "end": date_end},
-        "user_ai_usage": _aggregate_user_ai_usage(selected),
+        "user_ai_usage": _aggregate_user_ai_usage(selected, member_filter),
     }
 
 
@@ -452,15 +714,17 @@ async def get_csv_dashboard(
     skus: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
+    enterprise_team: str = Query(default="", description="Enterprise team slug to filter members by"),
 ):
     """Aggregated dashboard data derived entirely from uploaded CSVs."""
     selected_orgs = [o.strip() for o in orgs.split(",") if o.strip()]
     selected_ccs = [c.strip() for c in cost_centers.split(",") if c.strip()]
     selected_products = [p.strip() for p in products.split(",") if p.strip()]
     selected_skus = [s.strip() for s in skus.split(",") if s.strip()]
+    member_filter = _team_member_logins(enterprise_team)
 
-    ai_usage = _build_ai_usage_section(selected_orgs, selected_ccs, date_from, date_to)
-    usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to)
+    ai_usage = _build_ai_usage_section(selected_orgs, selected_ccs, date_from, date_to, member_filter)
+    usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to, member_filter)
 
     # Gather all filter options from raw data
     all_ai_usage = _load_all_csv_records(CSV_TYPE_AI)
@@ -487,22 +751,27 @@ async def get_csv_dashboard(
     return {
         "ai_usage": ai_usage,
         "usage_report": usage,
+        "selected_enterprise_team": enterprise_team or None,
         "filters": {
             "orgs": sorted(all_orgs),
             "cost_centers": sorted(all_ccs),
             "products": sorted(all_products),
             "skus": sorted(all_skus),
+            "enterprise_teams": _enterprise_team_options(),
         },
     }
 
 
 def _apply_common_filters(records: list[dict], selected_orgs: list[str], selected_ccs: list[str],
-                           date_from: str, date_to: str) -> list[dict]:
+                           date_from: str, date_to: str,
+                           member_filter: MemberFilter | None = None) -> list[dict]:
     result = records
     if selected_orgs:
         result = [r for r in result if r.get("organization", "") in selected_orgs]
     if selected_ccs:
         result = [r for r in result if (r.get("cost_center_name") or "") in selected_ccs]
+    if member_filter is not None:
+        result = [r for r in result if (r.get("username") or "").lower() in member_filter]
     if date_from:
         result = [r for r in result if r.get("date", "") >= date_from]
     if date_to:
@@ -511,14 +780,15 @@ def _apply_common_filters(records: list[dict], selected_orgs: list[str], selecte
 
 
 def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
-                                date_from: str, date_to: str) -> dict:
+                                date_from: str, date_to: str,
+                                member_filter: MemberFilter | None = None) -> dict:
     """Build aggregated AI usage CSV section for the CSV dashboard."""
     all_records = _load_all_csv_records(CSV_TYPE_AI)
     if not all_records:
         return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
                 "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
 
-    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to)
+    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to, member_filter)
     if not filtered:
         return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
                 "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
@@ -626,7 +896,8 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
 
 def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str],
                                  selected_products: list[str], selected_skus: list[str],
-                                 date_from: str, date_to: str) -> dict:
+                                 date_from: str, date_to: str,
+                                 member_filter: MemberFilter | None = None) -> dict:
     """Build aggregated usage report CSV section for CSV dashboard."""
     all_records = _load_all_csv_records(CSV_TYPE_USAGE)
     if not all_records:
@@ -634,7 +905,7 @@ def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str
                 "product_breakdown": [], "sku_breakdown": [], "org_breakdown": [],
                 "cost_center_breakdown": [], "users": []}
 
-    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to)
+    filtered = _apply_common_filters(all_records, selected_orgs, selected_ccs, date_from, date_to, member_filter)
     if selected_products:
         filtered = [r for r in filtered if r.get("product", "") in selected_products]
     if selected_skus:
@@ -794,7 +1065,7 @@ def _load_all_csv_records(csv_type: str = CSV_TYPE_AI) -> list[dict]:
     return records
 
 
-def _aggregate_user_ai_usage(selected_orgs: list[str]) -> dict:
+def _aggregate_user_ai_usage(selected_orgs: list[str], member_filter: MemberFilter | None = None) -> dict:
     """Aggregate per-user AI usage from uploaded CSV files.
 
     Returns structure with per-user breakdown, daily trend, model breakdown, etc.
@@ -806,6 +1077,8 @@ def _aggregate_user_ai_usage(selected_orgs: list[str]) -> dict:
 
     # Filter by selected orgs
     filtered = [r for r in records if r.get("organization", "") in selected_orgs]
+    if member_filter is not None:
+        filtered = [r for r in filtered if (r.get("username") or "").lower() in member_filter]
     if not filtered:
         return {"has_data": False, "latest_date": None, "users": [], "daily_trend": [],
                 "model_breakdown": [], "org_breakdown": [], "total_requests": 0, "total_cost": 0}
@@ -1418,6 +1691,274 @@ async def get_cost_center_dashboard(
         "total_unique_members": len(user_map),
         "user_map": user_map,
         "no_data": False,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Enterprise teams dashboard
+# ---------------------------------------------------------------------------
+
+def _aggregate_seats_by_login(org_logins: list[str]) -> dict[str, dict]:
+    """Build a `login (lowercase) -> seat summary` map across the given orgs."""
+    seat_users: dict[str, dict] = {}
+    for org in org_logins:
+        seats_data = data_collector.load_latest("seats", org)
+        if not seats_data:
+            continue
+        for seat in seats_data.get("seats", []):
+            assignee = seat.get("assignee") or {}
+            login = assignee.get("login", "")
+            if not login:
+                continue
+            entry = seat_users.setdefault(login.lower(), {
+                "login": login,
+                "avatar_url": assignee.get("avatar_url", ""),
+                "html_url": assignee.get("html_url", f"https://github.com/{login}"),
+                "orgs": [],
+                "assigning_teams": [],
+                "plan_types": [],
+                "last_activity_at": "",
+                "last_activity_editor": "",
+                "seat_count": 0,
+            })
+            if org not in entry["orgs"]:
+                entry["orgs"].append(org)
+            team = seat.get("assigning_team") or {}
+            team_label = team.get("name") or team.get("slug") or ""
+            if team_label:
+                # Enterprise-team-granted seats are the only place GitHub itself
+                # reports enterprise team attribution.
+                scope = "enterprise" if team.get("type") == "enterprise" else "organization"
+                tag = {"name": team_label, "scope": scope}
+                if tag not in entry["assigning_teams"]:
+                    entry["assigning_teams"].append(tag)
+            plan_type = seat.get("plan_type") or ""
+            if plan_type and plan_type not in entry["plan_types"]:
+                entry["plan_types"].append(plan_type)
+            last_activity = seat.get("last_activity_at") or ""
+            if last_activity and last_activity > entry["last_activity_at"]:
+                entry["last_activity_at"] = last_activity
+                entry["last_activity_editor"] = seat.get("last_activity_editor") or ""
+            entry["seat_count"] += 1
+    return seat_users
+
+
+def _aggregate_usage_users_by_login(org_logins: list[str]) -> dict[str, dict]:
+    """Build a `login (lowercase) -> usage metrics` map from cached usage reports."""
+    usage: dict[str, dict] = {}
+    for org in org_logins:
+        report = data_collector.load_latest("usage_users", org)
+        if not isinstance(report, dict):
+            continue
+        for rec in report.get("records", []) or []:
+            login = rec.get("user_login") or ""
+            if not login:
+                continue
+            entry = usage.setdefault(login.lower(), {
+                "interactions": 0,
+                "code_generations": 0,
+                "code_acceptances": 0,
+                "loc_added": 0,
+                "active_days": set(),
+                "last_active_day": "",
+            })
+            interactions = int(rec.get("user_initiated_interaction_count") or 0)
+            entry["interactions"] += interactions
+            entry["code_generations"] += int(rec.get("code_generation_activity_count") or 0)
+            entry["code_acceptances"] += int(rec.get("code_acceptance_activity_count") or 0)
+            entry["loc_added"] += int(rec.get("loc_added_sum") or 0)
+            day = rec.get("day") or ""
+            if day and interactions > 0:
+                entry["active_days"].add(day)
+                if day > entry["last_active_day"]:
+                    entry["last_active_day"] = day
+    for entry in usage.values():
+        entry["active_days"] = len(entry["active_days"])
+    return usage
+
+
+def _aggregate_ai_cost_by_login(org_logins: list[str]) -> dict[str, dict]:
+    """Build a `login (lowercase) -> AI credit spend` map from uploaded AI usage CSVs."""
+    org_set = {o.lower() for o in org_logins}
+    result: dict[str, dict] = {}
+    for r in _load_all_csv_records(CSV_TYPE_AI):
+        username = r.get("username", "")
+        if not username:
+            continue
+        org = (r.get("organization") or "").lower()
+        # Records without an organization belong to enterprise-level usage and
+        # cannot be attributed to a specific org, so they are always included.
+        if org and org_set and org not in org_set:
+            continue
+        entry = result.setdefault(username.lower(), {
+            "requests": 0.0,
+            "gross_amount": 0.0,
+            "net_amount": 0.0,
+            "cost_centers": [],
+        })
+        try:
+            entry["requests"] += float(r.get("quantity") or 0)
+            entry["gross_amount"] += float(r.get("gross_amount") or 0)
+            entry["net_amount"] += float(r.get("net_amount") or 0)
+        except (TypeError, ValueError):
+            pass
+        cc = r.get("cost_center_name") or ""
+        if cc and cc not in entry["cost_centers"]:
+            entry["cost_centers"].append(cc)
+    return result
+
+
+@router.get("/data/enterprise-teams-dashboard")
+async def get_enterprise_teams_dashboard(
+    enterprise: str = Query(default=""),
+    teams: str = Query(default="", description="Comma-separated enterprise team slugs"),
+    search: str = Query(default="", description="Filter members by login"),
+):
+    """Enterprise teams dashboard: team roster joined with seat, usage and AI spend data.
+
+    No Copilot dataset carries an enterprise-team field, so team attribution is
+    resolved by joining the synced team rosters against every other dataset on
+    the user login.
+    """
+    selected_slug, selected_enterprise, enterprise_list = _resolve_enterprise(enterprise)
+    empty = {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug or None,
+        "enterprise_name": (selected_enterprise or {}).get("name", selected_slug),
+        "teams": [],
+        "all_teams": [],
+        "orgs": [],
+        "totals": {},
+        "unassigned_seat_users": [],
+        "ai_usage_available": False,
+        "no_data": True,
+    }
+    if not selected_slug:
+        return empty
+
+    team_data = data_collector.load_latest("enterprise_teams", selected_slug)
+    if not isinstance(team_data, dict):
+        return empty
+
+    all_teams: list[dict] = team_data.get("teams", []) or []
+    org_logins = await _get_enterprise_org_logins(selected_slug, selected_enterprise)
+    seat_map = _aggregate_seats_by_login(org_logins)
+    usage_map = _aggregate_usage_users_by_login(org_logins)
+    ai_map = _aggregate_ai_cost_by_login(org_logins)
+
+    price_per_seat = COPILOT_PRICING.get("business", 19.0)
+
+    def build_member(login: str, avatar_url: str, html_url: str) -> dict:
+        key = login.lower()
+        seat = seat_map.get(key)
+        usage = usage_map.get(key, {})
+        ai = ai_map.get(key, {})
+        return {
+            "login": login,
+            "avatar_url": avatar_url or (seat or {}).get("avatar_url", ""),
+            "html_url": html_url or f"https://github.com/{login}",
+            "has_seat": seat is not None,
+            "orgs": (seat or {}).get("orgs", []),
+            "plan_types": (seat or {}).get("plan_types", []),
+            "assigning_teams": (seat or {}).get("assigning_teams", []),
+            "last_activity_at": (seat or {}).get("last_activity_at", ""),
+            "last_activity_editor": (seat or {}).get("last_activity_editor", ""),
+            "interactions": usage.get("interactions", 0),
+            "code_acceptances": usage.get("code_acceptances", 0),
+            "loc_added": usage.get("loc_added", 0),
+            "active_days": usage.get("active_days", 0),
+            "last_active_day": usage.get("last_active_day", ""),
+            "ai_requests": round(ai.get("requests", 0.0), 2),
+            "ai_net_amount": round(ai.get("net_amount", 0.0), 4),
+            "cost_centers": ai.get("cost_centers", []),
+        }
+
+    team_filter = {s.strip() for s in teams.split(",") if s.strip()}
+    search_lower = search.strip().lower()
+
+    result_teams: list[dict] = []
+    for team in all_teams:
+        if team_filter and team.get("slug") not in team_filter:
+            continue
+        members = [
+            build_member(m.get("login", ""), m.get("avatar_url", ""), m.get("html_url", ""))
+            for m in team.get("members", []) or []
+            if m.get("login")
+        ]
+        if search_lower:
+            members = [m for m in members if search_lower in m["login"].lower()]
+            if not members:
+                continue
+        seat_members = [m for m in members if m["has_seat"]]
+        result_teams.append({
+            "id": team.get("id"),
+            "slug": team.get("slug", ""),
+            "name": team.get("name", ""),
+            "description": team.get("description", ""),
+            "html_url": team.get("html_url", ""),
+            "group_name": team.get("group_name") or "",
+            "organization_selection_type": team.get("organization_selection_type", ""),
+            "organizations": team.get("organizations", []),
+            "members": sorted(members, key=lambda m: m["login"].lower()),
+            "member_count": len(members),
+            "seat_count": len(seat_members),
+            "no_seat_count": len(members) - len(seat_members),
+            "active_member_count": sum(1 for m in members if m["interactions"] > 0),
+            "interactions": sum(m["interactions"] for m in members),
+            "loc_added": sum(m["loc_added"] for m in members),
+            "ai_requests": round(sum(m["ai_requests"] for m in members), 2),
+            "ai_net_amount": round(sum(m["ai_net_amount"] for m in members), 4),
+            "seat_cost": round(len(seat_members) * price_per_seat, 2),
+        })
+
+    result_teams.sort(key=lambda t: (-t["member_count"], t["name"].lower()))
+
+    # Seat holders that no enterprise team covers — the blind spot when using
+    # enterprise teams as the primary reporting dimension.
+    assigned_logins = {
+        m.get("login", "").lower()
+        for team in all_teams
+        for m in team.get("members", []) or []
+        if m.get("login")
+    }
+    unassigned = [
+        build_member(seat["login"], seat.get("avatar_url", ""), seat.get("html_url", ""))
+        for key, seat in seat_map.items()
+        if key not in assigned_logins
+    ]
+    if search_lower:
+        unassigned = [u for u in unassigned if search_lower in u["login"].lower()]
+    unassigned.sort(key=lambda u: u["login"].lower())
+
+    # Team members that hold no Copilot seat at all (includes unaffiliated
+    # enterprise users, who never appear in any org's seat data).
+    members_without_seat = sum(1 for key in assigned_logins if key not in seat_map)
+
+    totals = {
+        "total_teams": len(all_teams),
+        "shown_teams": len(result_teams),
+        "total_unique_members": len(assigned_logins),
+        "members_with_seat": len(assigned_logins & set(seat_map.keys())),
+        "members_without_seat": members_without_seat,
+        "total_seat_users": len(seat_map),
+        "unassigned_seat_users": len(unassigned),
+        "coverage_pct": round(len(assigned_logins & set(seat_map.keys())) / len(seat_map) * 100, 1) if seat_map else 0.0,
+        "ai_net_amount": round(sum(t["ai_net_amount"] for t in result_teams), 4),
+        "seat_cost": round(sum(t["seat_cost"] for t in result_teams), 2),
+        "price_per_seat": price_per_seat,
+    }
+
+    return {
+        "enterprises": enterprise_list,
+        "selected_enterprise": selected_slug,
+        "enterprise_name": team_data.get("enterprise_name", selected_slug),
+        "teams": result_teams,
+        "all_teams": [{"slug": t.get("slug", ""), "name": t.get("name", "")} for t in all_teams],
+        "orgs": org_logins,
+        "totals": totals,
+        "unassigned_seat_users": unassigned,
+        "ai_usage_available": bool(ai_map),
+        "no_data": not all_teams,
     }
 
 

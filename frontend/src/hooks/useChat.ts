@@ -15,7 +15,7 @@ export function useChat() {
   const thinkingRef = useRef("");
   const toolNameMap = useRef<Record<string, string>>({});
 
-  const sendMessage = useCallback(async (content: string, sessionId = "default") => {
+  const sendMessage = useCallback(async (content: string, sessionId = "default", model = "") => {
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
@@ -48,7 +48,7 @@ export function useChat() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, session_id: sessionId }),
+        body: JSON.stringify({ message: content, session_id: sessionId, model }),
         signal: abortRef.current.signal,
       });
 

@@ -473,7 +473,7 @@ class DataCollector:
         return members
 
     async def sync_enterprises(self, log_fn: LogFn = None) -> dict:
-        """Sync enterprise list, all cost centers, and budgets."""
+        """Sync enterprise list, all cost centers, budgets, and enterprise teams."""
         summary: dict = {"synced": [], "errors": []}
         if not self._api_manager:
             return summary
@@ -493,8 +493,9 @@ class DataCollector:
         # Cost centers + budgets
         cc_summary = await self._sync_cost_centers(enterprises, log_fn=log_fn)
         bd_summary = await self._sync_budgets(enterprises, log_fn=log_fn)
-        summary["synced"].extend(cc_summary["synced"] + bd_summary["synced"])
-        summary["errors"].extend(cc_summary["errors"] + bd_summary["errors"])
+        et_summary = await self._sync_enterprise_teams(enterprises, log_fn=log_fn)
+        summary["synced"].extend(cc_summary["synced"] + bd_summary["synced"] + et_summary["synced"])
+        summary["errors"].extend(cc_summary["errors"] + bd_summary["errors"] + et_summary["errors"])
 
         # Enterprise-level Copilot data (seats/usage) for enterprises with no
         # organizations — either genuinely orgless, or organization scanning was
@@ -681,6 +682,10 @@ class DataCollector:
             if log_fn:
                 log_fn("info", "Syncing budget data...")
             result = await self._sync_budgets(enterprises, log_fn=log_fn)
+        elif dataset == "enterprise_teams":
+            if log_fn:
+                log_fn("info", "Syncing enterprise team data...")
+            result = await self._sync_enterprise_teams(enterprises, log_fn=log_fn)
         else:
             summary["errors"].append(f"Unknown dataset '{dataset}'")
             if log_fn:
@@ -743,6 +748,86 @@ class DataCollector:
     async def sync_cost_centers_for_enterprise(self, enterprise: dict, log_fn: LogFn = None) -> dict:
         """Refresh cached cost center data for a single enterprise."""
         return await self._sync_cost_centers([enterprise], log_fn=log_fn)
+
+    async def _sync_enterprise_teams(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
+        """Sync enterprise teams, their members and org assignments.
+
+        None of the Copilot datasets (seats/usage/metrics/CSV exports) carry an
+        enterprise-team field, so the only way to filter them by team is to keep
+        a local `login -> teams` index and join on the user login at query time.
+        That index is built here and stored alongside the team list.
+        """
+        summary: dict = {"synced": [], "errors": []}
+
+        for ent in enterprises:
+            slug = ent["slug"]
+            api = self._api_manager.get_api_for_enterprise(slug)
+            if not api:
+                summary["errors"].append(f"enterprise_teams/{slug}: no API client")
+                continue
+            try:
+                raw_teams = await api.get_enterprise_teams(slug)
+                if log_fn:
+                    log_fn("info", f"  {slug}: {len(raw_teams)} enterprise teams, expanding members...")
+
+                expanded: list[dict] = []
+                member_index: dict[str, list[str]] = {}
+
+                for team in raw_teams:
+                    team_slug = team.get("slug", "")
+                    if not team_slug:
+                        continue
+                    raw_members = await api.get_enterprise_team_members(slug, team_slug)
+                    org_assignments = await api.get_enterprise_team_organizations(slug, team_slug)
+                    members = [
+                        {
+                            "login": m.get("login", ""),
+                            "avatar_url": m.get("avatar_url", ""),
+                            "html_url": m.get("html_url", f"https://github.com/{m.get('login', '')}"),
+                        }
+                        for m in raw_members
+                        if m.get("login")
+                    ]
+                    for m in members:
+                        member_index.setdefault(m["login"].lower(), []).append(team_slug)
+
+                    expanded.append({
+                        "id": team.get("id"),
+                        "slug": team_slug,
+                        "name": team.get("name", team_slug),
+                        "description": team.get("description", "") or "",
+                        "html_url": team.get("html_url", ""),
+                        "group_id": team.get("group_id"),
+                        "group_name": team.get("group_name"),
+                        "organization_selection_type": team.get("organization_selection_type", ""),
+                        "created_at": team.get("created_at", ""),
+                        "updated_at": team.get("updated_at", ""),
+                        "organizations": [o.get("login", "") for o in org_assignments if o.get("login")],
+                        "members": members,
+                        "member_count": len(members),
+                    })
+                    if log_fn:
+                        log_fn("info", f"    Team '{team_slug}': {len(members)} members")
+
+                self._save_json("enterprise_teams", slug, {
+                    "enterprise": slug,
+                    "enterprise_name": ent.get("name", ""),
+                    "teams": expanded,
+                    "member_index": member_index,
+                    "total": len(expanded),
+                    "total_unique_members": len(member_index),
+                })
+                summary["synced"].append(
+                    f"enterprise_teams/{slug} ({len(expanded)} teams, {len(member_index)} unique members)"
+                )
+                if log_fn:
+                    log_fn("info", f"  {slug}: enterprise teams synced ({len(expanded)} teams, {len(member_index)} unique members)")
+            except Exception as e:
+                summary["errors"].append(f"enterprise_teams/{slug}: {e}")
+                if log_fn:
+                    log_fn("error", f"  {slug}: enterprise teams error - {e}")
+
+        return summary
 
     async def _sync_budgets(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
         """Sync billing budgets (UBB) for the given enterprises."""

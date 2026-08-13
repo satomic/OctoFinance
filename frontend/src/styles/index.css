@@ -747,6 +747,7 @@ body {
 .chat-input:disabled { opacity: 0.5; }
 
 .send-btn {
+  min-height: 40px;
   padding: 10px 20px;
   border-radius: var(--radius);
   border: none;
@@ -765,6 +766,7 @@ body {
 .send-btn.stop-btn:hover { background: #da3633; }
 
 .clear-btn {
+  min-height: 40px;
   padding: 10px 12px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -1611,6 +1613,39 @@ body {
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+.cc-muted {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Expanded enterprise team row: the nested member table owns its own columns,
+   so it must not inherit the outer cell's padding. */
+.et-detail-cell {
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-primary));
+}
+
+.et-detail-cell > .cc-table {
+  border-top: 1px solid var(--border);
+}
+
+.et-detail-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dash-note {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
 /* ---- Cost Center share column & modal ---- */
 
 .cc-td-share {
@@ -2294,6 +2329,7 @@ body {
   color: var(--text-primary);
   font-size: 12px;
   cursor: pointer;
+  width: 100%;
   min-width: 140px;
   transition: border-color 0.15s;
 }
@@ -3184,4 +3220,24 @@ body {
 
 .cc-change-leave {
   color: #f85149;
+}
+
+.chat-model-select {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  max-width: 160px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-model-select:hover,
+.chat-model-select:focus {
+  outline: none;
+  border-color: var(--accent);
 }

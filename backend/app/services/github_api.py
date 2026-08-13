@@ -226,6 +226,87 @@ class GitHubAPI:
         except Exception:
             return []
 
+    async def get_enterprise_teams(self, enterprise: str) -> list[dict]:
+        """List all enterprise teams.
+        API: GET /enterprises/{enterprise}/teams
+        Requires a classic PAT with the `read:enterprise` scope — fine-grained
+        tokens and GitHub App tokens are not supported by this endpoint.
+        """
+        try:
+            teams = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/teams",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                teams.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return teams
+        except Exception:
+            return []
+
+    async def get_enterprise_team_members(self, enterprise: str, team_slug: str) -> list[dict]:
+        """List members of an enterprise team.
+        API: GET /enterprises/{enterprise}/teams/{team_slug}/memberships
+        `team_slug` carries GitHub's `ent:` prefix (e.g. 'ent:platform').
+        """
+        try:
+            members = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/teams/{team_slug}/memberships",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                members.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return members
+        except Exception:
+            return []
+
+    async def get_enterprise_team_organizations(self, enterprise: str, team_slug: str) -> list[dict]:
+        """List organizations an enterprise team is assigned to.
+        API: GET /enterprises/{enterprise}/teams/{team_slug}/organizations
+        """
+        try:
+            orgs = []
+            page = 1
+            while True:
+                resp = await self.client.get(
+                    f"/enterprises/{enterprise}/teams/{team_slug}/organizations",
+                    params={"per_page": 100, "page": page},
+                )
+                if resp.status_code in (404, 403):
+                    return []
+                resp.raise_for_status()
+                batch = resp.json()
+                if not batch:
+                    break
+                orgs.extend(batch)
+                if len(batch) < 100:
+                    break
+                page += 1
+            return orgs
+        except Exception:
+            return []
+
     async def add_cost_center_resources(
         self,
         enterprise: str,

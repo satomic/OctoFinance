@@ -2,7 +2,7 @@
 
 ## Project Summary
 
-OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 31 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
+OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language — "Which users haven't used Copilot in 30 days? How much are we wasting?" — and the AI agent autonomously calls 42 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, Enterprise Teams analytics and filtering, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
 
 ---
 
@@ -191,10 +191,10 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 **Problem**: Enterprises managing hundreds or thousands of Copilot seats across multiple organizations lack unified visibility into usage, waste, and ROI. Manual cost analysis through spreadsheets is time-consuming and error-prone, and AI credit costs are hard to track per-user.
 
 **Solution**: An AI-first FinOps platform built on the GitHub Copilot SDK with:
-- **Conversational interface** — Ask questions in natural language, get data-driven answers
-- **31 custom tools** — Autonomous data analysis via `define_tool()` API including budget management
+- **Conversational interface** — Ask questions in natural language, get data-driven answers, and pick the model per message (default Auto)
+- **42 custom tools** — Autonomous data analysis via `define_tool()` API including budget and Enterprise Team management
 - **Human-in-the-loop** — AI recommends, admin approves before destructive operations
-- **Multi-dashboard analytics** — Rich usage, AI credits, budgets, and Cost Center views
+- **Multi-dashboard analytics** — Rich usage, AI credits, budgets, Cost Center and Enterprise Team views
 - **Multi-org management** — Multiple PATs, auto-discovery, cross-org analysis
 
 ---
@@ -204,16 +204,16 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │              React Frontend (Vite + TypeScript)                     │
-│   AI Chat (SSE) · Dashboard (9 sections) · Action Panel · Auth     │
+│   AI Chat (SSE) · Dashboard (8 tabs) · Action Panel · Auth         │
 └──────────────────────────┬─────────────────────────────────────────┘
                 SSE / REST │
 ┌──────────────────────────┴─────────────────────────────────────────┐
 │              FastAPI Backend (Python 3.13+)                         │
-│   Copilot SDK AI Engine (31 tools) · Auth · Sync · PAT Manager     │
+│   Copilot SDK AI Engine (42 tools) · Auth · Sync · PAT Manager     │
 │   Data Collector · Audit Log · Budget Management                   │
 └──────────────────────────┬─────────────────────────────────────────┘
                            │
-              GitHub REST API (Seats, Billing, Usage, Metrics, AI Credits, Budgets)
+              GitHub REST API (Seats, Billing, Usage, Metrics, AI Credits, Budgets, Enterprise Teams)
                            │
               JSON Data Store (No database required)
 ```
@@ -224,9 +224,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 
 ## Key Features
 
-- **Copilot SDK Agentic AI** — 31 custom tools including budget management, SSE streaming, session management
+- **Copilot SDK Agentic AI** — 42 custom tools including budget and Enterprise Team management, SSE streaming, session management, and **per-message model selection** (dropdown next to the chat box, dynamically populated from the Copilot SDK; defaults to Auto)
 - **Budget Management** — UBB (Usage-Based Billing) AI credits budget controls (Universal/Individual user-level, Enterprise, Cost center)
-- **Analytics Dashboard** — Usage, AI credits, budgets, and Cost Center dashboards
+- **Analytics Dashboard** — Usage, AI credits, budgets, Cost Center and Enterprise Team dashboards
+- **Enterprise Teams** — Full support for [Enterprise Teams](https://docs.github.com/en/rest/enterprise-teams): a dedicated dashboard tab showing per-team seats, adoption, AI spend and estimated seat cost with expandable member rosters, plus an **Enterprise Team filter on Usage Metrics / AI Usage / Usage Report** (including a *No enterprise team* option). Because **no Copilot dataset carries a team field**, OctoFinance syncs the team rosters and joins them onto seats/usage/AI-credit data on the user login — and when a team filter is active the usage aggregates are recomputed from user-level records so the charts stay accurate. Also surfaces seat holders that no team covers, and team members with no seat (unaffiliated enterprise users). Requires a **classic** PAT (`read:enterprise`, or `admin:enterprise` for writes)
 - **Cost Center Assignment** — List Copilot users not assigned to any Cost Center, then assign one or many users with confirmation
 - **Cost Center Report Sharing** — Share a per-cost-center HTML report page via a tokenized public link (`/share/cc/{token}`), no OctoFinance account required. Each share can be **public** or **password-protected** (PBKDF2-hashed), and can be updated (change password / switch mode) or disabled at any time from the Cost Centers dashboard. The shared page uses the same template as the Download Report export, plus a top-right Download button to save the report as a standalone HTML file. Share settings are persisted in `data/cc_shares.json`
   ![alt text](images/cc_shares.png)

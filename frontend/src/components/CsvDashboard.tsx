@@ -442,11 +442,12 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
   const setDateFrom = useCallback((v: string) => ui.patch({ csvDashDateFrom: v }), [ui.patch]);
   const dateTo = ui.csvDashDateTo;
   const setDateTo = useCallback((v: string) => ui.patch({ csvDashDateTo: v }), [ui.patch]);
+  const enterpriseTeam = ui.csvDashEnterpriseTeam;
 
   const range = resolveRange(ui.periodMode, dateFrom, dateTo);
   const params = useMemo(() => ({
-    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to,
-  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to, enterpriseTeam,
+  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to, enterpriseTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, loading } = useCsvDashboard(params);
 
@@ -472,6 +473,21 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
                 selected={orgs}
                 onChange={setOrgs}
               />
+              <div className="org-dropdown" style={{ width: 140 }}>
+                <select
+                  className="cc-native-select"
+                  value={enterpriseTeam}
+                  onChange={(e) => ui.patch({ csvDashEnterpriseTeam: e.target.value })}
+                  title={t("etFilter.hint")}
+                >
+                  <option value="">{t("etFilter.all")}</option>
+                  {(data.filters.enterprise_teams ?? []).map((tm) => (
+                    <option key={tm.slug} value={tm.slug}>
+                      {tm.slug === "__no_team__" ? t("etFilter.none") : tm.name} ({tm.member_count})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <MultiSelect
                 label={t("csvDash.allCostCenters")}
                 options={data.filters.cost_centers}

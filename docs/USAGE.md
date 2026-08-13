@@ -178,6 +178,7 @@ Tool calls appear inline as tags — spinning while running, green check when co
 | Control | Action |
 |---------|--------|
 | **Send** (Enter) | Send message |
+| **Model** | Pick the model for the next message. The list is fetched live from the Copilot SDK, so it only shows models your account can actually use. **Auto** (the default) lets Copilot choose; switching back to Auto resets a session that had an explicit model |
 | **Clear** | Clear conversation history |
 | **Stop** | Abort the response in progress |
 
@@ -185,7 +186,9 @@ Tool calls appear inline as tags — spinning while running, green check when co
 
 ## Dashboard View
 
-Seven tabs, each with its own filters. Sections are collapsible.
+Eight tabs, each with its own filters. Sections are collapsible.
+
+> **Enterprise Team filter** — Usage Metrics, AI Usage and Usage Report each have an **Enterprise Team** dropdown next to the Organizations filter, listing every synced team plus a **(No enterprise team)** option for users that belong to none. Since GitHub does not tag any Copilot data with a team, the filter matches on the user login using the synced team rosters; on Usage Metrics the charts are then recomputed from user-level records so they stay accurate. Run a sync (or `Sync` on the Enterprise Teams tab) first to populate the list.
 
 ### 1. Usage Metrics
 
@@ -215,11 +218,23 @@ Cost centers with members and resources, plus a user → cost center mapping.
 
 Copilot seat holders who belong to no active cost center. Select users, pick a target cost center, and assign them in bulk after a confirmation step.
 
-### 6. Budgets
+### 6. Enterprise Teams
+
+Enterprise-level teams and how they actually use Copilot. The **Sync** button refreshes just this dataset.
+
+- **KPI cards** — teams, unique members, members with/without a seat, seat holders outside any team, seat coverage %, monthly seat cost and AI credit cost
+- **Teams table** — per team: assigned organizations, members, seats, members without a seat, active members, interactions, AI cost and estimated seat cost. Expand a row to see each member's seat status, organizations, interactions, active days, AI spend and last activity
+- **Seat Holders Outside Enterprise Teams** — users holding a Copilot seat that no team covers, so team-based reporting does not silently miss them
+
+> A team's member count can legitimately exceed the seats matched to it: enterprise teams may include unaffiliated users who belong to no organization, and those users never appear in org seat data.
+>
+> Enterprise team endpoints require a **classic** PAT (`read:enterprise`; `admin:enterprise` for writes) — fine-grained and GitHub App tokens are rejected by GitHub.
+
+### 7. Budgets
 
 All enterprise budgets by scope (enterprise / universal / individual user / cost center / org / repo), showing amount, **used**, **remaining**, usage %, hard-vs-soft limit and alerting. In Current Month mode the numbers come live from GitHub — a **Live from GitHub** badge and a **Refresh live** button confirm it.
 
-### 7. Requests
+### 8. Requests
 
 Two sub-tabs:
 
@@ -255,6 +270,9 @@ These are the scopes for the **data-sync PAT** you add here — the token that r
 | `admin:org` | Read Copilot billing and seats |
 | `copilot` | Access Copilot usage metrics |
 | `manage_billing:copilot` | AI credit usage, cost centers, and budget writes |
+| `read:enterprise` | Enterprise teams (reads). `admin:enterprise` is required to create/modify teams |
+
+> **Enterprise teams need a classic PAT.** GitHub rejects fine-grained and GitHub App tokens on the `/enterprises/{ent}/teams` endpoints, so the Enterprise Teams tab and its filters stay empty unless the data-sync PAT is a classic token with `read:enterprise`.
 
 > **This is not the same token that powers the AI chat.** The Copilot CLI / SDK authenticates separately via the `COPILOT_GITHUB_TOKEN` environment variable (or an interactive `copilot` login), and that one must be a **fine-grained PAT** (`github_pat_…`) owned by a **personal account** with an active Copilot subscription and the **Copilot Requests: Read** account permission. Classic PATs (`ghp_…`) are rejected by Copilot CLI. See [Authenticating GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
 

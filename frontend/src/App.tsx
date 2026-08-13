@@ -102,9 +102,9 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
   }, [ui.patch, ui.sidebarCollapsed]);
 
   // Wrap sendMessage to pass current session id and refresh session list after
-  const handleSendMessage = useCallback(async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string, _sessionId?: string, model?: string) => {
     const sid = sessions.currentSessionId || "default";
-    await chat.sendMessage(content, sid);
+    await chat.sendMessage(content, sid, model);
     sessions.loadSessions();
     setRefreshKey((k) => k + 1);
   }, [chat.sendMessage, sessions.currentSessionId, sessions.loadSessions]);

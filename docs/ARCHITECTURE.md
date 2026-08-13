@@ -41,7 +41,7 @@
 │  │  (multi-worker)  │  │  │  System Prompt: FinOps Assistant           │  │  │
 │  └──────────────────┘  │  │  Session Persistence (.copilot_session_id) │  │  │
 │                        │  └──────────────────┬─────────────────────────┘  │  │
-│  ┌──────────────────┐  │                     │  31 Custom Tools           │  │
+│  ┌──────────────────┐  │                     │  42 Custom Tools           │  │
 │  │ BudgetProvisioner│  │  ┌──────────────────┴─────────────────────────┐  │  │
 │  │ real GitHub      │  │  │ Seats (4)      │ Usage (8)                 │  │  │
 │  │ user budgets     │  │  │ Billing (2)    │ Actions (3)               │  │  │
@@ -66,6 +66,7 @@
                     │  /enterprises/{ent}/reports     │
                     │  /enterprises/{ent}/budgets     │
                     │  /enterprises/{ent}/cost-centers│
+                    │  /enterprises/{ent}/teams       │
                     │  github.com/login/oauth/*  (SSO)│
                     └───────────────────────────────┘
 ```
@@ -74,7 +75,7 @@
 
 ```
 1. PAT Configuration → Auto-discover user → Auto-discover orgs & enterprises → Detect Copilot plans
-2. Data Sync        → Fetch seats, billing, usage, metrics, AI credits, cost centers, budgets
+2. Data Sync        → Fetch seats, billing, usage, metrics, AI credits, cost centers, budgets, enterprise teams
                     → Merge into data/{category}/{org}_latest.json (atomic write)
 3. Admin Message    → Copilot SDK Session → LLM selects tools → Tools read cache or call live API
 4. AI Analysis      → Recommendations → Admin approval → Execute via GitHub API → Audit log
@@ -149,13 +150,14 @@ OctoFinance/
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings
 │   │   │   ├── report_generator.py     # Cost center HTML/ZIP report generation
 │   │   │   └── ops_executor.py         # Operation executor
-│   │   └── tools/                      # 31 Copilot SDK tools
+│   │   └── tools/                      # 42 Copilot SDK tools
 │   │       ├── seat_tools.py           # 4 seat management tools
 │   │       ├── usage_tools.py          # 8 usage analysis tools
 │   │       ├── billing_tools.py        # 2 billing/ROI tools
 │   │       ├── action_tools.py         # 3 action/recommendation tools
 │   │       ├── cost_center_tools.py    # 8 cost center tools
-│   │       └── budget_tools.py         # 6 budget management tools (UBB)
+│   │       ├── budget_tools.py         # 6 budget management tools (UBB)
+│   │       └── enterprise_team_tools.py # 11 enterprise team tools
 │   └── requirements.txt
 ├── frontend/
 │   ├── public/copilot.svg              # Favicon
@@ -167,13 +169,14 @@ OctoFinance/
 │   │   │   ├── MyDashboard.tsx         # Own usage, budget, cost centers
 │   │   │   ├── BudgetRequestPanel.tsx  # User: submit + own history
 │   │   │   ├── BudgetRequestsAdmin.tsx # Admin: review + approval history
-│   │   │   ├── UnifiedDashboard.tsx    # 7 admin dashboard tabs
+│   │   │   ├── UnifiedDashboard.tsx    # 8 admin dashboard tabs
 │   │   │   ├── Dashboard.tsx           # Usage metrics (9 sections)
 │   │   │   ├── CsvDashboard.tsx        # AI usage / usage report CSV
 │   │   │   ├── CostCenterDashboard.tsx # Cost centers + sharing
 │   │   │   ├── UnassignedCostCenterUsersDashboard.tsx
+│   │   │   ├── EnterpriseTeamsDashboard.tsx # Per-team adoption, cost & rosters
 │   │   │   ├── BudgetsDashboard.tsx    # Budgets with consumed/remaining
-│   │   │   ├── ChatInterface.tsx       # AI chat UI
+│   │   │   ├── ChatInterface.tsx       # AI chat UI + model selector
 │   │   │   ├── ActionPanel.tsx         # Recommendation review
 │   │   │   ├── StatusBar.tsx           # Status, period toggle, language, sync
 │   │   │   ├── PeriodToggle.tsx        # All Time / Current Month

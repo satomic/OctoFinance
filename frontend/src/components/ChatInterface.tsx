@@ -1,18 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { useI18n } from "../contexts/I18nContext";
+import { useUIState } from "../contexts/UIStateContext";
+import { useChatModels } from "../hooks/useData";
 import { MessageBubble } from "./MessageBubble";
 import type { ChatMessage } from "../types";
 
 interface Props {
   messages: ChatMessage[];
   isLoading: boolean;
-  sendMessage: (content: string, sessionId?: string) => Promise<void>;
+  sendMessage: (content: string, sessionId?: string, model?: string) => Promise<void>;
   abort: () => void;
   clearMessages: () => void;
 }
 
 export function ChatInterface({ messages, isLoading, sendMessage, abort, clearMessages }: Props) {
   const { t } = useI18n();
+  const ui = useUIState();
+  const models = useChatModels();
+  const model = ui.chatModel;
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -31,7 +36,7 @@ export function ChatInterface({ messages, isLoading, sendMessage, abort, clearMe
     const text = input.trim();
     if (!text || isLoading) return;
     setInput("");
-    sendMessage(text);
+    sendMessage(text, undefined, model);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -53,7 +58,7 @@ export function ChatInterface({ messages, isLoading, sendMessage, abort, clearMe
                 <button
                   key={qp.label}
                   className="quick-prompt-btn"
-                  onClick={() => sendMessage(qp.prompt)}
+                  onClick={() => sendMessage(qp.prompt, undefined, model)}
                   disabled={isLoading}
                 >
                   {qp.label}
@@ -73,6 +78,18 @@ export function ChatInterface({ messages, isLoading, sendMessage, abort, clearMe
             {t("chat.clear")}
           </button>
         )}
+        <select
+          className="chat-model-select"
+          value={model}
+          onChange={(e) => ui.patch({ chatModel: e.target.value })}
+          disabled={isLoading}
+          title={t("chat.modelHint")}
+        >
+          <option value="">{t("chat.modelAuto")}</option>
+          {models.filter((m) => m.id !== "auto").map((m) => (
+            <option key={m.id} value={m.id}>{m.name}</option>
+          ))}
+        </select>
         <textarea
           className="chat-input"
           value={input}

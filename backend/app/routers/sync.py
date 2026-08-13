@@ -81,10 +81,11 @@ async def sync_all(session_id: str | None = Query(default=None)):
 async def sync_dataset(dataset: str, session_id: str | None = Query(default=None)):
     """Trigger a sync for a single enterprise-scoped dataset only.
 
-    Supported datasets: 'cost_centers', 'budgets'. Runs in background; logs
-    stream via /sync-stream. Two path segments avoid colliding with /sync/{org}.
+    Supported datasets: 'cost_centers', 'budgets', 'enterprise_teams'. Runs in
+    background; logs stream via /sync-stream. Two path segments avoid colliding
+    with /sync/{org}.
     """
-    if dataset not in ("cost_centers", "budgets"):
+    if dataset not in ("cost_centers", "budgets", "enterprise_teams"):
         return {"status": "error", "error": f"Unsupported dataset '{dataset}'"}
 
     if sync_manager.is_syncing:

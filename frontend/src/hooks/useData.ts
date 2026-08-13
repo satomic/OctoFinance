@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, UnassignedCostCenterUsersData, AssignCostCenterUsersResult, BudgetsDashboardData, CsvUploadResult } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, UnassignedCostCenterUsersData, AssignCostCenterUsersResult, BudgetsDashboardData, EnterpriseTeamsDashboardData, ChatModel, CsvUploadResult } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -114,7 +114,7 @@ export function useSync() {
 export function useDatasetSync() {
   const [syncing, setSyncing] = useState(false);
 
-  const runSync = useCallback(async (dataset: "cost_centers" | "budgets", onDone?: () => void) => {
+  const runSync = useCallback(async (dataset: "cost_centers" | "budgets" | "enterprise_teams", onDone?: () => void) => {
     setSyncing(true);
     try {
       await fetch(`/api/sync/dataset/${dataset}`, { method: "POST" }).catch(() => {});
@@ -149,15 +149,18 @@ export function useDatasetSync() {
   return { syncing, runSync };
 }
 
-export function useDashboard(selectedOrgs: string[]) {
+export function useDashboard(selectedOrgs: string[], enterpriseTeam = "") {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const params = selectedOrgs.length > 0 ? `?orgs=${selectedOrgs.join(",")}` : "";
-      const res = await fetch(`/api/data/dashboard${params}`);
+      const qp = new URLSearchParams();
+      if (selectedOrgs.length > 0) qp.set("orgs", selectedOrgs.join(","));
+      if (enterpriseTeam) qp.set("enterprise_team", enterpriseTeam);
+      const query = qp.toString();
+      const res = await fetch(`/api/data/dashboard${query ? `?${query}` : ""}`);
       const json = await res.json();
       setData(json);
     } catch {
@@ -165,7 +168,7 @@ export function useDashboard(selectedOrgs: string[]) {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgs.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOrgs.join(","), enterpriseTeam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchDashboard();
@@ -247,6 +250,58 @@ export function useCostCenterDashboard(params: {
       setLoading(false);
     }
   }, [params.enterprise, params.costCenters.join(","), params.state, params.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, refetch: fetchData };
+}
+
+export function useChatModels() {
+  const [models, setModels] = useState<ChatModel[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/chat/models");
+        const json = await res.json();
+        if (!cancelled) setModels(json.models ?? []);
+      } catch {
+        if (!cancelled) setModels([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return models;
+}
+
+export function useEnterpriseTeamsDashboard(params: {
+  enterprise: string;
+  teams: string[];
+  search: string;
+}) {
+  const [data, setData] = useState<EnterpriseTeamsDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qp = new URLSearchParams();
+      if (params.enterprise) qp.set("enterprise", params.enterprise);
+      if (params.teams.length) qp.set("teams", params.teams.join(","));
+      if (params.search) qp.set("search", params.search);
+      const res = await fetch(`/api/data/enterprise-teams-dashboard?${qp}`);
+      const json = await res.json();
+      setData(json);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.enterprise, params.teams.join(","), params.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -354,6 +409,7 @@ export function useCsvDashboard(params: {
   skus: string[];
   dateFrom: string;
   dateTo: string;
+  enterpriseTeam?: string;
 }) {
   const [data, setData] = useState<CsvDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,6 +424,7 @@ export function useCsvDashboard(params: {
       if (params.skus.length) qp.set("skus", params.skus.join(","));
       if (params.dateFrom) qp.set("date_from", params.dateFrom);
       if (params.dateTo) qp.set("date_to", params.dateTo);
+      if (params.enterpriseTeam) qp.set("enterprise_team", params.enterpriseTeam);
       const res = await fetch(`/api/data/csv-dashboard?${qp}`);
       const json = await res.json();
       setData(json);
@@ -377,7 +434,7 @@ export function useCsvDashboard(params: {
       setLoading(false);
     }
   }, [params.orgs.join(","), params.costCenters.join(","), params.products.join(","), // eslint-disable-line react-hooks/exhaustive-deps
-      params.skus.join(","), params.dateFrom, params.dateTo]);
+      params.skus.join(","), params.dateFrom, params.dateTo, params.enterpriseTeam]);
 
   useEffect(() => {
     fetchData();

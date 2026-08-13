@@ -18,6 +18,17 @@ router = APIRouter(tags=["chat"])
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+    model: str = ""
+
+
+@router.get("/chat/models")
+async def list_chat_models():
+    """List models available for chat. An empty selection means Copilot auto-picks."""
+    try:
+        models = await copilot_engine.list_models()
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+    return {"models": models}
 
 
 @router.post("/chat")
@@ -46,7 +57,9 @@ async def chat(request: ChatRequest):
     async def event_generator():
         full_content = ""
         try:
-            async for event in copilot_engine.chat(request.message, sid, working_directory=session_dir):
+            async for event in copilot_engine.chat(
+                request.message, sid, working_directory=session_dir, model=request.model or None
+            ):
                 # Track assistant text
                 if event["type"] == "delta":
                     full_content += event.get("content", "")
@@ -116,7 +129,9 @@ async def chat_simple(request: ChatRequest):
     session_manager.append_message(sid, user_msg)
 
     session_dir = str(SESSIONS_DIR / sid)
-    response = await copilot_engine.chat_simple(request.message, sid, working_directory=session_dir)
+    response = await copilot_engine.chat_simple(
+        request.message, sid, working_directory=session_dir, model=request.model or None
+    )
 
     # Persist assistant message
     if response:

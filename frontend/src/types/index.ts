@@ -131,6 +131,10 @@ export interface DashboardData {
   chat_stats: { ide_chats: number; ide_copy_events: number; ide_insertion_events: number; dotcom_chats: number; pr_summaries: number };
   top_users: { user: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; days_active: number; used_agent: boolean; used_chat: boolean }[];
   orgs: string[];
+  enterprise_teams: EnterpriseTeamOption[];
+  selected_enterprise_team: string | null;
+  team_filtered: boolean;
+  team_member_count: number | null;
   date_range: { start: string; end: string };
   user_ai_usage: AiUsage;
 }
@@ -225,11 +229,13 @@ export interface UsageReportSection {
 export interface CsvDashboardData {
   ai_usage: AiUsageSection;
   usage_report: UsageReportSection;
+  selected_enterprise_team: string | null;
   filters: {
     orgs: string[];
     cost_centers: string[];
     products: string[];
     skus: string[];
+    enterprise_teams: EnterpriseTeamOption[];
   };
 }
 
@@ -353,6 +359,94 @@ export interface BudgetsDashboardData {
   total_remaining: number;
   tracked_budgets: number;
   no_data: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Enterprise teams dashboard
+// ---------------------------------------------------------------------------
+
+export interface EnterpriseTeamMember {
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  has_seat: boolean;
+  orgs: string[];
+  plan_types: string[];
+  assigning_teams: { name: string; scope: "enterprise" | "organization" }[];
+  last_activity_at: string;
+  last_activity_editor: string;
+  interactions: number;
+  code_acceptances: number;
+  loc_added: number;
+  active_days: number;
+  last_active_day: string;
+  ai_requests: number;
+  ai_net_amount: number;
+  cost_centers: string[];
+}
+
+export interface EnterpriseTeam {
+  id: number | null;
+  slug: string;
+  name: string;
+  description: string;
+  html_url: string;
+  group_name: string;
+  organization_selection_type: string;
+  organizations: string[];
+  members: EnterpriseTeamMember[];
+  member_count: number;
+  seat_count: number;
+  no_seat_count: number;
+  active_member_count: number;
+  interactions: number;
+  loc_added: number;
+  ai_requests: number;
+  ai_net_amount: number;
+  seat_cost: number;
+}
+
+export interface EnterpriseTeamsTotals {
+  total_teams: number;
+  shown_teams: number;
+  total_unique_members: number;
+  members_with_seat: number;
+  members_without_seat: number;
+  total_seat_users: number;
+  unassigned_seat_users: number;
+  coverage_pct: number;
+  ai_net_amount: number;
+  seat_cost: number;
+  price_per_seat: number;
+}
+
+export interface EnterpriseTeamsDashboardData {
+  enterprises: { slug: string; name: string }[];
+  selected_enterprise: string;
+  enterprise_name: string;
+  teams: EnterpriseTeam[];
+  all_teams: { slug: string; name: string }[];
+  orgs: string[];
+  totals: EnterpriseTeamsTotals;
+  unassigned_seat_users: EnterpriseTeamMember[];
+  ai_usage_available: boolean;
+  no_data: boolean;
+}
+
+export interface ChatModel {
+  id: string;
+  name: string;
+  multiplier: number | null;
+  is_premium: boolean | null;
+  supported_reasoning_efforts: string[] | null;
+  default_reasoning_effort: string | null;
+}
+
+export interface EnterpriseTeamOption {
+  slug: string;
+  name: string;
+  enterprise: string;
+  member_count: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,12 +4,15 @@
 
 ## Copilot SDK Agentic AI (Core)
 
-- **31 custom tools** registered via `define_tool()` from `github-copilot-sdk`
+- **42 custom tools** registered via `define_tool()` from `github-copilot-sdk`
 - **Session management** with resume capability across backend restarts
 - **Streaming responses** via SSE (Server-Sent Events)
 - **Tool transparency**: real-time tool execution indicators in the chat UI
 - **Multi-turn conversations**: context preserved across messages within a session
+- **Model selection**: a dropdown next to the chat input lists the models the Copilot account can actually use, fetched live from the SDK (`models.list`). The default is **Auto** (Copilot picks); choosing a model calls `session.set_model()` so it applies from the next message onward, and switching back to Auto resets the session to Copilot's `auto` model
 - **Copilot Skills**: the SDK discovers markdown-defined skills from `.github/skills/` inside each session working directory
+
+> **Auth fallback** — if the configured Copilot token (`COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`, or the first UI-configured PAT) is rejected, the engine falls back to the Copilot CLI's own logged-in user instead of leaving every request failing with *Not authenticated*.
 
 ### Tool Catalog
 
@@ -46,6 +49,19 @@
 | | `update_budget` | Change budget amount / hard-limit flag |
 | | `delete_budget` | Delete a budget |
 | | `batch_create_user_budgets` | Create individual budgets for many users at once |
+| **Enterprise Teams** (11) | `list_enterprise_teams` | List enterprise teams with member counts and assigned orgs |
+| | `get_enterprise_team` | One team's full detail including its member roster |
+| | `get_user_enterprise_teams` | Which enterprise teams a given user belongs to |
+| | `get_enterprise_team_copilot_usage` | Per-team seats, members without a seat, active members, interactions, estimated seat cost |
+| | `create_enterprise_team` | Create a team (description, IdP group, org assignment mode) |
+| | `update_enterprise_team` | Rename / change description, org mode or notifications |
+| | `delete_enterprise_team` | Delete a team and its IdP mappings |
+| | `add_enterprise_team_organizations` | Assign a team to organizations |
+| | `remove_enterprise_team_organizations` | Unassign a team from organizations |
+| | `add_enterprise_team_members` | Bulk add users to a team |
+| | `remove_enterprise_team_members` | Bulk remove users from a team |
+
+> Enterprise team endpoints accept **classic PATs only** — `read:enterprise` for reads, `admin:enterprise` for writes. Fine-grained and GitHub App tokens are rejected by GitHub.
 
 ## Authentication & Roles
 
@@ -115,7 +131,7 @@ A top-bar toggle flips every dashboard between **All Time** and **Current Month*
 
 ## Analytics Dashboards
 
-The dashboard is split into seven tabs.
+The dashboard is split into eight tabs.
 
 | Tab | Contents |
 |-----|----------|
@@ -124,8 +140,30 @@ The dashboard is split into seven tabs.
 | **Usage Report** | Uploaded usage-report CSV: daily trend, product/SKU/org/cost-center breakdowns, per-user table |
 | **Cost Centers** | Cost centers with members and resources, user → cost center mapping, downloadable and shareable HTML report |
 | **Unassigned Users** | Copilot seat holders not in any active cost center, with bulk assignment |
+| **Enterprise Teams** | Per-team Copilot adoption and cost, expandable member rosters, and seat holders no team covers |
 | **Budgets** | All enterprise budgets by scope, with amount, **consumed**, **remaining** and usage %, live-refreshable from GitHub |
 | **Requests** | Budget request review + approval history (admins only) |
+
+## Enterprise Teams
+
+[Enterprise Teams](https://docs.github.com/en/rest/enterprise-teams) group users at the enterprise level, independently of organizations, and can hold Copilot Business licenses directly — including users who belong to no organization at all.
+
+**The join problem.** No Copilot dataset carries an enterprise-team field: seats, usage reports, legacy metrics and both CSV exports have organization and cost-center columns, but nothing that identifies a team. (GitHub denormalizes `cost_center_name` into the CSVs; it does not do the same for teams.) OctoFinance therefore syncs the team rosters itself and joins them against every other dataset **on the user login**.
+
+- **Sync** — `GET /enterprises/{ent}/teams`, plus each team's `/memberships` and `/organizations`, stored as `data/enterprise_teams/{slug}_latest.json`. The file carries both the team list and a `member_index` (`login → [team_slug]`) so lookups do not have to rescan every roster. Runs as part of a full sync, or on its own via `POST /api/sync/dataset/enterprise_teams`
+- **Dashboard tab** — per team: members, seats, members without a seat, active members, interactions, AI credit cost and estimated monthly seat cost. Expanding a team shows each member's seat status, organizations, interactions, active days, AI spend and last activity. A separate section lists **seat holders that no enterprise team covers** — the blind spot of team-based reporting
+- **Cross-dashboard filter** — Usage Metrics, AI Usage and Usage Report all gained an **Enterprise Team** filter, including a **(No enterprise team)** option for users that belong to no team
+- **Seat attribution** — where GitHub *does* report a team, it appears in `assigning_team` with `type: "enterprise" | "organization"`, so a seat granted through an enterprise team is distinguishable from an org-team seat
+
+> **Team members can legitimately exceed matched seats.** Enterprise teams may contain unaffiliated users who belong to no organization, and those users never appear in any org's seat data. The dashboard reports them as *members without a seat* rather than silently dropping them.
+
+### Filtering by team
+
+The org-level usage report is pre-aggregated and has no user dimension, so it cannot be sliced by team. When a team filter is active the Usage Metrics dashboard is **recomputed from the user-level report** instead — daily trend, feature/model/IDE/language breakdowns are rebuilt from per-user records, DAU/WAU/MAU become distinct-user counts over trailing 1/7/28-day windows, KPIs are derived from the team's own seats, and AI credit detail comes from the per-user CSV rather than the model-aggregated cache.
+
+### What is not available
+
+GitHub's [enterprise-team model policy targeting](https://github.blog/changelog/2026-07-31-enterprise-teams-model-policy-targeting-in-public-preview/) (assigning *Optional* models to specific teams) is **UI-only**. A full scan of GitHub's published OpenAPI description contains no model-policy endpoint at any level, so OctoFinance cannot read or manage per-team model availability.
 
 ## Multi-Organization Management
 
@@ -217,8 +255,9 @@ The dashboard is split into seven tabs.
 
 | Endpoint | Method | Access | Description |
 |----------|--------|--------|-------------|
-| `/api/chat` | POST | admin | AI chat with SSE streaming response |
+| `/api/chat` | POST | admin | AI chat with SSE streaming response. Body: `message`, `session_id`, `model` (empty = Auto) |
 | `/api/chat/simple` | POST | admin | AI chat, wait for the complete response |
+| `/api/chat/models` | GET | admin | Models available to the Copilot account, fetched live from the SDK |
 | `/api/sessions` | GET/POST | admin | List / create chat sessions |
 | `/api/sessions/{id}` | GET/PUT/DELETE | admin | Get / rename / delete a session |
 | `/api/sessions/{id}/messages` | GET | admin | Messages for a session |
@@ -232,8 +271,8 @@ The dashboard is split into seven tabs.
 | `/api/data/overview` | GET | admin | Global overview (seats, costs, waste) |
 | `/api/data/seats/{org}` | GET | admin | Seat data for an organization |
 | `/api/data/billing/{org}` | GET | admin | Billing data for an organization |
-| `/api/data/dashboard` | GET | admin | Aggregated usage-metrics dashboard |
-| `/api/data/csv-dashboard` | GET | admin | Aggregated CSV dashboard (AI usage + usage report) |
+| `/api/data/dashboard` | GET | admin | Aggregated usage-metrics dashboard. Params: `orgs`, `enterprise_team` |
+| `/api/data/csv-dashboard` | GET | admin | Aggregated CSV dashboard (AI usage + usage report). Params include `enterprise_team` |
 | `/api/data/csv-info` | GET | admin | Uploaded CSV coverage info |
 | `/api/data/upload-csv` | POST | admin | Upload an AI usage / usage report CSV (type auto-detected) |
 | `/api/data/budgets-dashboard` | GET | admin | Budgets with consumed/remaining. Params: `enterprise`, `scope`, `search`, `live`, `period` |
@@ -243,6 +282,7 @@ The dashboard is split into seven tabs.
 | `/api/data/cost-center-unassigned-users/assign` | POST | admin | Bulk-assign users to a cost center |
 | `/api/data/cost-center-shares` | GET | admin | List share links |
 | `/api/data/cost-center-share` | POST/DELETE | admin | Create/update or disable a share link |
+| `/api/data/enterprise-teams-dashboard` | GET | admin | Enterprise teams joined with seats, usage and AI spend. Params: `enterprise`, `teams`, `search` |
 
 ### Sync, actions & settings
 
@@ -250,7 +290,7 @@ The dashboard is split into seven tabs.
 |----------|--------|--------|-------------|
 | `/api/sync` | POST | admin | Trigger a full data sync (background) |
 | `/api/sync/{org}` | POST | admin | Sync one organization |
-| `/api/sync/dataset/{dataset}` | POST | admin | Sync a single dataset (e.g. `budgets`, `cost_centers`) |
+| `/api/sync/dataset/{dataset}` | POST | admin | Sync a single dataset (`budgets`, `cost_centers`, `enterprise_teams`) |
 | `/api/sync/status` | GET | admin | Current sync status |
 | `/api/sync-stream` | GET | admin | SSE stream of sync progress |
 | `/api/actions/pending` | GET | admin | Pending AI recommendations |
@@ -291,5 +331,6 @@ PATs and settings are managed through the web UI (**Settings** modal):
 | `data/cc_shares.json` | Cost center share links |
 | `data/audit_log.json` | Executed operations |
 | `data/{category}/{org}_latest.json` | Synced GitHub data (seats, billing, usage, usage_users, metrics, ai_credits, cost_centers, budgets, enterprise) |
+| `data/enterprise_teams/{slug}_latest.json` | Enterprise team rosters + `login → teams` index used to join teams onto every other dataset |
 | `data/ai_usage_csv/`, `data/usage_report_csv/` | Uploaded CSV files |
 | `data/sessions/{id}/` | Per-chat-session working directories |

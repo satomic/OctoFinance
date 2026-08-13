@@ -26,7 +26,7 @@ class AppConfig:
         self.data_dir: Path = DATA_DIR
         # Ensure data directories exist
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        for sub in ("seats", "usage", "usage_users", "metrics", "billing", "ai_credits", "ai_usage_csv", "cost_centers", "budgets"):
+        for sub in ("seats", "usage", "usage_users", "metrics", "billing", "ai_credits", "ai_usage_csv", "cost_centers", "budgets", "enterprise_teams"):
             (self.data_dir / sub).mkdir(parents=True, exist_ok=True)
 
 

@@ -5,7 +5,7 @@ const STORAGE_KEY = "octofinance-ui-state";
 export interface UIState {
   currentView: "chat" | "dashboard";
   periodMode: "all" | "current_month";
-  dashboardTab: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests";
+  dashboardTab: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests" | "entteams";
   consoleOpen: boolean;
   sidebarWidth: number;
   sidebarCollapsed: Record<string, boolean>;
@@ -14,6 +14,9 @@ export interface UIState {
   dashboardSelectedOrgs: string[] | null;
   dashboardDateFrom: string;
   dashboardDateTo: string;
+  dashboardEnterpriseTeam: string;
+  // Chat
+  chatModel: string;
   // CSV dashboard filters
   csvDashOrgs: string[];
   csvDashCostCenters: string[];
@@ -21,6 +24,7 @@ export interface UIState {
   csvDashSkus: string[];
   csvDashDateFrom: string;
   csvDashDateTo: string;
+  csvDashEnterpriseTeam: string;
   // Cost Center dashboard filters
   ccDashEnterprise: string;
   ccDashCostCenters: string[];
@@ -31,6 +35,10 @@ export interface UIState {
   budgetsDashEnterprise: string;
   budgetsDashScope: string;
   budgetsDashSearch: string;
+  // Enterprise teams dashboard filters
+  etDashEnterprise: string;
+  etDashTeams: string[];
+  etDashSearch: string;
 }
 
 
@@ -51,12 +59,15 @@ const DEFAULTS: UIState = {
   dashboardSelectedOrgs: null,
   dashboardDateFrom: "",
   dashboardDateTo: "",
+  dashboardEnterpriseTeam: "",
+  chatModel: "",
   csvDashOrgs: [],
   csvDashCostCenters: [],
   csvDashProducts: [],
   csvDashSkus: [],
   csvDashDateFrom: "",
   csvDashDateTo: "",
+  csvDashEnterpriseTeam: "",
   ccDashEnterprise: "",
   ccDashCostCenters: [],
   ccDashState: "active",
@@ -65,6 +76,9 @@ const DEFAULTS: UIState = {
   budgetsDashEnterprise: "",
   budgetsDashScope: "all",
   budgetsDashSearch: "",
+  etDashEnterprise: "",
+  etDashTeams: [],
+  etDashSearch: "",
 };
 
 interface UIStateContextValue extends UIState {

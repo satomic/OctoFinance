@@ -42,7 +42,7 @@ export function Dashboard({ refreshKey }: Props) {
     const next = typeof v === "function" ? v(ui.dashboardSelectedOrgs) : v;
     ui.patch({ dashboardSelectedOrgs: next });
   }, [ui.patch, ui.dashboardSelectedOrgs]);
-  const { data, loading } = useDashboard(selectedOrgs ?? []);
+  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam);
 
   const period = ui.periodMode;
   const dateFrom = period === "current_month" ? currentMonthRange().start : ui.dashboardDateFrom;
@@ -139,6 +139,21 @@ export function Dashboard({ refreshKey }: Props) {
               </div>
             )}
           </div>
+          <div className="org-dropdown" style={{ width: 140 }}>
+            <select
+              className="cc-native-select"
+              value={ui.dashboardEnterpriseTeam}
+              onChange={(e) => ui.patch({ dashboardEnterpriseTeam: e.target.value })}
+              title={t("etFilter.hint")}
+            >
+              <option value="">{t("etFilter.all")}</option>
+              {(data?.enterprise_teams ?? []).map((tm) => (
+                <option key={tm.slug} value={tm.slug}>
+                  {tm.slug === "__no_team__" ? t("etFilter.none") : tm.name} ({tm.member_count})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="dashboard-filter-group">
           <input type="date" className="dashboard-date-input" value={dateFrom || data?.date_range?.start || ""} onChange={(e) => setDateFrom(e.target.value)} />
@@ -146,6 +161,14 @@ export function Dashboard({ refreshKey }: Props) {
           <input type="date" className="dashboard-date-input" value={dateTo || data?.date_range?.end || ""} onChange={(e) => setDateTo(e.target.value)} />
         </div>
       </div>
+
+      {data?.team_filtered && (
+        <div className="dash-note">
+          {data.team_member_count === null
+            ? t("etFilter.noteNone")
+            : `${t("etFilter.note")} ${data.team_member_count}`}
+        </div>
+      )}
 
       {loading && !data && <div className="dashboard-loading">{t("loading")}</div>}
       {!loading && !hasData && <div className="dashboard-empty">{t("dashboard.noData")}</div>}
