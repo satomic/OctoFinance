@@ -147,6 +147,7 @@ OctoFinance/
 │   │   │   ├── api_manager.py          # Multi-PAT API management & discovery
 │   │   │   ├── session_manager.py      # Chat session persistence
 │   │   │   ├── sync_manager.py         # Sync state & cron scheduler
+│   │   │   ├── update_checker.py       # Latest-release lookup (30s cap, non-blocking)
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings
 │   │   │   ├── report_generator.py     # Cost center HTML/ZIP report generation
 │   │   │   └── ops_executor.py         # Operation executor
@@ -177,6 +178,7 @@ OctoFinance/
 │   │   │   ├── EnterpriseTeamsDashboard.tsx # Per-team adoption, cost & rosters
 │   │   │   ├── BudgetsDashboard.tsx    # Budgets with consumed/remaining
 │   │   │   ├── ChatInterface.tsx       # AI chat UI + model selector
+│   │   │   ├── SourceCodeLink.tsx      # Source code / new-version button
 │   │   │   ├── ActionPanel.tsx         # Recommendation review
 │   │   │   ├── StatusBar.tsx           # Status, period toggle, language, sync
 │   │   │   ├── PeriodToggle.tsx        # All Time / Current Month

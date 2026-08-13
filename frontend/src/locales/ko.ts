@@ -308,6 +308,8 @@ export const ko = {
   "auth.logout": "로그아웃",
   "auth.error": "사용자 이름과 비밀번호는 필수입니다",
   "nav.sourceCode": "소스 코드",
+  "nav.updateAvailable": "새 버전",
+  "nav.updateAvailableHint": "새로운 OctoFinance 릴리스가 있습니다:",
   "nav.feedback": "이슈 신고",
   "loading": "불러오는 중...",
   "loading.actions": "작업을 불러오는 중...",

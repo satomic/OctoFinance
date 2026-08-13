@@ -308,6 +308,8 @@ export const hi = {
   "auth.logout": "लॉगआउट",
   "auth.error": "उपयोगकर्ता नाम और पासवर्ड आवश्यक हैं",
   "nav.sourceCode": "सोर्स कोड",
+  "nav.updateAvailable": "नया संस्करण",
+  "nav.updateAvailableHint": "OctoFinance का नया रिलीज़ उपलब्ध है:",
   "nav.feedback": "समस्या दर्ज करें",
   "loading": "लोड हो रहा है...",
   "loading.actions": "कार्रवाइयाँ लोड हो रही हैं...",

@@ -462,6 +462,15 @@ export interface AuthUser {
   github_id?: number | null;
 }
 
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  release_url: string;
+  checked_at: string | null;
+  error: string | null;
+}
+
 export interface AuthStatus {
   setup_required: boolean;
   authenticated: boolean;
@@ -469,6 +478,7 @@ export interface AuthStatus {
   is_admin: boolean;
   github_enabled: boolean;
   version?: string;
+  update?: UpdateInfo;
 }
 
 export interface GithubOAuthConfig {

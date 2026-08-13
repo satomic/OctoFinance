@@ -308,6 +308,8 @@ export const zh = {
   "auth.logout": "退出",
   "auth.error": "用户名和密码不能为空",
   "nav.sourceCode": "查看源码",
+  "nav.updateAvailable": "新版本",
+  "nav.updateAvailableHint": "有更新的 OctoFinance 版本可用：",
   "nav.feedback": "问题反馈",
   "loading": "加载中...",
   "loading.actions": "加载操作中...",

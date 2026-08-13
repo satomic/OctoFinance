@@ -28,6 +28,7 @@ from .services.ops_executor import ops_executor
 from .services.pat_manager import pat_manager
 from .services.session_manager import session_manager
 from .services.sync_manager import sync_manager
+from .services.update_checker import update_checker
 
 
 @asynccontextmanager
@@ -170,6 +171,7 @@ async def health():
         "pat_count": pat_count,
         "copilot_engine": copilot_engine.is_ready(),
         "is_syncing": sync_manager.is_syncing,
+        "update": update_checker.state,
     }
 
 

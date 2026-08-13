@@ -153,6 +153,10 @@ class SyncManager:
             self.log("warn", "Sync already in progress, skipping")
             return False
 
+        # Fire-and-forget: an offline deployment must not delay or fail the sync.
+        from .update_checker import update_checker
+        update_checker.schedule()
+
         async def _run():
             self._start()
             try:

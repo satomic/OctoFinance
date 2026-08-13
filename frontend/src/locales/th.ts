@@ -308,6 +308,8 @@ export const th = {
   "auth.logout": "ออกจากระบบ",
   "auth.error": "ต้องระบุชื่อผู้ใช้และรหัสผ่าน",
   "nav.sourceCode": "ซอร์สโค้ด",
+  "nav.updateAvailable": "เวอร์ชันใหม่",
+  "nav.updateAvailableHint": "มี OctoFinance เวอร์ชันใหม่:",
   "nav.feedback": "รายงานปัญหา",
   "loading": "กำลังโหลด...",
   "loading.actions": "กำลังโหลดการดำเนินการ...",

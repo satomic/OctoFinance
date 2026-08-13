@@ -308,6 +308,8 @@ export const en = {
   "auth.logout": "Logout",
   "auth.error": "Username and password are required",
   "nav.sourceCode": "Source Code",
+  "nav.updateAvailable": "New version",
+  "nav.updateAvailableHint": "A newer OctoFinance release is available:",
   "nav.feedback": "Report an Issue",
   "loading": "Loading...",
   "loading.actions": "Loading actions...",

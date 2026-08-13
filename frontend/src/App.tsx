@@ -355,7 +355,7 @@ function AuthGate() {
   // Regular GitHub users only see their own data + the budget request flow.
   if (authStatus.user && !authStatus.user.is_admin) {
     return (
-      <UserPortal user={authStatus.user} version={authStatus.version} onLogout={checkAuth} />
+      <UserPortal user={authStatus.user} version={authStatus.version} update={authStatus.update} onLogout={checkAuth} />
     );
   }
 

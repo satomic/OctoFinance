@@ -308,6 +308,8 @@ export const ja = {
   "auth.logout": "ログアウト",
   "auth.error": "ユーザー名とパスワードは必須です",
   "nav.sourceCode": "ソースコード",
+  "nav.updateAvailable": "新バージョン",
+  "nav.updateAvailableHint": "新しい OctoFinance のリリースがあります:",
   "nav.feedback": "問題を報告",
   "loading": "読み込み中...",
   "loading.actions": "アクションを読み込み中...",

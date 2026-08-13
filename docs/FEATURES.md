@@ -165,6 +165,22 @@ The org-level usage report is pre-aggregated and has no user dimension, so it ca
 
 GitHub's [enterprise-team model policy targeting](https://github.blog/changelog/2026-07-31-enterprise-teams-model-policy-targeting-in-public-preview/) (assigning *Optional* models to specific teams) is **UI-only**. A full scan of GitHub's published OpenAPI description contains no model-policy endpoint at any level, so OctoFinance cannot read or manage per-team model availability.
 
+## Update Notifications
+
+Every data sync — manual, startup auto-sync or cron — also kicks off a **release version check**.
+
+| Aspect | Behaviour |
+|--------|-----------|
+| **How the version is resolved** | A single `GET https://github.com/satomic/OctoFinance/releases/latest`, which GitHub redirects to `/releases/tag/<version>`. The tag is read from the redirect target — no GitHub API call, no token, no rate limit |
+| **Comparison** | The resolved tag is compared numerically against `APP_VERSION` (leading `v` ignored) |
+| **UI** | When a newer release exists, the **Source Code** button in the status bar becomes a highlighted **New version vX.Y.Z** button linking straight to that release page. Shown to admins and to regular users in the self-service portal |
+| **Non-blocking** | The check is fired as a detached asyncio task; the sync never waits for it and never fails because of it |
+| **Timeout** | Hard ceiling of **30 seconds** for the whole check (connect + redirects). On timeout the task is cancelled and the state records the error |
+| **Offline / air-gapped** | A failed or timed-out check simply leaves `latest_version: null` and `update_available: false`, so the button stays a plain Source Code link. Nothing is retried until the next sync |
+| **State** | Held in memory only (`current_version`, `latest_version`, `update_available`, `release_url`, `checked_at`, `error`) and exposed on `/api/health` and `/api/auth/status` |
+
+> **Network allowlist** — the only host this feature contacts is **`github.com`** (specifically `https://github.com/satomic/OctoFinance/releases/latest` and the `/releases/tag/*` redirect target). If your deployment restricts egress and you want update notifications, allow that host; otherwise the feature degrades silently and everything else keeps working.
+
 ## Multi-Organization Management
 
 - Support for **multiple GitHub PATs** with label management

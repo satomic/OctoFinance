@@ -234,6 +234,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 - **Multi-Org Management** — Multiple PATs, auto-discovery, enterprise support, including enterprises with **no organizations** (Copilot granted purely via Enterprise Teams) via a per-PAT "Include Organizations" toggle — enterprise-level seats/usage/AI-credit data is synced instead, so the dashboard stays fully populated
 - **Human-in-the-Loop** — Recommendation → Review → Approve/Reject workflow
 - **Real-Time Sync** — Auto-sync, cron scheduling, SSE progress streaming, with **incremental historical merge** so usage data accumulates beyond GitHub's rolling 28-day reporting window instead of being overwritten on every sync
+- **Update Notifications** — Every sync (manual, startup or cron) also checks `https://github.com/satomic/OctoFinance/releases/latest` and, if a newer release exists, turns the **Source Code** button into a highlighted **New version vX.Y.Z** link to that release. The check runs detached with a hard **30-second timeout**, so it never blocks or fails a sync — offline / air-gapped deployments simply keep the plain Source Code button. Allowlist **`github.com`** if you want this feature
 - **AI Credit Tracking** — Org-level API data + per-user CSV upload
 - **GitHub SSO Login** — Sign in with GitHub (OAuth App) alongside the local admin username/password. Admins get the full platform; every other GitHub user gets a self-service portal scoped to their **own** Copilot seat, activity, AI credit consumption and spend. Configure it in Settings → GitHub SSO (persisted in `data/oauth.json`)
 - **Budget Requests (provisioned for real)** — Non-admin users submit budget requests; admins review them in Dashboard → Requests and approve with an editable amount. Approving **creates or updates a real GitHub `user`-scope AI-credit budget** via the Billing Budgets API — it is not a number that only lives in OctoFinance. Every decision is recorded with its GitHub sync result (created / updated / failed) and is visible in the **Approval History** tab, with a one-click retry for failed syncs. Persisted in `data/budget_requests.json`
@@ -263,6 +264,16 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 | Env `GITHUB_OAUTH_CLIENT_ID` | Optional. GitHub OAuth App client ID for SSO login (can also be set in Settings → GitHub SSO) |
 | Env `GITHUB_OAUTH_CLIENT_SECRET` | Optional. GitHub OAuth App client secret for SSO login |
 | Env `GITHUB_OAUTH_CALLBACK_URL` | Optional. Overrides the auto-detected OAuth callback URL (`<origin>/api/auth/github/callback`) |
+
+### Outbound network access
+
+| Host | Purpose | Required? |
+|------|---------|-----------|
+| `api.github.com` | All data sync: seats, billing, usage, metrics, AI credits, cost centers, budgets, enterprise teams | **Yes** |
+| `api.githubcopilot.com` (and the endpoints the Copilot CLI uses) | AI chat via the Copilot CLI / SDK | Only for the AI chat |
+| `github.com` | Release version check (`/releases/latest`) driving the update notification | No — skipped gracefully after a 30s timeout |
+
+An air-gapped deployment with none of these reachable still starts and serves whatever was previously synced; only live data, chat and update notifications are unavailable.
 
 **Separation of concerns**:
 

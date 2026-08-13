@@ -308,6 +308,8 @@ export const vi = {
   "auth.logout": "Đăng xuất",
   "auth.error": "Tên đăng nhập và mật khẩu không được để trống",
   "nav.sourceCode": "Mã nguồn",
+  "nav.updateAvailable": "Phiên bản mới",
+  "nav.updateAvailableHint": "Đã có bản phát hành OctoFinance mới:",
   "nav.feedback": "Báo lỗi",
   "loading": "Đang tải...",
   "loading.actions": "Đang tải hành động...",

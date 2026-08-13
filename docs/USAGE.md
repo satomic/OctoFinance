@@ -281,6 +281,8 @@ These are the scopes for the **data-sync PAT** you add here — the token that r
 - **Auto Sync on Startup** — sync automatically when the backend starts
 - **Sync Cron Schedule** — presets (30min, 1h, 6h, 24h, Off) or a custom cron expression
 
+> Every sync also checks GitHub for a newer OctoFinance release. If one exists, the **Source Code** button in the top bar turns into a highlighted **New version vX.Y.Z** button that links to that release. The check is detached from the sync and gives up after **30 seconds**, so an offline deployment is unaffected — it only needs outbound access to `github.com` to work.
+
 ### GitHub SSO
 
 Client ID, Client Secret, callback URL, admin allow-list, and whether any GitHub user may sign in. See "Enabling GitHub SSO" above.

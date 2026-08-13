@@ -166,6 +166,7 @@ class OAuthConfigParams(BaseModel):
 async def auth_status(request: Request, octofinance_session: str | None = Cookie(default=None)):
     """Auth state for the login gate: setup needed, current user, SSO availability."""
     from ..config import APP_VERSION
+    from ..services.update_checker import update_checker
 
     session = auth_store.get_session(octofinance_session)
     if octofinance_session and session is None:
@@ -186,6 +187,7 @@ async def auth_status(request: Request, octofinance_session: str | None = Cookie
         "is_admin": bool(session and session.get("is_admin")),
         "github_enabled": auth_store.is_github_enabled(),
         "version": APP_VERSION,
+        "update": update_checker.state,
     }
 
 

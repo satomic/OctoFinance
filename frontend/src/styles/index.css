@@ -3241,3 +3241,14 @@ body {
   outline: none;
   border-color: var(--accent);
 }
+
+.btn-update-available {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+
+.btn-update-available:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
