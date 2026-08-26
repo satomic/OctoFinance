@@ -149,7 +149,7 @@ export function useDatasetSync() {
   return { syncing, runSync };
 }
 
-export function useDashboard(selectedOrgs: string[], enterpriseTeam = "") {
+export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user = "") {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -159,6 +159,7 @@ export function useDashboard(selectedOrgs: string[], enterpriseTeam = "") {
       const qp = new URLSearchParams();
       if (selectedOrgs.length > 0) qp.set("orgs", selectedOrgs.join(","));
       if (enterpriseTeam) qp.set("enterprise_team", enterpriseTeam);
+      if (user) qp.set("user", user);
       const query = qp.toString();
       const res = await fetch(`/api/data/dashboard${query ? `?${query}` : ""}`);
       const json = await res.json();
@@ -168,7 +169,7 @@ export function useDashboard(selectedOrgs: string[], enterpriseTeam = "") {
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgs.join(","), enterpriseTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOrgs.join(","), enterpriseTeam, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchDashboard();
@@ -410,6 +411,7 @@ export function useCsvDashboard(params: {
   dateFrom: string;
   dateTo: string;
   enterpriseTeam?: string;
+  user?: string;
 }) {
   const [data, setData] = useState<CsvDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -425,6 +427,7 @@ export function useCsvDashboard(params: {
       if (params.dateFrom) qp.set("date_from", params.dateFrom);
       if (params.dateTo) qp.set("date_to", params.dateTo);
       if (params.enterpriseTeam) qp.set("enterprise_team", params.enterpriseTeam);
+      if (params.user) qp.set("user", params.user);
       const res = await fetch(`/api/data/csv-dashboard?${qp}`);
       const json = await res.json();
       setData(json);
@@ -434,7 +437,7 @@ export function useCsvDashboard(params: {
       setLoading(false);
     }
   }, [params.orgs.join(","), params.costCenters.join(","), params.products.join(","), // eslint-disable-line react-hooks/exhaustive-deps
-      params.skus.join(","), params.dateFrom, params.dateTo, params.enterpriseTeam]);
+      params.skus.join(","), params.dateFrom, params.dateTo, params.enterpriseTeam, params.user]);
 
   useEffect(() => {
     fetchData();

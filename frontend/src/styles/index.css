@@ -2313,6 +2313,20 @@ body {
   margin-right: 4px;
 }
 
+/* Keep every filter control the same height: the native <select> renders
+   taller than the dropdown buttons and date inputs when left to itself. */
+.dashboard-filters .org-dropdown,
+.dashboard-filters .org-dropdown-trigger,
+.dashboard-filters .cc-native-select,
+.dashboard-filters .dashboard-date-input {
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.dashboard-filters .dashboard-date-input {
+  line-height: normal;
+}
+
 /* Org Multi-Select Dropdown */
 .org-dropdown {
   position: relative;
@@ -2391,6 +2405,40 @@ body {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+}
+
+.org-dropdown-search {
+  position: sticky;
+  top: -4px;
+  background: var(--bg-secondary);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+
+.org-dropdown-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.org-dropdown-search-input:focus {
+  border-color: var(--accent);
+}
+
+.org-dropdown-empty {
+  color: var(--text-muted) !important;
+  cursor: default;
+}
+
+.org-dropdown-empty:hover {
+  background: transparent;
 }
 
 .dashboard-date-input {

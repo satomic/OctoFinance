@@ -7,6 +7,7 @@ import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useCsvDashboard } from "../hooks/useData";
 import { resolveRange } from "../utils/period";
+import { UserFilterSelect } from "./UserFilterSelect";
 import type { AiUsageSection, UsageReportSection } from "../types";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
@@ -443,11 +444,12 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
   const dateTo = ui.csvDashDateTo;
   const setDateTo = useCallback((v: string) => ui.patch({ csvDashDateTo: v }), [ui.patch]);
   const enterpriseTeam = ui.csvDashEnterpriseTeam;
+  const selectedUser = ui.csvDashUser;
 
   const range = resolveRange(ui.periodMode, dateFrom, dateTo);
   const params = useMemo(() => ({
-    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to, enterpriseTeam,
-  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to, enterpriseTeam]); // eslint-disable-line react-hooks/exhaustive-deps
+    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to, enterpriseTeam, user: selectedUser,
+  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to, enterpriseTeam, selectedUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, loading } = useCsvDashboard(params);
 
@@ -488,6 +490,11 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
                   ))}
                 </select>
               </div>
+              <UserFilterSelect
+                options={data.filters.users ?? []}
+                value={selectedUser}
+                onChange={(v) => ui.patch({ csvDashUser: v })}
+              />
               <MultiSelect
                 label={t("csvDash.allCostCenters")}
                 options={data.filters.cost_centers}

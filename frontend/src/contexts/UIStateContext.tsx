@@ -15,6 +15,7 @@ export interface UIState {
   dashboardDateFrom: string;
   dashboardDateTo: string;
   dashboardEnterpriseTeam: string;
+  dashboardUser: string;
   // Chat
   chatModel: string;
   // CSV dashboard filters
@@ -25,6 +26,7 @@ export interface UIState {
   csvDashDateFrom: string;
   csvDashDateTo: string;
   csvDashEnterpriseTeam: string;
+  csvDashUser: string;
   // Cost Center dashboard filters
   ccDashEnterprise: string;
   ccDashCostCenters: string[];
@@ -60,6 +62,7 @@ const DEFAULTS: UIState = {
   dashboardDateFrom: "",
   dashboardDateTo: "",
   dashboardEnterpriseTeam: "",
+  dashboardUser: "",
   chatModel: "",
   csvDashOrgs: [],
   csvDashCostCenters: [],
@@ -68,6 +71,7 @@ const DEFAULTS: UIState = {
   csvDashDateFrom: "",
   csvDashDateTo: "",
   csvDashEnterpriseTeam: "",
+  csvDashUser: "",
   ccDashEnterprise: "",
   ccDashCostCenters: [],
   ccDashState: "active",

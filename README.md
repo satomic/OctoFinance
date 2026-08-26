@@ -13,7 +13,7 @@ The fastest path is Docker — the image is fully self-contained (FastAPI backen
 ### Option A — Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.2.0)
+# Pull the latest release (or pin a version, e.g. :v1.2.1)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -72,6 +72,34 @@ docker run -itd --restart=always \
 > `/app/data` contains credentials and billing data. Keep it private — never publish an image or volume containing it.
 
 See [Docker reference](#docker-reference) for the full environment-variable list, local builds and releases.
+
+#### Upgrading from an older version
+
+Upgrading is just "pull the new image and re-run the same command". All state lives in the `/app/data` volume, not in the container, so keeping the **same `-v` mount** carries your admin credentials, PATs, OAuth config, synced GitHub data, budget requests and logs across the upgrade. There is no manual migration step: existing data files are read as-is (legacy formats are converted on load where needed), and any new fields are filled in on the next sync.
+
+```bash
+# 1. Pull the new image
+docker pull ghcr.io/satomic/octofinance:latest
+
+# 2. Remove the old container (the data volume is NOT touched by this)
+docker rm -f octofinance
+
+# 3. Start again with exactly the same command as before —
+#    same volume, same port, same env vars
+docker run -itd --restart=always \
+  --name octofinance \
+  -p 8000:8000 \
+  -v <octofinance-data>:/app/data \
+  -e COPILOT_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxx \
+  ghcr.io/satomic/octofinance:latest
+```
+
+Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
+
+> - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
+> - If you pinned a version tag (e.g. `:v1.2.1`), change it to the new tag in both the `pull` and the `run` command — `docker pull` on a pinned tag will not fetch a newer release.
+> - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
+> - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
 ### Option B — Run from source (development)
 
@@ -250,7 +278,7 @@ See [docs/FEATURES.md](docs/FEATURES.md) for detailed feature descriptions and f
 
 ## Docker Reference
 
-OctoFinance ships as a single self-contained image: FastAPI backend + pre-built React frontend + GitHub Copilot CLI (standalone binary, no Node.js runtime needed). Images are published to GitHub Container Registry (GHCR) on every release tag. See [Quick Start](#option-a--docker-recommended) for the run command.
+OctoFinance ships as a single self-contained image: FastAPI backend + pre-built React frontend + GitHub Copilot CLI (standalone binary, no Node.js runtime needed). Images are published to GitHub Container Registry (GHCR) on every release tag. See [Quick Start](#option-a--docker-recommended) for the run command and [Upgrading from an older version](#upgrading-from-an-older-version) for moving to a new release.
 
 ### Configuration
 
@@ -297,7 +325,7 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.2.0
+./scripts/docker-build.sh v1.2.1
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -308,9 +336,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
-# → publishes ghcr.io/<owner>/<repo>:v1.2.0, :1.2.0, :1.2, :1 and :latest
+git tag v1.2.1
+git push origin v1.2.1
+# → publishes ghcr.io/<owner>/<repo>:v1.2.1, :1.2.1, :1.2, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.

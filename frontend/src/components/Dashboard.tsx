@@ -6,6 +6,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useDashboard } from "../hooks/useData";
+import { UserFilterSelect } from "./UserFilterSelect";
 import { currentMonthRange } from "../utils/period";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
@@ -42,7 +43,7 @@ export function Dashboard({ refreshKey }: Props) {
     const next = typeof v === "function" ? v(ui.dashboardSelectedOrgs) : v;
     ui.patch({ dashboardSelectedOrgs: next });
   }, [ui.patch, ui.dashboardSelectedOrgs]);
-  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam);
+  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser);
 
   const period = ui.periodMode;
   const dateFrom = period === "current_month" ? currentMonthRange().start : ui.dashboardDateFrom;
@@ -154,6 +155,11 @@ export function Dashboard({ refreshKey }: Props) {
               ))}
             </select>
           </div>
+          <UserFilterSelect
+            options={data?.users ?? []}
+            value={ui.dashboardUser}
+            onChange={(v) => ui.patch({ dashboardUser: v })}
+          />
         </div>
         <div className="dashboard-filter-group">
           <input type="date" className="dashboard-date-input" value={dateFrom || data?.date_range?.start || ""} onChange={(e) => setDateFrom(e.target.value)} />

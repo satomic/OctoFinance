@@ -58,7 +58,31 @@ class _UsersWithoutTeam:
         return login not in self._team_logins
 
 
-MemberFilter = set[str] | _UsersWithoutTeam
+class _AllOfFilter:
+    """Membership test that requires a login to match every sub-filter."""
+
+    def __init__(self, filters: list):
+        self._filters = filters
+
+    def __contains__(self, login: str) -> bool:
+        return all(login in f for f in self._filters)
+
+
+MemberFilter = set[str] | _UsersWithoutTeam | _AllOfFilter
+
+
+def _with_user_filter(base: "MemberFilter | None", user: str) -> "MemberFilter | None":
+    """Narrow a member filter down to a single user login.
+
+    Every dataset is matched on the (lowercased) user login, so a single-user
+    filter is just another membership test combined with the existing one.
+    """
+    login = user.strip().lower()
+    if not login:
+        return base
+    if base is None:
+        return {login}
+    return _AllOfFilter([base, {login}])
 
 
 def _enterprise_team_options() -> list[dict]:
@@ -338,6 +362,7 @@ def _aggregate_usage_from_users(selected_orgs: list[str], member_filter: MemberF
 async def get_dashboard(
     orgs: str = Query(default=""),
     enterprise_team: str = Query(default="", description="Enterprise team slug to filter members by"),
+    user: str = Query(default="", description="Single user login to filter every section by"),
 ):
     """Aggregated dashboard data for visualization.
 
@@ -348,12 +373,16 @@ async def get_dashboard(
 
     When ``enterprise_team`` is set, every section is restricted to that team's
     members and the usage aggregates are recomputed from user-level records.
+    ``user`` narrows the same way down to one login and can be combined with
+    the team filter.
     """
     all_orgs = api_manager.get_all_orgs()
     pseudo_orgs = api_manager.get_enterprise_pseudo_orgs()
     all_org_names = [o["login"] for o in all_orgs] + [enterprise_pseudo_org(e["slug"]) for e in pseudo_orgs]
     selected = [o.strip() for o in orgs.split(",") if o.strip()] if orgs.strip() else all_org_names
-    member_filter = _team_member_logins(enterprise_team)
+    team_filter = _team_member_logins(enterprise_team)
+    selected_user = user.strip()
+    member_filter = _with_user_filter(team_filter, selected_user)
 
     # --- KPI from billing ---
     total_seats = 0
@@ -642,7 +671,7 @@ async def get_dashboard(
     chat_stats = {"ide_chats": 0, "ide_copy_events": 0, "ide_insertion_events": 0,
                   "dotcom_chats": 0, "pr_summaries": 0}
 
-    for org_name in selected:
+    for org_name in (selected if member_filter is None else []):
         metrics = data_collector.load_latest("metrics", org_name)
         if not metrics:
             continue
@@ -695,11 +724,44 @@ async def get_dashboard(
         "orgs": all_org_names,
         "enterprise_teams": _enterprise_team_options(),
         "selected_enterprise_team": enterprise_team or None,
-        "team_filtered": member_filter is not None,
-        "team_member_count": len(member_filter) if isinstance(member_filter, set) else None,
+        "team_filtered": team_filter is not None,
+        "team_member_count": len(team_filter) if isinstance(team_filter, set) else None,
+        "users": _dashboard_user_options(selected, team_filter),
+        "selected_user": selected_user or None,
         "date_range": {"start": date_start, "end": date_end},
         "user_ai_usage": _aggregate_user_ai_usage(selected, member_filter),
     }
+
+
+def _dashboard_user_options(selected_orgs: list[str], member_filter: MemberFilter | None) -> list[str]:
+    """Every user login that the Usage Metrics dashboard can be filtered down to.
+
+    Collected from both seat assignments and user-level usage records so a user
+    shows up even when only one of the two datasets covers them. The user filter
+    itself is deliberately not applied here, so selecting a user never empties
+    the dropdown.
+    """
+    logins: dict[str, str] = {}
+
+    def add(login: str):
+        if not login:
+            return
+        key = login.lower()
+        if member_filter is not None and key not in member_filter:
+            return
+        logins.setdefault(key, login)
+
+    for org_name in selected_orgs:
+        seats_data = data_collector.load_latest("seats", org_name)
+        if isinstance(seats_data, dict):
+            for seat in seats_data.get("seats", []):
+                add((seat.get("assignee") or {}).get("login") or "")
+        uu = data_collector.load_latest("usage_users", org_name)
+        if isinstance(uu, dict):
+            for rec in uu.get("records", []) or []:
+                add(rec.get("user_login") or "")
+
+    return sorted(logins.values(), key=str.lower)
 
 
 # ---------------------------------------------------------------------------
@@ -715,13 +777,16 @@ async def get_csv_dashboard(
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
     enterprise_team: str = Query(default="", description="Enterprise team slug to filter members by"),
+    user: str = Query(default="", description="Single username to filter every section by"),
 ):
     """Aggregated dashboard data derived entirely from uploaded CSVs."""
     selected_orgs = [o.strip() for o in orgs.split(",") if o.strip()]
     selected_ccs = [c.strip() for c in cost_centers.split(",") if c.strip()]
     selected_products = [p.strip() for p in products.split(",") if p.strip()]
     selected_skus = [s.strip() for s in skus.split(",") if s.strip()]
-    member_filter = _team_member_logins(enterprise_team)
+    selected_user = user.strip()
+    team_filter = _team_member_logins(enterprise_team)
+    member_filter = _with_user_filter(team_filter, selected_user)
 
     ai_usage = _build_ai_usage_section(selected_orgs, selected_ccs, date_from, date_to, member_filter)
     usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to, member_filter)
@@ -733,11 +798,22 @@ async def get_csv_dashboard(
     all_ccs: set[str] = set()
     all_products: set[str] = set()
     all_skus: set[str] = set()
+    all_users: dict[str, str] = {}
+
+    def collect_user(name: str):
+        if not name:
+            return
+        key = name.lower()
+        if team_filter is not None and key not in team_filter:
+            return
+        all_users.setdefault(key, name)
+
     for r in all_ai_usage:
         if r.get("organization"):
             all_orgs.add(r["organization"])
         if r.get("cost_center_name"):
             all_ccs.add(r["cost_center_name"])
+        collect_user(r.get("username") or "")
     for r in all_usage:
         if r.get("organization"):
             all_orgs.add(r["organization"])
@@ -747,16 +823,19 @@ async def get_csv_dashboard(
             all_products.add(r["product"])
         if r.get("sku"):
             all_skus.add(r["sku"])
+        collect_user(r.get("username") or "")
 
     return {
         "ai_usage": ai_usage,
         "usage_report": usage,
         "selected_enterprise_team": enterprise_team or None,
+        "selected_user": selected_user or None,
         "filters": {
             "orgs": sorted(all_orgs),
             "cost_centers": sorted(all_ccs),
             "products": sorted(all_products),
             "skus": sorted(all_skus),
+            "users": sorted(all_users.values(), key=str.lower),
             "enterprise_teams": _enterprise_team_options(),
         },
     }

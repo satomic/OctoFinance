@@ -135,6 +135,8 @@ export interface DashboardData {
   selected_enterprise_team: string | null;
   team_filtered: boolean;
   team_member_count: number | null;
+  users: string[];
+  selected_user: string | null;
   date_range: { start: string; end: string };
   user_ai_usage: AiUsage;
 }
@@ -235,6 +237,7 @@ export interface CsvDashboardData {
     cost_centers: string[];
     products: string[];
     skus: string[];
+    users: string[];
     enterprise_teams: EnterpriseTeamOption[];
   };
 }
