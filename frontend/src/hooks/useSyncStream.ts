@@ -17,6 +17,21 @@ interface SyncEvent {
 }
 
 /**
+ * Mirror a sync log line into the browser console.
+ *
+ * The in-app console panel is easy to miss and is not captured when a user
+ * exports devtools logs, so backend failures (401/403, missing scopes) are
+ * echoed here too. Without this a failed fetch is indistinguishable from an
+ * org that genuinely has no Copilot data.
+ */
+function echoToBrowserConsole(level: string, message: string) {
+  const line = `[OctoFinance][sync] ${message}`;
+  if (level === "error") console.error(line);
+  else if (level === "warn" || level === "warning") console.warn(line);
+  else console.info(line);
+}
+
+/**
  * Hook that tracks sync state via polling + SSE stream for real-time logs.
  * Polling is used as the primary mechanism for sync state (reliable through proxies).
  * SSE stream provides real-time log entries for the console.
@@ -142,21 +157,25 @@ export function useSyncStream(onLog: (entry: ConsoleEntry) => void) {
                 } else if (data.type === "sync_complete") {
                   setSyncing(false);
                   prevSyncingRef.current = false;
+                  const summary = data.success
+                    ? "Data sync completed successfully"
+                    : `Data sync failed: ${data.error || "unknown error"}`;
+                  echoToBrowserConsole(data.success ? "info" : "error", summary);
                   onLogRef.current({
                     id: nextSyncId(),
                     timestamp: Date.now(),
                     type: "sync",
-                    title: data.success
-                      ? "Data sync completed successfully"
-                      : `Data sync failed: ${data.error || "unknown error"}`,
+                    title: summary,
                   });
                   onSyncCompleteRef.current?.();
                 } else if (data.type === "sync_log") {
+                  const level = (data.level || "info").toLowerCase();
+                  if (level !== "info") echoToBrowserConsole(level, data.message || "");
                   onLogRef.current({
                     id: nextSyncId(),
                     timestamp: Date.now(),
                     type: "sync",
-                    title: `[${(data.level || "info").toUpperCase()}] ${data.message || ""}`,
+                    title: `[${level.toUpperCase()}] ${data.message || ""}`,
                   });
                 }
               } catch {

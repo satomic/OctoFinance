@@ -20,6 +20,7 @@ class GitHubAPI:
         self._token = token
         self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
+        self._last_failure: dict | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -39,6 +40,59 @@ class GitHubAPI:
     async def close(self):
         if self._client and not self._client.is_closed:
             await self._client.aclose()
+
+    # =========================================================================
+    # Failure reporting
+    #
+    # Most getters below swallow HTTP errors and return None/[] so that one
+    # inaccessible org does not abort a whole sync. That hides the reason the
+    # data is missing, so every swallow point records it here for the caller
+    # to surface (see DataCollector.sync_org).
+    # =========================================================================
+
+    @staticmethod
+    def _error_detail(resp: httpx.Response) -> str:
+        """Best-effort human-readable reason out of a GitHub error response."""
+        try:
+            body = resp.json()
+        except Exception:
+            return (resp.text or "").strip()[:300]
+        if isinstance(body, dict):
+            msg = body.get("message") or ""
+            errors = body.get("errors")
+            if errors:
+                msg = f"{msg} {json.dumps(errors)}".strip()
+            return msg[:300] or json.dumps(body)[:300]
+        return json.dumps(body)[:300]
+
+    def _record_failure(self, operation: str, *, status: int | None = None,
+                        detail: str = "", url: str = "") -> None:
+        self._last_failure = {
+            "operation": operation,
+            "status": status,
+            "detail": detail.strip(),
+            "url": url,
+        }
+        logger.warning(
+            "[%s] returned no data%s%s%s",
+            operation,
+            f" (HTTP {status})" if status else "",
+            f" {url}" if url else "",
+            f": {detail.strip()}" if detail.strip() else "",
+        )
+
+    def _record_response_failure(self, operation: str, resp: httpx.Response) -> None:
+        self._record_failure(
+            operation,
+            status=resp.status_code,
+            detail=self._error_detail(resp),
+            url=str(resp.request.url) if resp.request else "",
+        )
+
+    def consume_failure(self) -> dict | None:
+        """Pop the last recorded failure, if any. Reading it clears it."""
+        failure, self._last_failure = self._last_failure, None
+        return failure
 
     # =========================================================================
     # Auto-Discovery
@@ -84,6 +138,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure("enterprise_memberships", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -103,7 +158,8 @@ class GitHubAPI:
                 for m in memberships
                 if m.get("enterprise", {}).get("slug")
             ]
-        except Exception:
+        except Exception as e:
+            self._record_failure("enterprise_memberships", detail=str(e))
             return []
 
     async def get_org_members(self, org: str) -> list[dict]:
@@ -120,6 +176,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"org_members {org}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -130,7 +187,8 @@ class GitHubAPI:
                     break
                 page += 1
             return members
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"org_members {org}", detail=str(e))
             return []
 
     async def get_team_members(self, org: str, team_slug: str) -> list[dict]:
@@ -147,6 +205,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"team_members {org}/{team_slug}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -157,7 +216,8 @@ class GitHubAPI:
                     break
                 page += 1
             return members
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"team_members {org}/{team_slug}", detail=str(e))
             return []
 
     async def get_enterprise_cost_centers(self, enterprise: str) -> list[dict]:
@@ -180,6 +240,8 @@ class GitHubAPI:
                     headers=_headers,
                 )
                 if resp.status_code in (404, 403, 400):
+                    if resp.status_code != 404:
+                        self._record_response_failure(f"enterprise_cost_centers {enterprise}", resp)
                     break
                 resp.raise_for_status()
                 data = resp.json()
@@ -213,6 +275,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"enterprise_orgs {enterprise}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -223,7 +286,8 @@ class GitHubAPI:
                     break
                 page += 1
             return orgs
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"enterprise_orgs {enterprise}", detail=str(e))
             return []
 
     async def get_enterprise_teams(self, enterprise: str) -> list[dict]:
@@ -241,6 +305,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"enterprise_teams {enterprise}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -251,7 +316,8 @@ class GitHubAPI:
                     break
                 page += 1
             return teams
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"enterprise_teams {enterprise}", detail=str(e))
             return []
 
     async def get_enterprise_team_members(self, enterprise: str, team_slug: str) -> list[dict]:
@@ -268,6 +334,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"enterprise_team_members {team_slug}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -278,7 +345,8 @@ class GitHubAPI:
                     break
                 page += 1
             return members
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"enterprise_team_members {team_slug}", detail=str(e))
             return []
 
     async def get_enterprise_team_organizations(self, enterprise: str, team_slug: str) -> list[dict]:
@@ -294,6 +362,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure(f"enterprise_team_orgs {team_slug}", resp)
                     return []
                 resp.raise_for_status()
                 batch = resp.json()
@@ -304,7 +373,8 @@ class GitHubAPI:
                     break
                 page += 1
             return orgs
-        except Exception:
+        except Exception as e:
+            self._record_failure(f"enterprise_team_orgs {team_slug}", detail=str(e))
             return []
 
     async def add_cost_center_resources(
@@ -375,6 +445,7 @@ class GitHubAPI:
         try:
             resp = await self.client.get(f"/orgs/{org}/copilot/billing")
             if resp.status_code == 404:
+                self._record_response_failure("copilot_billing", resp)
                 return None
             resp.raise_for_status()
             billing = resp.json()
@@ -389,7 +460,8 @@ class GitHubAPI:
             billing["_detected_plan_type"] = plan_type
 
             return billing
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("copilot_billing", e.response)
             return None
 
     # =========================================================================
@@ -408,6 +480,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code == 404:
+                    self._record_response_failure("copilot_seats", resp)
                     return None
                 resp.raise_for_status()
                 data = resp.json()
@@ -418,7 +491,8 @@ class GitHubAPI:
                 all_seats.extend(seats)
                 page += 1
             return {"total_seats": total, "seats": all_seats}
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("copilot_seats", e.response)
             return None
 
     async def get_enterprise_billing_seats(self, enterprise: str) -> dict | None:
@@ -437,6 +511,7 @@ class GitHubAPI:
                     params={"per_page": 100, "page": page},
                 )
                 if resp.status_code in (404, 403):
+                    self._record_response_failure("enterprise_billing_seats", resp)
                     return None
                 resp.raise_for_status()
                 data = resp.json()
@@ -447,7 +522,8 @@ class GitHubAPI:
                 all_seats.extend(seats)
                 page += 1
             return {"total_seats": total, "seats": all_seats}
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("enterprise_billing_seats", e.response)
             return None
 
     # =========================================================================
@@ -464,10 +540,12 @@ class GitHubAPI:
                 params["until"] = until
             resp = await self.client.get(f"/orgs/{org}/copilot/metrics", params=params)
             if resp.status_code == 404:
+                self._record_response_failure("copilot_metrics", resp)
                 return None
             resp.raise_for_status()
             return resp.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("copilot_metrics", e.response)
             return None
 
     # =========================================================================
@@ -501,10 +579,12 @@ class GitHubAPI:
                 headers={"X-GitHub-Api-Version": "2026-03-10"},
             )
             if resp.status_code in (404, 403):
+                self._record_response_failure("ai_credit_usage", resp)
                 return None
             resp.raise_for_status()
             return resp.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("ai_credit_usage", e.response)
             return None
 
     async def get_enterprise_ai_credit_usage(
@@ -532,10 +612,12 @@ class GitHubAPI:
                 headers={"X-GitHub-Api-Version": "2026-03-10"},
             )
             if resp.status_code in (404, 403):
+                self._record_response_failure("enterprise_ai_credit_usage", resp)
                 return None
             resp.raise_for_status()
             return resp.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("enterprise_ai_credit_usage", e.response)
             return None
 
     # =========================================================================
@@ -550,10 +632,12 @@ class GitHubAPI:
         try:
             resp = await self.client.get(path, params=params or {})
             if resp.status_code in (404, 403):
+                self._record_response_failure(f"usage_report {path}", resp)
                 return None
             resp.raise_for_status()
             return resp.json()
-        except httpx.HTTPStatusError:
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure(f"usage_report {path}", e.response)
             return None
 
     async def _download_and_merge_reports(self, download_links: list[str]) -> list[dict]:

@@ -95,15 +95,33 @@ export function usePendingActions() {
 
 export function useSync() {
   const sync = useCallback(async () => {
-    await fetch("/api/sync", { method: "POST" });
+    await postSync("/api/sync");
   }, []);
 
   /** Sync only a single enterprise-scoped dataset: 'cost_centers' | 'budgets'. */
   const syncDataset = useCallback(async (dataset: "cost_centers" | "budgets") => {
-    await fetch(`/api/sync/dataset/${dataset}`, { method: "POST" });
+    await postSync(`/api/sync/dataset/${dataset}`);
   }, []);
 
   return { sync, syncDataset };
+}
+
+/** POST a sync trigger, reporting a rejected request to the browser console. */
+async function postSync(url: string) {
+  try {
+    const res = await fetch(url, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error(`[OctoFinance][sync] ${url} failed: HTTP ${res.status} ${res.statusText} ${body}`.trim());
+      return;
+    }
+    const data = await res.json().catch(() => null);
+    if (data?.status === "error") {
+      console.error(`[OctoFinance][sync] ${url} rejected: ${data.error || "unknown error"}`);
+    }
+  } catch (err) {
+    console.error(`[OctoFinance][sync] ${url} request failed:`, err);
+  }
 }
 
 /**

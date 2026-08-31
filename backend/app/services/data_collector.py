@@ -25,6 +25,33 @@ LogFn = Callable[[str, str], None] | None
 _SNAPSHOT_NAME_RE = re.compile(r".*_\d{8}_\d{6}\.json$")
 
 
+def _empty_result_log(api: "GitHubAPI", scope: str, dataset: str) -> tuple[str, str]:
+    """Build a level+message pair explaining why a fetch produced no data.
+
+    GitHubAPI swallows HTTP errors so one inaccessible org cannot abort a sync.
+    Without this the frontend only ever sees "synced data is empty" with no
+    reason, so the recorded status code and GitHub message are surfaced here.
+    """
+    failure = api.consume_failure()
+    if not failure:
+        return "info", f"  {scope}: {dataset} returned nothing (not enabled for this scope)"
+
+    status = failure.get("status")
+    detail = (failure.get("detail") or "").strip()
+    # 401/403 mean the PAT is wrong or under-scoped; that is an operator error,
+    # not the benign "this org has no Copilot" case a 404 usually signals.
+    level = "error" if status in (401, 403) else "warn"
+
+    parts = [f"  {scope}: {dataset} unavailable"]
+    if status:
+        parts.append(f"HTTP {status}")
+    if detail:
+        parts.append(detail)
+    if status in (401, 403):
+        parts.append("check the PAT and its scopes")
+    return level, " | ".join(parts)
+
+
 def enterprise_pseudo_org(slug: str) -> str:
     """Return the pseudo-org key used to store enterprise-level Copilot data.
 
@@ -329,6 +356,12 @@ class DataCollector:
                 summary["synced"].append("billing")
                 if log_fn:
                     log_fn("info", f"  {org}: billing synced")
+            else:
+                level, msg = _empty_result_log(api, org, "billing")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"billing: {e}")
             if log_fn:
@@ -342,6 +375,12 @@ class DataCollector:
                 summary["synced"].append(f"seats ({seats.get('total_seats', 0)} total)")
                 if log_fn:
                     log_fn("info", f"  {org}: seats synced ({seats.get('total_seats', 0)} total)")
+            else:
+                level, msg = _empty_result_log(api, org, "seats")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"seats: {e}")
             if log_fn:
@@ -356,6 +395,12 @@ class DataCollector:
                 summary["synced"].append(f"usage ({n} records)")
                 if log_fn:
                     log_fn("info", f"  {org}: usage report synced ({n} records)")
+            else:
+                level, msg = _empty_result_log(api, org, "usage report")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"usage: {e}")
             if log_fn:
@@ -370,6 +415,12 @@ class DataCollector:
                 summary["synced"].append(f"usage_users ({n} records)")
                 if log_fn:
                     log_fn("info", f"  {org}: usage users report synced ({n} records)")
+            else:
+                level, msg = _empty_result_log(api, org, "usage users report")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"usage_users: {e}")
             if log_fn:
@@ -383,6 +434,12 @@ class DataCollector:
                 summary["synced"].append(f"metrics ({len(metrics)} entries)")
                 if log_fn:
                     log_fn("info", f"  {org}: metrics synced ({len(metrics)} entries)")
+            else:
+                level, msg = _empty_result_log(api, org, "metrics")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"metrics: {e}")
             if log_fn:
@@ -397,6 +454,12 @@ class DataCollector:
                 summary["synced"].append(f"ai_credits ({n} items)")
                 if log_fn:
                     log_fn("info", f"  {org}: AI credit usage synced ({n} items)")
+            else:
+                level, msg = _empty_result_log(api, org, "AI credit usage")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"ai_credits: {e}")
             if log_fn:
@@ -541,6 +604,12 @@ class DataCollector:
                 summary["synced"].append(f"seats ({seats.get('total_seats', 0)} total)")
                 if log_fn:
                     log_fn("info", f"  {slug}: enterprise seats synced ({seats.get('total_seats', 0)} total)")
+            else:
+                level, msg = _empty_result_log(api, slug, "enterprise seats")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"seats: {e}")
             if log_fn:
@@ -567,6 +636,12 @@ class DataCollector:
                 summary["synced"].append(f"usage ({n} records)")
                 if log_fn:
                     log_fn("info", f"  {slug}: enterprise usage report synced ({n} records)")
+            else:
+                level, msg = _empty_result_log(api, slug, "enterprise usage report")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"usage: {e}")
             if log_fn:
@@ -581,6 +656,12 @@ class DataCollector:
                 summary["synced"].append(f"usage_users ({n} records)")
                 if log_fn:
                     log_fn("info", f"  {slug}: enterprise usage users report synced ({n} records)")
+            else:
+                level, msg = _empty_result_log(api, slug, "enterprise usage users report")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"usage_users: {e}")
             if log_fn:
@@ -595,6 +676,12 @@ class DataCollector:
                 summary["synced"].append(f"ai_credits ({n} items)")
                 if log_fn:
                     log_fn("info", f"  {slug}: enterprise AI credit usage synced ({n} items)")
+            else:
+                level, msg = _empty_result_log(api, slug, "enterprise AI credit usage")
+                if level == "error":
+                    summary["errors"].append(msg.strip())
+                if log_fn:
+                    log_fn(level, msg)
         except Exception as e:
             summary["errors"].append(f"ai_credits: {e}")
             if log_fn:
