@@ -128,6 +128,7 @@ export interface DashboardData {
   language_usage: { language: string; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number }[];
   code_completions: { language: string; suggestions: number; acceptances: number; lines_suggested: number; lines_accepted: number; engaged_users: number }[];
   ai_credit_detail: { model: string; gross_qty: number; discount_qty: number; net_qty: number; gross_amount: number; net_amount: number }[];
+  ai_credit_period: string;
   chat_stats: { ide_chats: number; ide_copy_events: number; ide_insertion_events: number; dotcom_chats: number; pr_summaries: number };
   top_users: { user: string; interactions: number; code_gen: number; code_accept: number; loc_suggested: number; loc_accepted: number; days_active: number; used_agent: boolean; used_chat: boolean }[];
   orgs: string[];
@@ -138,7 +139,6 @@ export interface DashboardData {
   users: string[];
   selected_user: string | null;
   date_range: { start: string; end: string };
-  user_ai_usage: AiUsage;
 }
 
 export interface AiUsageRecord {

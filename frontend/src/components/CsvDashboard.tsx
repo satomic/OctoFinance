@@ -8,10 +8,24 @@ import { useUIState } from "../contexts/UIStateContext";
 import { useCsvDashboard } from "../hooks/useData";
 import { resolveRange } from "../utils/period";
 import { UserFilterSelect } from "./UserFilterSelect";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { AiUsageSection, UsageReportSection } from "../types";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
 const TOOLTIP_STYLE = { background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 };
+
+/* GitHub reports auto-selected models as "Auto: <model name>" */
+const isAutoModel = (model: string) => model.trim().toLowerCase().startsWith("auto:");
+const shortModel = (model: string) => model.split(":").pop()?.trim() || model;
+const fmtCredits = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+function autoSharePct(models: { model: string; requests: number }[]): number {
+  const total = models.reduce((s, m) => s + m.requests, 0);
+  if (total <= 0) return 0;
+  const auto = models.reduce((s, m) => (isAutoModel(m.model) ? s + m.requests : s), 0);
+  return (auto / total) * 100;
+}
 
 interface Props {
   refreshKey: number;
@@ -93,6 +107,12 @@ function Section({ sectionKey, title, defaultOpen = true, children }: {
 /* ---------- AI Usage content ---------- */
 function AiUsageContent({ data }: { data: AiUsageSection }) {
   const { t } = useI18n();
+  const modelTotal = useMemo(
+    () => data.model_breakdown.reduce((s, m) => s + m.requests, 0),
+    [data.model_breakdown],
+  );
+  const modelSorter = useSortableRows(data.model_breakdown, { share: (m) => m.requests });
+  const userSorter = useSortableRows(data.users, { auto_share: (u) => autoSharePct(u.models) });
 
   if (!data.has_data) {
     return <div className="dashboard-empty">{t("csvDash.noDataType")}</div>;
@@ -149,7 +169,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                   <Pie data={data.model_breakdown} dataKey="requests" nameKey="model"
                     cx="50%" cy="50%" outerRadius={80}
                     label={({ name, percent }: { name?: string; percent?: number }) =>
-                      `${(name || "").split(":").pop()?.trim() || name} ${((percent || 0) * 100).toFixed(0)}%`}
+                      `${shortModel(name || "")} ${((percent || 0) * 100).toFixed(0)}%`}
                     labelLine={false}>
                     {data.model_breakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
@@ -190,6 +210,61 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
               </ResponsiveContainer>
             ) : <div className="chart-empty">{t("csvDash.noData")}</div>}
           </div>
+          <div className="chart-card chart-card-wide">
+            <h4>{t("csvDash.modelShareTable")}</h4>
+            {data.model_breakdown.length > 0 ? (
+              <div className="dashboard-table-wrap">
+                <table className="dashboard-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <SortTh label={t("csvDash.model")} sortKey="model" sorter={modelSorter} />
+                      <SortTh label={t("csvDash.requests")} sortKey="requests" sorter={modelSorter} />
+                      <SortTh label={t("csvDash.share")} sortKey="share" sorter={modelSorter} />
+                      <SortTh label={t("csvDash.cost")} sortKey="amount" sorter={modelSorter} />
+                      <SortTh label={t("csvDash.uniqueUsers")} sortKey="user_count" sorter={modelSorter} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelSorter.rows.map((m, i) => {
+                      const pct = modelTotal > 0 ? (m.requests / modelTotal) * 100 : 0;
+                      return (
+                        <tr key={m.model}>
+                          <td className="rank">{i + 1}</td>
+                          <td className="user-name">
+                            <span className="dash-dot" style={{ background: COLORS[i % COLORS.length] }} />
+                            {shortModel(m.model)}
+                            {isAutoModel(m.model) && <span className="dash-badge dash-badge-muted">{t("csvDash.autoTag")}</span>}
+                          </td>
+                          <td>{fmtCredits(m.requests)}</td>
+                          <td>
+                            <div className="quota-bar-wrap">
+                              <div className="quota-bar">
+                                <div className="quota-bar-fill" style={{ width: `${Math.min(pct, 100)}%`, background: COLORS[i % COLORS.length] }} />
+                              </div>
+                              <span className="quota-bar-label">{pct.toFixed(1)}%</span>
+                            </div>
+                          </td>
+                          <td>${m.amount.toFixed(2)}</td>
+                          <td>{m.user_count}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td />
+                      <td className="user-name">{t("csvDash.total")}</td>
+                      <td>{fmtCredits(modelTotal)}</td>
+                      <td>100%</td>
+                      <td>${data.model_breakdown.reduce((s, m) => s + m.amount, 0).toFixed(2)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : <div className="chart-empty">{t("csvDash.noData")}</div>}
+          </div>
         </div>
       </Section>
 
@@ -202,19 +277,22 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>{t("csvDash.user")}</th>
-                      <th>{t("csvDash.org")}</th>
-                      <th>{t("csvDash.costCenter")}</th>
-                      <th>{t("csvDash.requests")}</th>
-                      <th>{t("csvDash.grossAmount")}</th>
-                      <th>{t("csvDash.quota")}</th>
-                      <th>{t("csvDash.quotaUsage")}</th>
-                      <th>{t("csvDash.daysActive")}</th>
+                      <SortTh label={t("csvDash.user")} sortKey="user" sorter={userSorter} />
+                      <SortTh label={t("csvDash.org")} sortKey="org" sorter={userSorter} />
+                      <SortTh label={t("csvDash.costCenter")} sortKey="cost_center" sorter={userSorter} />
+                      <SortTh label={t("csvDash.requests")} sortKey="requests" sorter={userSorter} />
+                      <SortTh label={t("csvDash.grossAmount")} sortKey="gross_amount" sorter={userSorter} />
+                      <SortTh label={t("csvDash.quota")} sortKey="quota" sorter={userSorter} />
+                      <SortTh label={t("csvDash.quotaUsage")} sortKey="usage_pct" sorter={userSorter} />
+                      <SortTh label={t("csvDash.autoShare")} sortKey="auto_share" sorter={userSorter} />
+                      <SortTh label={t("csvDash.daysActive")} sortKey="days_active" sorter={userSorter} />
                       <th>{t("csvDash.models")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.users.map((u, i) => (
+                    {userSorter.rows.map((u, i) => {
+                      const autoPct = autoSharePct(u.models);
+                      return (
                       <tr key={u.user}>
                         <td className="rank">{i + 1}</td>
                         <td className="user-name">{u.user}</td>
@@ -234,16 +312,25 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                             <span className="quota-bar-label">{u.usage_pct}%</span>
                           </div>
                         </td>
+                        <td>
+                          <div className="quota-bar-wrap">
+                            <div className="quota-bar">
+                              <div className="quota-bar-fill" style={{ width: `${Math.min(autoPct, 100)}%`, background: "#bc8cff" }} />
+                            </div>
+                            <span className="quota-bar-label">{autoPct.toFixed(1)}%</span>
+                          </div>
+                        </td>
                         <td>{u.days_active}</td>
                         <td className="model-tags">
                           {u.models.slice(0, 3).map((m) => (
                             <span key={m.model} className="dash-badge dash-badge-muted">
-                              {m.model.split(":").pop()?.trim()}: {m.requests}
+                              {shortModel(m.model)}: {fmtCredits(m.requests)}
                             </span>
                           ))}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -258,6 +345,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
 /* ---------- Usage Report content ---------- */
 function UsageContent({ data }: { data: UsageReportSection }) {
   const { t } = useI18n();
+  const userSorter = useSortableRows(data.users);
 
   if (!data.has_data) {
     return <div className="dashboard-empty">{t("csvDash.noDataType")}</div>;
@@ -385,18 +473,18 @@ function UsageContent({ data }: { data: UsageReportSection }) {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>{t("csvDash.user")}</th>
-                      <th>{t("csvDash.org")}</th>
-                      <th>{t("csvDash.costCenter")}</th>
-                      <th>{t("csvDash.grossAmount")}</th>
-                      <th>{t("csvDash.netAmount")}</th>
-                      <th>{t("csvDash.quantity")}</th>
-                      <th>{t("csvDash.daysActive")}</th>
+                      <SortTh label={t("csvDash.user")} sortKey="user" sorter={userSorter} />
+                      <SortTh label={t("csvDash.org")} sortKey="org" sorter={userSorter} />
+                      <SortTh label={t("csvDash.costCenter")} sortKey="cost_center" sorter={userSorter} />
+                      <SortTh label={t("csvDash.grossAmount")} sortKey="gross_amount" sorter={userSorter} />
+                      <SortTh label={t("csvDash.netAmount")} sortKey="net_amount" sorter={userSorter} />
+                      <SortTh label={t("csvDash.quantity")} sortKey="quantity" sorter={userSorter} />
+                      <SortTh label={t("csvDash.daysActive")} sortKey="days_active" sorter={userSorter} />
                       <th>{t("csvDash.skus")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.users.map((u, i) => (
+                    {userSorter.rows.map((u, i) => (
                       <tr key={u.user}>
                         <td className="rank">{i + 1}</td>
                         <td className="user-name">{u.user}</td>

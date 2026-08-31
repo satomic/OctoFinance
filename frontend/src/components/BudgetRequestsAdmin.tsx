@@ -3,6 +3,8 @@ import { useI18n } from "../contexts/I18nContext";
 import { useBudgetAudit, useBudgetRequests } from "../hooks/useMe";
 import { statusBadgeClass } from "../utils/budgetRequests";
 import { CostCenterChangeCell } from "./BudgetRequestPanel";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { BudgetRequest, GithubBudgetSync } from "../types";
 
 interface Props {
@@ -80,6 +82,11 @@ function ReviewTable() {
   const requests = data?.requests ?? [];
   const summary = data?.summary;
 
+  const requestSorter = useSortableRows(requests, {
+    details: (r) => (isCostCenter(r) ? r.cost_center_plan?.to?.name ?? "" : r.requested_amount),
+    github: (r) => (isCostCenter(r) ? r.cost_center_result?.status : r.github_budget?.status) ?? "",
+  });
+
   return (
     <>
       <div className="csv-filters">
@@ -150,18 +157,18 @@ function ReviewTable() {
               <table className="cc-table">
                 <thead>
                   <tr>
-                    <th className="cc-th">{t("budgetReq.colDate")}</th>
-                    <th className="cc-th">{t("budgetReq.colUser")}</th>
-                    <th className="cc-th">{t("budgetReq.colType")}</th>
-                    <th className="cc-th">{t("budgetReq.colDetails")}</th>
-                    <th className="cc-th">{t("budgetReq.colReason")}</th>
-                    <th className="cc-th">{t("budgetReq.colStatus")}</th>
-                    <th className="cc-th">{t("budgetReq.githubStatus")}</th>
+                    <SortTh label={t("budgetReq.colDate")} sortKey="created_at" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.colUser")} sortKey="user_login" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.colType")} sortKey="request_type" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.colDetails")} sortKey="details" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.colReason")} sortKey="reason" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.colStatus")} sortKey="status" sorter={requestSorter} className="cc-th" />
+                    <SortTh label={t("budgetReq.githubStatus")} sortKey="github" sorter={requestSorter} className="cc-th" />
                     <th className="cc-th">{t("budgetReq.colDecision")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map((r) => (
+                  {requestSorter.rows.map((r) => (
                     <tr key={r.id} className="cc-table-row">
                       <td className="cc-td">{r.created_at.slice(0, 10)}</td>
                       <td className="cc-td">
@@ -307,6 +314,9 @@ function ReviewTable() {
 function AuditTable({ refreshKey }: { refreshKey: number }) {
   const { t } = useI18n();
   const { entries, loading } = useBudgetAudit(refreshKey);
+  const sorter = useSortableRows(entries, {
+    github: (e) => e.github_budget_status ?? "",
+  });
 
   if (loading) return <div className="dashboard-loading">{t("loading")}</div>;
   if (!entries.length) return <div className="dashboard-empty">{t("budgetReq.auditEmpty")}</div>;
@@ -322,19 +332,19 @@ function AuditTable({ refreshKey }: { refreshKey: number }) {
           <table className="cc-table">
             <thead>
               <tr>
-                <th className="cc-th">{t("budgetReq.colDate")}</th>
-                <th className="cc-th">{t("budgetReq.colAction")}</th>
-                <th className="cc-th">{t("budgetReq.colType")}</th>
-                <th className="cc-th">{t("budgetReq.colUser")}</th>
-                <th className="cc-th">{t("budgetReq.colBy")}</th>
-                <th className="cc-th cc-th-num">{t("budgetReq.colRequested")}</th>
-                <th className="cc-th cc-th-num">{t("budgetReq.colApproved")}</th>
-                <th className="cc-th">{t("budgetReq.githubStatus")}</th>
-                <th className="cc-th">{t("budgetReq.comment")}</th>
+                <SortTh label={t("budgetReq.colDate")} sortKey="at" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.colAction")} sortKey="action" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.colType")} sortKey="request_type" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.colUser")} sortKey="user_login" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.colBy")} sortKey="by" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.colRequested")} sortKey="amount" sorter={sorter} className="cc-th cc-th-num" />
+                <SortTh label={t("budgetReq.colApproved")} sortKey="approved_amount" sorter={sorter} className="cc-th cc-th-num" />
+                <SortTh label={t("budgetReq.githubStatus")} sortKey="github" sorter={sorter} className="cc-th" />
+                <SortTh label={t("budgetReq.comment")} sortKey="comment" sorter={sorter} className="cc-th" />
               </tr>
             </thead>
             <tbody>
-              {entries.map((e, i) => (
+              {sorter.rows.map((e, i) => (
                 <tr key={`${e.request_id}-${i}`} className="cc-table-row">
                   <td className="cc-td">{e.at ? e.at.slice(0, 19).replace("T", " ") : "—"}</td>
                   <td className="cc-td">

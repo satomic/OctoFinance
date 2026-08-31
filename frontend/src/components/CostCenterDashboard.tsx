@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useCostCenterDashboard, useDatasetSync } from "../hooks/useData";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { CostCenter, CostCenterShareInfo, UserCostCenterEntry } from "../types";
 
 interface Props {
@@ -305,6 +307,10 @@ function CostCenterRow({ cc, share, onOpenShare }: {
 /* ---------- User map table ---------- */
 function UserMapTable({ users }: { users: UserCostCenterEntry[] }) {
   const { t } = useI18n();
+  const sorter = useSortableRows(users, {
+    cost_centers: (u) => u.cost_centers.map((cc) => cc.name).join(", "),
+    source: (u) => u.cost_centers.map((cc) => cc.source_type).join(", "),
+  });
 
   if (!users.length) return null;
 
@@ -313,13 +319,13 @@ function UserMapTable({ users }: { users: UserCostCenterEntry[] }) {
       <table className="cc-table">
         <thead>
           <tr>
-            <th className="cc-th">{t("ccDash.colUser")}</th>
-            <th className="cc-th">{t("ccDash.colCostCenters")}</th>
-            <th className="cc-th">{t("ccDash.colSource")}</th>
+            <SortTh label={t("ccDash.colUser")} sortKey="login" sorter={sorter} className="cc-th" />
+            <SortTh label={t("ccDash.colCostCenters")} sortKey="cost_centers" sorter={sorter} className="cc-th" />
+            <SortTh label={t("ccDash.colSource")} sortKey="source" sorter={sorter} className="cc-th" />
           </tr>
         </thead>
         <tbody>
-          {users.map((u) => (
+          {sorter.rows.map((u) => (
             <tr key={u.login} className="cc-table-row">
               <td className="cc-td">
                 <div className="cc-member-info">
@@ -474,6 +480,10 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
     [ui.patch],
   );
 
+  const ccSorter = useSortableRows<CostCenter>(data?.cost_centers ?? [], {
+    resource_count: (cc) => cc.resources.length,
+  });
+
   if (loading) return <div className="dashboard-loading">{t("loading")}</div>;
 
   if (!data || data.no_data) {
@@ -584,15 +594,15 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
           <table className="cc-table">
             <thead>
               <tr>
-                <th className="cc-th">{t("ccDash.colCostCenter")}</th>
-                <th className="cc-th">{t("ccDash.colState")}</th>
-                <th className="cc-th">{t("ccDash.colResources")}</th>
-                <th className="cc-th cc-th-num">{t("ccDash.colMembers")}</th>
+                <SortTh label={t("ccDash.colCostCenter")} sortKey="name" sorter={ccSorter} className="cc-th" />
+                <SortTh label={t("ccDash.colState")} sortKey="state" sorter={ccSorter} className="cc-th" />
+                <SortTh label={t("ccDash.colResources")} sortKey="resource_count" sorter={ccSorter} className="cc-th" />
+                <SortTh label={t("ccDash.colMembers")} sortKey="member_count" sorter={ccSorter} className="cc-th cc-th-num" />
                 <th className="cc-th">{t("ccDash.colShare")}</th>
               </tr>
             </thead>
             <tbody>
-              {data.cost_centers.map((cc) => (
+              {ccSorter.rows.map((cc) => (
                 <CostCenterRow
                   key={cc.id}
                   cc={cc}

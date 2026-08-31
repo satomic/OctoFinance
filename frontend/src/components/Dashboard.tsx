@@ -7,6 +7,8 @@ import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useDashboard } from "../hooks/useData";
 import { UserFilterSelect } from "./UserFilterSelect";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import { currentMonthRange } from "../utils/period";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
@@ -43,13 +45,12 @@ export function Dashboard({ refreshKey }: Props) {
     const next = typeof v === "function" ? v(ui.dashboardSelectedOrgs) : v;
     ui.patch({ dashboardSelectedOrgs: next });
   }, [ui.patch, ui.dashboardSelectedOrgs]);
-  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser);
-
   const period = ui.periodMode;
   const dateFrom = period === "current_month" ? currentMonthRange().start : ui.dashboardDateFrom;
   const setDateFrom = useCallback((v: string) => ui.patch({ dashboardDateFrom: v }), [ui.patch]);
   const dateTo = period === "current_month" ? currentMonthRange().end : ui.dashboardDateTo;
   const setDateTo = useCallback((v: string) => ui.patch({ dashboardDateTo: v }), [ui.patch]);
+  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser, dateFrom, dateTo);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -112,6 +113,39 @@ export function Dashboard({ refreshKey }: Props) {
       loc_accept_rate: d.loc_suggested > 0 ? Math.round((d.loc_accepted / d.loc_suggested) * 100) : 0,
     }));
   }, [filteredTrend]);
+
+  const modelInteractionTotal = useMemo(
+    () => (data?.model_usage ?? []).reduce((s, m) => s + m.interactions, 0),
+    [data?.model_usage],
+  );
+
+  const langGenTotal = useMemo(
+    () => (data?.language_usage ?? []).reduce((s, l) => s + l.code_gen, 0),
+    [data?.language_usage],
+  );
+
+  const rate = (num: number, den: number) => (den > 0 ? num / den : -1);
+
+  const featureSorter = useSortableRows(data?.feature_usage ?? [], {
+    accept_rate: (f) => rate(f.code_accept, f.code_gen),
+  });
+  const langSorter = useSortableRows(data?.language_usage ?? [], {
+    share: (l) => l.code_gen,
+    accept_rate: (l) => rate(l.code_accept, l.code_gen),
+  });
+  const completionSorter = useSortableRows(data?.code_completions ?? [], {
+    accept_rate: (c) => rate(c.acceptances, c.suggestions),
+  });
+  const modelSorter = useSortableRows(data?.model_usage ?? [], {
+    share: (m) => m.interactions,
+  });
+  const ideSorter = useSortableRows(data?.ide_usage ?? []);
+  const seatSorter = useSortableRows(data?.seat_info?.seats ?? [], {
+    status: (s) => (s.pending_cancellation_date ? 2 : s.last_activity_at ? 0 : 1),
+  });
+  const topUserSorter = useSortableRows(data?.top_users ?? [], {
+    accept_rate: (u) => rate(u.code_accept, u.code_gen),
+  });
 
   return (
     <div className="dashboard" key={refreshKey}>
@@ -216,6 +250,7 @@ export function Dashboard({ refreshKey }: Props) {
               </>
             )}
           </div>
+          {(dateFrom || dateTo) && <div className="chart-hint kpi-hint">{t("dashboard.kpiSnapshotHint")}</div>}
 
           {/* ===== Section: Active User Trends ===== */}
           <Section sectionKey="activeUserTrends" title={t("dashboard.activeUserTrends")}>
@@ -295,17 +330,17 @@ export function Dashboard({ refreshKey }: Props) {
                     <table className="dashboard-table">
                       <thead>
                         <tr>
-                          <th>Feature</th>
-                          <th>Interactions</th>
-                          <th>Code Gen</th>
-                          <th>Code Accept</th>
-                          <th>Accept %</th>
-                          <th>LOC Suggested</th>
-                          <th>LOC Accepted</th>
+                          <SortTh label="Feature" sortKey="feature" sorter={featureSorter} />
+                          <SortTh label="Interactions" sortKey="interactions" sorter={featureSorter} />
+                          <SortTh label="Code Gen" sortKey="code_gen" sorter={featureSorter} />
+                          <SortTh label="Code Accept" sortKey="code_accept" sorter={featureSorter} />
+                          <SortTh label="Accept %" sortKey="accept_rate" sorter={featureSorter} />
+                          <SortTh label="LOC Suggested" sortKey="loc_suggested" sorter={featureSorter} />
+                          <SortTh label="LOC Accepted" sortKey="loc_accepted" sorter={featureSorter} />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.feature_usage.map((f) => (
+                        {featureSorter.rows.map((f) => (
                           <tr key={f.feature}>
                             <td className="user-name">{f.feature}</td>
                             <td>{f.interactions.toLocaleString()}</td>
@@ -345,6 +380,60 @@ export function Dashboard({ refreshKey }: Props) {
                     </ResponsiveContainer>
                   </div>
                 )}
+                {data.language_usage.length > 0 && (
+                  <div className="chart-card">
+                    <h4>{t("dashboard.langShareTable")}</h4>
+                    <div className="dashboard-table-wrap">
+                      <table className="dashboard-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <SortTh label={t("dashboard.language")} sortKey="language" sorter={langSorter} />
+                            <SortTh label={t("dashboard.codeGen")} sortKey="code_gen" sorter={langSorter} />
+                            <SortTh label={t("csvDash.share")} sortKey="share" sorter={langSorter} />
+                            <SortTh label={t("dashboard.accepted")} sortKey="code_accept" sorter={langSorter} />
+                            <SortTh label={t("dashboard.acceptRate")} sortKey="accept_rate" sorter={langSorter} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {langSorter.rows.map((l, i) => {
+                            const pct = langGenTotal > 0 ? (l.code_gen / langGenTotal) * 100 : 0;
+                            return (
+                              <tr key={l.language}>
+                                <td className="rank">{i + 1}</td>
+                                <td className="user-name">
+                                  <span className="dash-dot" style={{ background: COLORS[i % COLORS.length] }} />
+                                  {l.language}
+                                </td>
+                                <td>{l.code_gen.toLocaleString()}</td>
+                                <td>
+                                  <div className="quota-bar-wrap">
+                                    <div className="quota-bar">
+                                      <div className="quota-bar-fill" style={{ width: `${Math.min(pct, 100)}%`, background: COLORS[i % COLORS.length] }} />
+                                    </div>
+                                    <span className="quota-bar-label">{pct.toFixed(1)}%</span>
+                                  </div>
+                                </td>
+                                <td>{l.code_accept.toLocaleString()}</td>
+                                <td>{l.code_gen > 0 ? `${Math.round((l.code_accept / l.code_gen) * 100)}%` : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td />
+                            <td className="user-name">{t("csvDash.total")}</td>
+                            <td>{langGenTotal.toLocaleString()}</td>
+                            <td>100%</td>
+                            <td>{data.language_usage.reduce((s, l) => s + l.code_accept, 0).toLocaleString()}</td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {data.code_completions.length > 0 && (
                   <div className="chart-card">
                     <h4>{t("dashboard.codeCompletions")}</h4>
@@ -352,16 +441,16 @@ export function Dashboard({ refreshKey }: Props) {
                       <table className="dashboard-table">
                         <thead>
                           <tr>
-                            <th>Language</th>
-                            <th>Suggestions</th>
-                            <th>Accepted</th>
-                            <th>Accept %</th>
-                            <th>Lines Sugg.</th>
-                            <th>Lines Acc.</th>
+                            <SortTh label="Language" sortKey="language" sorter={completionSorter} />
+                            <SortTh label="Suggestions" sortKey="suggestions" sorter={completionSorter} />
+                            <SortTh label="Accepted" sortKey="acceptances" sorter={completionSorter} />
+                            <SortTh label="Accept %" sortKey="accept_rate" sorter={completionSorter} />
+                            <SortTh label="Lines Sugg." sortKey="lines_suggested" sorter={completionSorter} />
+                            <SortTh label="Lines Acc." sortKey="lines_accepted" sorter={completionSorter} />
                           </tr>
                         </thead>
                         <tbody>
-                          {data.code_completions.slice(0, 15).map((c) => (
+                          {completionSorter.rows.slice(0, 15).map((c) => (
                             <tr key={c.language}>
                               <td className="user-name">{c.language}</td>
                               <td>{c.suggestions.toLocaleString()}</td>
@@ -408,30 +497,57 @@ export function Dashboard({ refreshKey }: Props) {
                 )}
               </div>
               <div className="chart-card">
-                <h4>{t("dashboard.aiCreditDetail")}</h4>
-                {data.ai_credit_detail.length > 0 ? (
+                <h4>{t("csvDash.modelShareTable")}</h4>
+                <div className="chart-hint">
+                  {t("dashboard.modelShareHint")
+                    .replace("{usage}", `${data.date_range.start} ~ ${data.date_range.end}`)
+                    .replace("{credit}", data.ai_credit_period || "-")}
+                </div>
+                {data.model_usage.length > 0 ? (
                   <div className="dashboard-table-wrap">
                     <table className="dashboard-table">
                       <thead>
                         <tr>
-                          <th>Model</th>
-                          <th>Gross Qty</th>
-                          <th>Discount</th>
-                          <th>Net Qty</th>
-                          <th>Net Cost</th>
+                          <th>#</th>
+                          <SortTh label={t("csvDash.model")} sortKey="model" sorter={modelSorter} />
+                          <SortTh label={t("etDash.colInteractions")} sortKey="interactions" sorter={modelSorter} />
+                          <SortTh label={t("csvDash.share")} sortKey="share" sorter={modelSorter} />
+                          <SortTh label={t("csvDash.requests")} sortKey="ai_credits" sorter={modelSorter} />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.ai_credit_detail.map((p) => (
-                          <tr key={p.model}>
-                            <td className="user-name">{p.model}</td>
-                            <td>{p.gross_qty.toLocaleString()}</td>
-                            <td>{p.discount_qty.toLocaleString()}</td>
-                            <td>{p.net_qty.toLocaleString()}</td>
-                            <td>${p.net_amount.toFixed(2)}</td>
-                          </tr>
-                        ))}
+                        {modelSorter.rows.map((m, i) => {
+                          const pct = modelInteractionTotal > 0 ? (m.interactions / modelInteractionTotal) * 100 : 0;
+                          return (
+                            <tr key={m.model}>
+                              <td className="rank">{i + 1}</td>
+                              <td className="user-name">
+                                <span className="dash-dot" style={{ background: COLORS[i % COLORS.length] }} />
+                                {m.model}
+                              </td>
+                              <td>{m.interactions.toLocaleString()}</td>
+                              <td>
+                                <div className="quota-bar-wrap">
+                                  <div className="quota-bar">
+                                    <div className="quota-bar-fill" style={{ width: `${Math.min(pct, 100)}%`, background: COLORS[i % COLORS.length] }} />
+                                  </div>
+                                  <span className="quota-bar-label">{pct.toFixed(1)}%</span>
+                                </div>
+                              </td>
+                              <td>{m.ai_credits.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
+                      <tfoot>
+                        <tr>
+                          <td />
+                          <td className="user-name">{t("csvDash.total")}</td>
+                          <td>{modelInteractionTotal.toLocaleString()}</td>
+                          <td>100%</td>
+                          <td>{data.model_usage.reduce((s, m) => s + m.ai_credits, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 ) : (
@@ -468,16 +584,16 @@ export function Dashboard({ refreshKey }: Props) {
                     <table className="dashboard-table">
                       <thead>
                         <tr>
-                          <th>IDE</th>
-                          <th>Interactions</th>
-                          <th>Code Gen</th>
-                          <th>Accept</th>
-                          <th>LOC Sugg.</th>
-                          <th>LOC Acc.</th>
+                          <SortTh label="IDE" sortKey="ide" sorter={ideSorter} />
+                          <SortTh label="Interactions" sortKey="interactions" sorter={ideSorter} />
+                          <SortTh label="Code Gen" sortKey="code_gen" sorter={ideSorter} />
+                          <SortTh label="Accept" sortKey="code_accept" sorter={ideSorter} />
+                          <SortTh label="LOC Sugg." sortKey="loc_suggested" sorter={ideSorter} />
+                          <SortTh label="LOC Acc." sortKey="loc_accepted" sorter={ideSorter} />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.ide_usage.map((ide) => (
+                        {ideSorter.rows.map((ide) => (
                           <tr key={ide.ide}>
                             <td className="user-name">{ide.ide}</td>
                             <td>{ide.interactions.toLocaleString()}</td>
@@ -517,16 +633,16 @@ export function Dashboard({ refreshKey }: Props) {
                     <table className="dashboard-table">
                       <thead>
                         <tr>
-                          <th>User</th>
-                          <th>Org</th>
-                          <th>Team</th>
-                          <th>Last Activity</th>
-                          <th>Editor</th>
-                          <th>Status</th>
+                          <SortTh label="User" sortKey="user" sorter={seatSorter} />
+                          <SortTh label="Org" sortKey="org" sorter={seatSorter} />
+                          <SortTh label="Team" sortKey="team" sorter={seatSorter} />
+                          <SortTh label="Last Activity" sortKey="last_activity_at" sorter={seatSorter} />
+                          <SortTh label="Editor" sortKey="last_activity_editor" sorter={seatSorter} />
+                          <SortTh label="Status" sortKey="status" sorter={seatSorter} />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.seat_info.seats.map((s) => {
+                        {seatSorter.rows.map((s) => {
                           const inactive = !s.last_activity_at;
                           const pending = !!s.pending_cancellation_date;
                           return (
@@ -565,20 +681,20 @@ export function Dashboard({ refreshKey }: Props) {
                       <thead>
                         <tr>
                           <th>#</th>
-                          <th>User</th>
-                          <th>Interactions</th>
-                          <th>Code Gen</th>
-                          <th>Accept</th>
-                          <th>Accept %</th>
-                          <th>LOC Sugg.</th>
-                          <th>LOC Acc.</th>
-                          <th>Days</th>
-                          <th>Chat</th>
-                          <th>Agent</th>
+                          <SortTh label="User" sortKey="user" sorter={topUserSorter} />
+                          <SortTh label="Interactions" sortKey="interactions" sorter={topUserSorter} />
+                          <SortTh label="Code Gen" sortKey="code_gen" sorter={topUserSorter} />
+                          <SortTh label="Accept" sortKey="code_accept" sorter={topUserSorter} />
+                          <SortTh label="Accept %" sortKey="accept_rate" sorter={topUserSorter} />
+                          <SortTh label="LOC Sugg." sortKey="loc_suggested" sorter={topUserSorter} />
+                          <SortTh label="LOC Acc." sortKey="loc_accepted" sorter={topUserSorter} />
+                          <SortTh label="Days" sortKey="days_active" sorter={topUserSorter} />
+                          <SortTh label="Chat" sortKey="used_chat" sorter={topUserSorter} />
+                          <SortTh label="Agent" sortKey="used_agent" sorter={topUserSorter} />
                         </tr>
                       </thead>
                       <tbody>
-                        {data.top_users.map((u, i) => (
+                        {topUserSorter.rows.map((u, i) => (
                           <tr key={u.user}>
                             <td className="rank">{i + 1}</td>
                             <td className="user-name">{u.user}</td>

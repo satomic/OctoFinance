@@ -6,6 +6,7 @@ Supports enterprise grouping for org display.
 import csv
 import io
 import json
+import re
 import shutil
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -83,6 +84,18 @@ def _with_user_filter(base: "MemberFilter | None", user: str) -> "MemberFilter |
     if base is None:
         return {login}
     return _AllOfFilter([base, {login}])
+
+
+def _model_key(model: str) -> str:
+    """Slug a model name so billing and usage-metrics spellings collapse together.
+
+    "Claude Opus 5" and "Auto: Claude Opus 5" both become "claude-opus-5", which
+    is how the usage metrics API already reports it.
+    """
+    s = (model or "").strip().lower()
+    if s.startswith("auto:"):
+        s = s[len("auto:"):].strip()
+    return re.sub(r"[\s_]+", "-", s)
 
 
 def _enterprise_team_options() -> list[dict]:
@@ -268,7 +281,19 @@ async def get_billing(org: str):
     return data
 
 
-def _aggregate_usage_from_users(selected_orgs: list[str], member_filter: MemberFilter) -> dict:
+def _in_range(day: str, date_from: str, date_to: str) -> bool:
+    """Inclusive YYYY-MM-DD range test; empty bounds mean unbounded."""
+    if not day:
+        return False
+    if date_from and day < date_from:
+        return False
+    if date_to and day > date_to:
+        return False
+    return True
+
+
+def _aggregate_usage_from_users(selected_orgs: list[str], member_filter: MemberFilter,
+                                date_from: str = "", date_to: str = "") -> dict:
     """Rebuild the Usage Metrics aggregates from user-level records.
 
     The org-level usage report is pre-aggregated and has no user dimension, so it
@@ -306,7 +331,7 @@ def _aggregate_usage_from_users(selected_orgs: list[str], member_filter: MemberF
             if not login or login not in member_filter:
                 continue
             day = rec.get("day", "")
-            if not day:
+            if not _in_range(day, date_from, date_to):
                 continue
             if not date_start or day < date_start:
                 date_start = day
@@ -363,8 +388,14 @@ async def get_dashboard(
     orgs: str = Query(default=""),
     enterprise_team: str = Query(default="", description="Enterprise team slug to filter members by"),
     user: str = Query(default="", description="Single user login to filter every section by"),
+    date_from: str = Query(default="", description="Inclusive YYYY-MM-DD lower bound; empty means no bound"),
+    date_to: str = Query(default="", description="Inclusive YYYY-MM-DD upper bound; empty means no bound"),
 ):
     """Aggregated dashboard data for visualization.
+
+    Every section is built from data captured by Sync Data (the Copilot usage
+    metrics, seats, billing and AI credit APIs). Uploaded CSVs are deliberately
+    not consulted here; they drive the AI Usage and Usage Report tabs instead.
 
     Query param ``orgs`` is a comma-separated list of org logins to include.
     Empty means all orgs with Copilot billing data. Also includes pseudo-org
@@ -375,6 +406,10 @@ async def get_dashboard(
     members and the usage aggregates are recomputed from user-level records.
     ``user`` narrows the same way down to one login and can be combined with
     the team filter.
+
+    ``date_from``/``date_to`` restrict every day-keyed dataset (usage report,
+    user-level usage, legacy metrics). Snapshot datasets that carry no day
+    dimension (seats, billing) always reflect the latest sync.
     """
     all_orgs = api_manager.get_all_orgs()
     pseudo_orgs = api_manager.get_enterprise_pseudo_orgs()
@@ -511,17 +546,14 @@ async def get_dashboard(
             continue
 
         for rec in usage.get("records", []):
-            rs = rec.get("report_start_day", "")
-            re_ = rec.get("report_end_day", "")
-            if rs and (not date_start or rs < date_start):
-                date_start = rs
-            if re_ and (not date_end or re_ > date_end):
-                date_end = re_
-
             for dt in rec.get("day_totals", []):
                 day = dt.get("day", "")
-                if not day:
+                if not _in_range(day, date_from, date_to):
                     continue
+                if not date_start or day < date_start:
+                    date_start = day
+                if not date_end or day > date_end:
+                    date_end = day
                 if day not in daily_map:
                     daily_map[day] = {
                         "day": day, "dau": 0, "wau": 0, "mau": 0,
@@ -580,7 +612,7 @@ async def get_dashboard(
     language_usage = [{"language": k, **v} for k, v in sorted(lang_map.items(), key=lambda x: -x[1]["code_gen"])]
 
     if member_filter is not None:
-        rebuilt = _aggregate_usage_from_users(selected, member_filter)
+        rebuilt = _aggregate_usage_from_users(selected, member_filter, date_from, date_to)
         daily_trend = rebuilt["daily_trend"]
         feature_usage = rebuilt["feature_usage"]
         model_usage = rebuilt["model_usage"]
@@ -590,6 +622,9 @@ async def get_dashboard(
         date_end = rebuilt["date_end"]
 
     # --- AI credit detail ---
+    # Billed per calendar month with no day dimension, so a month is either
+    # wholly in or wholly out of the selected range.
+    ai_credit_period = ""
     pr_detail_map: dict[str, dict] = defaultdict(lambda: {
         "gross_qty": 0, "discount_qty": 0, "net_qty": 0,
         "gross_amount": 0.0, "net_amount": 0.0,
@@ -598,6 +633,13 @@ async def get_dashboard(
         pr = data_collector.load_latest("ai_credits", org_name)
         if not pr:
             continue
+        tp = pr.get("timePeriod") or {}
+        if not (tp.get("year") and tp.get("month")):
+            continue
+        period_label = f"{tp['year']}-{int(tp['month']):02d}"
+        if (date_from and period_label < date_from[:7]) or (date_to and period_label > date_to[:7]):
+            continue
+        ai_credit_period = period_label
         for item in pr.get("usageItems", []):
             m = item.get("model", "unknown")
             pr_detail_map[m]["gross_qty"] += item.get("grossQuantity", 0)
@@ -606,29 +648,21 @@ async def get_dashboard(
             pr_detail_map[m]["gross_amount"] += item.get("grossAmount", 0.0)
             pr_detail_map[m]["net_amount"] += item.get("netAmount", 0.0)
 
-    if member_filter is not None:
-        # Cached AI credit data is aggregated per model with no user dimension;
-        # the uploaded AI usage CSV is the only per-user source.
-        for r in _apply_common_filters(_load_all_csv_records(CSV_TYPE_AI), [], [], "", "", member_filter):
-            m = r.get("model", "unknown")
-            try:
-                pr_detail_map[m]["gross_qty"] += float(r.get("quantity") or 0)
-                pr_detail_map[m]["net_qty"] += float(r.get("quantity") or 0)
-                pr_detail_map[m]["gross_amount"] += float(r.get("gross_amount") or 0)
-                pr_detail_map[m]["net_amount"] += float(r.get("net_amount") or 0)
-            except (TypeError, ValueError):
-                continue
-
     ai_credit_detail = [{"model": k, **v} for k, v in sorted(pr_detail_map.items(), key=lambda x: -x[1]["gross_qty"])]
 
-    # Merge AI credit totals into model_usage
-    for entry in model_usage:
-        pd = pr_detail_map.pop(entry["model"], None)
-        entry["ai_credits"] = pd["gross_qty"] if pd else 0
+    # Merge AI credit totals into model_usage. The billing API reports display
+    # names ("Claude Opus 5", "Auto: GPT-5.4") while the usage metrics API reports
+    # slugs ("claude-opus-5", "gpt-5.4"), so both sides are joined on a slug key.
+    credits_by_key: dict[str, float] = defaultdict(float)
     for m, pd in pr_detail_map.items():
-        if pd["gross_qty"] > 0:
+        credits_by_key[_model_key(m)] += pd["gross_qty"]
+    for entry in model_usage:
+        entry["ai_credits"] = credits_by_key.pop(_model_key(entry["model"]), 0)
+    for m, pd in pr_detail_map.items():
+        qty = credits_by_key.pop(_model_key(m), None)
+        if qty:
             model_usage.append({"model": m, "interactions": 0, "code_gen": 0, "code_accept": 0,
-                                "loc_suggested": 0, "loc_accepted": 0, "ai_credits": pd["gross_qty"]})
+                                "loc_suggested": 0, "loc_accepted": 0, "ai_credits": qty})
 
     # --- Top users from usage_users (enhanced) ---
     user_agg: dict[str, dict] = defaultdict(lambda: {
@@ -643,6 +677,8 @@ async def get_dashboard(
         for rec in uu.get("records", []):
             login = rec.get("user_login", "")
             if not login:
+                continue
+            if not _in_range(rec.get("day", ""), date_from, date_to):
                 continue
             if member_filter is not None and login.lower() not in member_filter:
                 continue
@@ -677,6 +713,8 @@ async def get_dashboard(
             continue
         entries = metrics if isinstance(metrics, list) else [metrics]
         for entry in entries:
+            if (date_from or date_to) and not _in_range(entry.get("date", ""), date_from, date_to):
+                continue
             # Code completions
             cc = entry.get("copilot_ide_code_completions", {})
             for editor in cc.get("editors", []):
@@ -719,6 +757,7 @@ async def get_dashboard(
         "language_usage": language_usage,
         "code_completions": code_completions,
         "ai_credit_detail": ai_credit_detail,
+        "ai_credit_period": ai_credit_period,
         "chat_stats": chat_stats,
         "top_users": top_users,
         "orgs": all_org_names,
@@ -729,7 +768,6 @@ async def get_dashboard(
         "users": _dashboard_user_options(selected, team_filter),
         "selected_user": selected_user or None,
         "date_range": {"start": date_start, "end": date_end},
-        "user_ai_usage": _aggregate_user_ai_usage(selected, member_filter),
     }
 
 
@@ -1142,141 +1180,6 @@ def _load_all_csv_records(csv_type: str = CSV_TYPE_AI) -> list[dict]:
             for row in reader:
                 records.append(row)
     return records
-
-
-def _aggregate_user_ai_usage(selected_orgs: list[str], member_filter: MemberFilter | None = None) -> dict:
-    """Aggregate per-user AI usage from uploaded CSV files.
-
-    Returns structure with per-user breakdown, daily trend, model breakdown, etc.
-    """
-    records = _load_all_csv_records()
-    if not records:
-        return {"has_data": False, "latest_date": None, "users": [], "daily_trend": [],
-                "model_breakdown": [], "org_breakdown": [], "total_requests": 0, "total_cost": 0}
-
-    # Filter by selected orgs
-    filtered = [r for r in records if r.get("organization", "") in selected_orgs]
-    if member_filter is not None:
-        filtered = [r for r in filtered if (r.get("username") or "").lower() in member_filter]
-    if not filtered:
-        return {"has_data": False, "latest_date": None, "users": [], "daily_trend": [],
-                "model_breakdown": [], "org_breakdown": [], "total_requests": 0, "total_cost": 0}
-
-    latest_date = max(r.get("date", "") for r in filtered)
-
-    # Per-user aggregation
-    user_map: dict[str, dict] = defaultdict(lambda: {
-        "requests": 0, "gross_amount": 0.0, "net_amount": 0.0,
-        "models": defaultdict(float), "days_active": set(), "org": "",
-        "quota": 0, "cost_center": "",
-    })
-    for r in filtered:
-        user = r.get("username", "")
-        qty = float(r.get("quantity", 0))
-        gross = float(r.get("gross_amount", 0))
-        net = float(r.get("net_amount", 0))
-        model = r.get("model", "unknown")
-        u = user_map[user]
-        u["requests"] += qty
-        u["gross_amount"] += gross
-        u["net_amount"] += net
-        u["models"][model] += qty
-        u["days_active"].add(r.get("date", ""))
-        u["org"] = r.get("organization", "")
-        u["cost_center"] = r.get("cost_center_name", "") or ""
-        try:
-            u["quota"] = int(r.get("total_monthly_quota", 0))
-        except (ValueError, TypeError):
-            pass
-
-    users = []
-    for username, info in sorted(user_map.items(), key=lambda x: -x[1]["requests"]):
-        models = [{"model": m, "requests": q} for m, q in sorted(info["models"].items(), key=lambda x: -x[1])]
-        users.append({
-            "user": username,
-            "org": info["org"],
-            "cost_center": info["cost_center"],
-            "requests": round(info["requests"], 2),
-            "gross_amount": round(info["gross_amount"], 4),
-            "net_amount": round(info["net_amount"], 4),
-            "days_active": len(info["days_active"]),
-            "quota": info["quota"],
-            "usage_pct": round(info["requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
-            "models": models,
-        })
-
-    # Daily trend
-    day_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
-    for r in filtered:
-        day = r.get("date", "")
-        qty = float(r.get("quantity", 0))
-        gross = float(r.get("gross_amount", 0))
-        dm = day_map[day]
-        dm["requests"] += qty
-        dm["amount"] += gross
-        dm["users"].add(r.get("username", ""))
-
-    daily_trend = [
-        {"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "active_users": len(v["users"])}
-        for d, v in sorted(day_map.items())
-    ]
-
-    # Model breakdown
-    model_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
-    for r in filtered:
-        model = r.get("model", "unknown")
-        mm = model_map[model]
-        mm["requests"] += float(r.get("quantity", 0))
-        mm["amount"] += float(r.get("gross_amount", 0))
-        mm["users"].add(r.get("username", ""))
-
-    model_breakdown = [
-        {"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
-        for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])
-    ]
-
-    # Org breakdown
-    org_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
-    for r in filtered:
-        org = r.get("organization", "")
-        om = org_map[org]
-        om["requests"] += float(r.get("quantity", 0))
-        om["amount"] += float(r.get("gross_amount", 0))
-        om["users"].add(r.get("username", ""))
-
-    org_breakdown = [
-        {"org": o, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
-        for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])
-    ]
-
-    # Cost center breakdown
-    cc_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
-    for r in filtered:
-        cc = r.get("cost_center_name", "") or "Unknown"
-        cm = cc_map[cc]
-        cm["requests"] += float(r.get("quantity", 0))
-        cm["amount"] += float(r.get("gross_amount", 0))
-        cm["users"].add(r.get("username", ""))
-
-    cost_center_breakdown = [
-        {"cost_center": cc, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4), "user_count": len(v["users"])}
-        for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["requests"])
-    ]
-
-    total_requests = sum(u["requests"] for u in users)
-    total_cost = sum(u["gross_amount"] for u in users)
-
-    return {
-        "has_data": True,
-        "latest_date": latest_date,
-        "users": users,
-        "daily_trend": daily_trend,
-        "model_breakdown": model_breakdown,
-        "org_breakdown": org_breakdown,
-        "cost_center_breakdown": cost_center_breakdown,
-        "total_requests": round(total_requests, 2),
-        "total_cost": round(total_cost, 4),
-    }
 
 
 # ---------------------------------------------------------------------------

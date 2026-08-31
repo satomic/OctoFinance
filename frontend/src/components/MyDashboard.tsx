@@ -4,6 +4,8 @@ import {
 } from "recharts";
 import { useI18n } from "../contexts/I18nContext";
 import { useMyDashboard } from "../hooks/useMe";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { MyDashboardData, UserBudget } from "../types";
 
 interface Props {
@@ -60,6 +62,14 @@ function BudgetMeter({ amount, consumed, pct }: { amount: number; consumed: numb
 export function MyDashboard({ refreshKey = 0, period = "all" }: Props) {
   const { t } = useI18n();
   const { data, loading, refetch } = useMyDashboard(refreshKey, period);
+
+  const seatSorter = useSortableRows(data?.seats ?? []);
+  const ccSorter = useSortableRows(data?.cost_centers ?? [], {
+    membership_source: (cc) => `${cc.membership_source ?? ""}${cc.membership_source_name ?? ""}`,
+    budget_amount: (cc) => cc.budget?.amount ?? null,
+    budget_usage: (cc) => cc.budget?.usage_pct ?? null,
+  });
+  const skuSorter = useSortableRows(data?.spend?.sku_breakdown ?? []);
 
   if (loading && !data) return <div className="dashboard-loading">{t("loading")}</div>;
   if (!data || !data.profile) return <div className="dashboard-empty">{t("me.noData")}</div>;
@@ -171,16 +181,16 @@ export function MyDashboard({ refreshKey = 0, period = "all" }: Props) {
             <table className="cc-table">
               <thead>
                 <tr>
-                  <th className="cc-th">{t("me.ccName")}</th>
-                  <th className="cc-th">{t("me.ccEnterprise")}</th>
-                  <th className="cc-th">{t("me.ccSource")}</th>
-                  <th className="cc-th">{t("me.ccPool")}</th>
-                  <th className="cc-th cc-th-num">{t("me.ccBudget")}</th>
-                  <th className="cc-th">{t("me.ccUsage")}</th>
+                  <SortTh label={t("me.ccName")} sortKey="name" sorter={ccSorter} className="cc-th" />
+                  <SortTh label={t("me.ccEnterprise")} sortKey="enterprise_name" sorter={ccSorter} className="cc-th" />
+                  <SortTh label={t("me.ccSource")} sortKey="membership_source" sorter={ccSorter} className="cc-th" />
+                  <SortTh label={t("me.ccPool")} sortKey="ai_credit_pool_enabled" sorter={ccSorter} className="cc-th" />
+                  <SortTh label={t("me.ccBudget")} sortKey="budget_amount" sorter={ccSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("me.ccUsage")} sortKey="budget_usage" sorter={ccSorter} className="cc-th" />
                 </tr>
               </thead>
               <tbody>
-                {costCenters.map((cc) => {
+                {ccSorter.rows.map((cc) => {
                   const b: UserBudget | null = cc.budget;
                   return (
                     <tr key={`${cc.enterprise}-${cc.id}`} className="cc-table-row">
@@ -231,16 +241,16 @@ export function MyDashboard({ refreshKey = 0, period = "all" }: Props) {
             <table className="cc-table">
               <thead>
                 <tr>
-                  <th className="cc-th">{t("me.colOrg")}</th>
-                  <th className="cc-th">{t("me.colPlan")}</th>
-                  <th className="cc-th">{t("me.colTeam")}</th>
-                  <th className="cc-th">{t("me.colAssigned")}</th>
-                  <th className="cc-th">{t("me.colLastActive")}</th>
-                  <th className="cc-th cc-th-num">{t("me.colSeatCost")}</th>
+                  <SortTh label={t("me.colOrg")} sortKey="org" sorter={seatSorter} className="cc-th" />
+                  <SortTh label={t("me.colPlan")} sortKey="plan_type" sorter={seatSorter} className="cc-th" />
+                  <SortTh label={t("me.colTeam")} sortKey="assigning_team" sorter={seatSorter} className="cc-th" />
+                  <SortTh label={t("me.colAssigned")} sortKey="created_at" sorter={seatSorter} className="cc-th" />
+                  <SortTh label={t("me.colLastActive")} sortKey="last_activity_at" sorter={seatSorter} className="cc-th" />
+                  <SortTh label={t("me.colSeatCost")} sortKey="price_per_seat" sorter={seatSorter} className="cc-th cc-th-num" />
                 </tr>
               </thead>
               <tbody>
-                {seats.map((s) => (
+                {seatSorter.rows.map((s) => (
                   <tr key={s.org} className="cc-table-row">
                     <td className="cc-td"><strong>{s.org}</strong></td>
                     <td className="cc-td">{s.plan_type}</td>
@@ -351,14 +361,14 @@ export function MyDashboard({ refreshKey = 0, period = "all" }: Props) {
             <table className="cc-table">
               <thead>
                 <tr>
-                  <th className="cc-th">{t("me.colSku")}</th>
-                  <th className="cc-th cc-th-num">{t("me.colQuantity")}</th>
-                  <th className="cc-th cc-th-num">{t("me.colGross")}</th>
-                  <th className="cc-th cc-th-num">{t("me.colNet")}</th>
+                  <SortTh label={t("me.colSku")} sortKey="sku" sorter={skuSorter} className="cc-th" />
+                  <SortTh label={t("me.colQuantity")} sortKey="quantity" sorter={skuSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("me.colGross")} sortKey="gross_amount" sorter={skuSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("me.colNet")} sortKey="net_amount" sorter={skuSorter} className="cc-th cc-th-num" />
                 </tr>
               </thead>
               <tbody>
-                {spend.sku_breakdown.map((s) => (
+                {skuSorter.rows.map((s) => (
                   <tr key={s.sku} className="cc-table-row">
                     <td className="cc-td">{s.sku}</td>
                     <td className="cc-td cc-td-num">{s.quantity.toLocaleString()}</td>

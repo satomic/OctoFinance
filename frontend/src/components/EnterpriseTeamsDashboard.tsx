@@ -2,6 +2,8 @@ import { useCallback, useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useEnterpriseTeamsDashboard, useDatasetSync } from "../hooks/useData";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { EnterpriseTeam, EnterpriseTeamMember } from "../types";
 
 interface Props {
@@ -51,21 +53,24 @@ function MemberRow({ member }: { member: EnterpriseTeamMember }) {
    the outer teams table. */
 function MemberTable({ members }: { members: EnterpriseTeamMember[] }) {
   const { t } = useI18n();
+  const sorter = useSortableRows(members, {
+    orgs: (m) => m.orgs.join(", "),
+  });
   return (
     <table className="cc-table">
       <thead>
         <tr>
-          <th className="cc-th">{t("etDash.colMember")}</th>
-          <th className="cc-th">{t("etDash.colSeat")}</th>
-          <th className="cc-th">{t("etDash.colOrgs")}</th>
-          <th className="cc-th cc-th-num">{t("etDash.colInteractions")}</th>
-          <th className="cc-th cc-th-num">{t("etDash.colActiveDays")}</th>
-          <th className="cc-th cc-th-num">{t("etDash.colAiCost")}</th>
-          <th className="cc-th">{t("etDash.colLastActivity")}</th>
+          <SortTh label={t("etDash.colMember")} sortKey="login" sorter={sorter} className="cc-th" />
+          <SortTh label={t("etDash.colSeat")} sortKey="has_seat" sorter={sorter} className="cc-th" />
+          <SortTh label={t("etDash.colOrgs")} sortKey="orgs" sorter={sorter} className="cc-th" />
+          <SortTh label={t("etDash.colInteractions")} sortKey="interactions" sorter={sorter} className="cc-th cc-th-num" />
+          <SortTh label={t("etDash.colActiveDays")} sortKey="active_days" sorter={sorter} className="cc-th cc-th-num" />
+          <SortTh label={t("etDash.colAiCost")} sortKey="ai_net_amount" sorter={sorter} className="cc-th cc-th-num" />
+          <SortTh label={t("etDash.colLastActivity")} sortKey="last_activity_at" sorter={sorter} className="cc-th" />
         </tr>
       </thead>
       <tbody>
-        {members.map((m) => <MemberRow key={m.login} member={m} />)}
+        {sorter.rows.map((m) => <MemberRow key={m.login} member={m} />)}
       </tbody>
     </table>
   );
@@ -135,6 +140,10 @@ export function EnterpriseTeamsDashboard({ refreshKey }: Props) {
   const setTeams = useCallback((v: string[]) => patch({ etDashTeams: v }), [patch]);
 
   const [showUnassigned, setShowUnassigned] = useState(false);
+
+  const teamSorter = useSortableRows<EnterpriseTeam>(data?.teams ?? [], {
+    organizations: (tm) => tm.organizations.join(", "),
+  });
 
   if (loading && !data) return <div className="dashboard-loading">{t("loading")}</div>;
 
@@ -254,20 +263,20 @@ export function EnterpriseTeamsDashboard({ refreshKey }: Props) {
             <table className="cc-table">
               <thead>
                 <tr>
-                  <th className="cc-th">{t("etDash.colTeam")}</th>
-                  <th className="cc-th">{t("etDash.colTeamOrgs")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colMembers")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colSeats")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colNoSeat")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colActive")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colInteractions")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colAiCost")}</th>
-                  <th className="cc-th cc-th-num">{t("etDash.colSeatCost")}</th>
+                  <SortTh label={t("etDash.colTeam")} sortKey="name" sorter={teamSorter} className="cc-th" />
+                  <SortTh label={t("etDash.colTeamOrgs")} sortKey="organizations" sorter={teamSorter} className="cc-th" />
+                  <SortTh label={t("etDash.colMembers")} sortKey="member_count" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colSeats")} sortKey="seat_count" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colNoSeat")} sortKey="no_seat_count" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colActive")} sortKey="active_member_count" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colInteractions")} sortKey="interactions" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colAiCost")} sortKey="ai_net_amount" sorter={teamSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("etDash.colSeatCost")} sortKey="seat_cost" sorter={teamSorter} className="cc-th cc-th-num" />
                 </tr>
               </thead>
               <tbody>
-                {data.teams.length
-                  ? data.teams.map((tm) => <TeamRow key={tm.slug} team={tm} />)
+                {teamSorter.rows.length
+                  ? teamSorter.rows.map((tm) => <TeamRow key={tm.slug} team={tm} />)
                   : <tr><td className="cc-td" colSpan={9}>{t("etDash.noMatch")}</td></tr>}
               </tbody>
             </table>

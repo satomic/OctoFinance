@@ -149,7 +149,8 @@ export function useDatasetSync() {
   return { syncing, runSync };
 }
 
-export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user = "") {
+export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user = "",
+                             dateFrom = "", dateTo = "") {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -160,6 +161,8 @@ export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user =
       if (selectedOrgs.length > 0) qp.set("orgs", selectedOrgs.join(","));
       if (enterpriseTeam) qp.set("enterprise_team", enterpriseTeam);
       if (user) qp.set("user", user);
+      if (dateFrom) qp.set("date_from", dateFrom);
+      if (dateTo) qp.set("date_to", dateTo);
       const query = qp.toString();
       const res = await fetch(`/api/data/dashboard${query ? `?${query}` : ""}`);
       const json = await res.json();
@@ -169,7 +172,7 @@ export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user =
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgs.join(","), enterpriseTeam, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOrgs.join(","), enterpriseTeam, user, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchDashboard();

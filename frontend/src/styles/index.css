@@ -2517,6 +2517,18 @@ body {
   letter-spacing: 0.3px;
 }
 
+.chart-hint {
+  font-size: 11px;
+  color: var(--text-tertiary, var(--text-secondary));
+  opacity: 0.75;
+  margin: -6px 0 10px;
+  line-height: 1.5;
+}
+
+.kpi-hint {
+  margin: -8px 0 14px 2px;
+}
+
 .chart-card-wide {
   grid-column: 1 / -1;
 }
@@ -2570,6 +2582,59 @@ body {
 
 .dashboard-table tbody tr:hover {
   background: var(--bg-tertiary);
+}
+
+/* Click-to-sort column headers */
+th.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.th-sortable:hover {
+  color: var(--accent);
+}
+
+th.th-sortable.th-sorted {
+  color: var(--accent);
+}
+
+.th-sortable-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.th-sort-arrow {
+  font-size: 9px;
+  opacity: 0.35;
+  line-height: 1;
+}
+
+th.th-sorted .th-sort-arrow {
+  opacity: 1;
+}
+
+.dashboard-table tfoot td {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border-bottom: none;
+}
+
+/* Legend dot used to tie a table row back to its pie slice */
+.dash-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.dashboard-table td.user-name .dash-badge {
+  margin-left: 6px;
 }
 
 /* Responsive: stack charts on narrow screens */

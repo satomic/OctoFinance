@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useDatasetSync, useUnassignedCostCenterUsers } from "../hooks/useData";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { CostCenterOption, UnassignedCostCenterUser } from "../types";
 
 interface Props {
@@ -210,6 +212,12 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
   const allVisibleSelected = users.length > 0 && users.every((user) => selectedUsers.has(user.login));
   const selectedCostCenter = costCenters.find((cc) => cc.id === batchCostCenterId);
 
+  const userSorter = useSortableRows(users, {
+    orgs: (u) => u.orgs.join(", "),
+    teams: (u) => u.teams.join(", "),
+    plan_types: (u) => u.plan_types.join(", "),
+  });
+
   const toggleUser = useCallback((login: string) => {
     setSelectedUsers((prev) => {
       const next = new Set(prev);
@@ -362,16 +370,16 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
                 <th className="cc-th cc-checkbox-cell">
                   <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} />
                 </th>
-                <th className="cc-th">{t("ccDash.colUser")}</th>
-                <th className="cc-th">{t("ccUnassigned.colOrganizations")}</th>
-                <th className="cc-th">{t("ccUnassigned.colTeams")}</th>
-                <th className="cc-th">{t("ccUnassigned.plan")}</th>
-                <th className="cc-th">{t("ccUnassigned.colLastActivity")}</th>
+                <SortTh label={t("ccDash.colUser")} sortKey="login" sorter={userSorter} className="cc-th" />
+                <SortTh label={t("ccUnassigned.colOrganizations")} sortKey="orgs" sorter={userSorter} className="cc-th" />
+                <SortTh label={t("ccUnassigned.colTeams")} sortKey="teams" sorter={userSorter} className="cc-th" />
+                <SortTh label={t("ccUnassigned.plan")} sortKey="plan_types" sorter={userSorter} className="cc-th" />
+                <SortTh label={t("ccUnassigned.colLastActivity")} sortKey="last_activity_at" sorter={userSorter} className="cc-th" />
                 <th className="cc-th">{t("ccUnassigned.colAssign")}</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => {
+              {userSorter.rows.map((user) => {
                 const rowCostCenterId = rowCostCenters[user.login] || "";
                 return (
                   <tr key={user.login} className="cc-table-row">

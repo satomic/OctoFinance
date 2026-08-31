@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useBudgetRequests, useMyCostCenters } from "../hooks/useMe";
 import { statusBadgeClass } from "../utils/budgetRequests";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { BudgetRequest } from "../types";
 
 /** Read-only view of a request's cost center move. */
@@ -20,6 +22,10 @@ export function CostCenterChangeCell({ request }: { request: BudgetRequest }) {
 
 export function RequestHistoryTable({ requests, showOwner = false }: { requests: BudgetRequest[]; showOwner?: boolean }) {
   const { t } = useI18n();
+  const sorter = useSortableRows(requests, {
+    details: (r) => (r.request_type === "cost_center" ? r.cost_center_plan?.to?.name ?? "" : r.requested_amount),
+    github: (r) => (r.request_type === "cost_center" ? r.cost_center_result?.status : r.github_budget?.status) ?? "",
+  });
 
   if (!requests.length) {
     return <div className="dashboard-empty">{t("budgetReq.empty")}</div>;
@@ -30,18 +36,18 @@ export function RequestHistoryTable({ requests, showOwner = false }: { requests:
       <table className="cc-table">
         <thead>
           <tr>
-            <th className="cc-th">{t("budgetReq.colDate")}</th>
-            {showOwner && <th className="cc-th">{t("budgetReq.colUser")}</th>}
-            <th className="cc-th">{t("budgetReq.colType")}</th>
-            <th className="cc-th">{t("budgetReq.colDetails")}</th>
-            <th className="cc-th">{t("budgetReq.colReason")}</th>
-            <th className="cc-th">{t("budgetReq.colStatus")}</th>
-            <th className="cc-th">{t("budgetReq.githubStatus")}</th>
-            <th className="cc-th">{t("budgetReq.colReviewer")}</th>
+            <SortTh label={t("budgetReq.colDate")} sortKey="created_at" sorter={sorter} className="cc-th" />
+            {showOwner && <SortTh label={t("budgetReq.colUser")} sortKey="user_login" sorter={sorter} className="cc-th" />}
+            <SortTh label={t("budgetReq.colType")} sortKey="request_type" sorter={sorter} className="cc-th" />
+            <SortTh label={t("budgetReq.colDetails")} sortKey="details" sorter={sorter} className="cc-th" />
+            <SortTh label={t("budgetReq.colReason")} sortKey="reason" sorter={sorter} className="cc-th" />
+            <SortTh label={t("budgetReq.colStatus")} sortKey="status" sorter={sorter} className="cc-th" />
+            <SortTh label={t("budgetReq.githubStatus")} sortKey="github" sorter={sorter} className="cc-th" />
+            <SortTh label={t("budgetReq.colReviewer")} sortKey="reviewed_by" sorter={sorter} className="cc-th" />
           </tr>
         </thead>
         <tbody>
-          {requests.map((r) => {
+          {sorter.rows.map((r) => {
             const isCC = r.request_type === "cost_center";
             const sync = isCC ? r.cost_center_result : r.github_budget;
             const syncStatus = sync?.status;

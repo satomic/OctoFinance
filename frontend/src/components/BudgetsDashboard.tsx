@@ -5,6 +5,8 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useBudgetsDashboard, useDatasetSync } from "../hooks/useData";
+import { SortTh } from "./SortTh";
+import { useSortableRows } from "../hooks/useSortableRows";
 import type { Budget } from "../types";
 
 interface Props {
@@ -51,6 +53,10 @@ export function BudgetsDashboard({ refreshKey }: Props) {
     (SCOPE_LABEL_KEYS as readonly string[]).includes(s)
       ? t(`budgetsDash.scope.${s}` as Parameters<typeof t>[0])
       : s;
+
+  const budgetSorter = useSortableRows<Budget>(data?.budgets ?? [], {
+    skus: (b) => b.skus.join(", "),
+  });
 
   if (loading && !data) return <div className="dashboard-loading">{t("loading")}</div>;
 
@@ -207,19 +213,19 @@ export function BudgetsDashboard({ refreshKey }: Props) {
             <table className="cc-table">
               <thead>
                 <tr>
-                  <th className="cc-th">{t("budgetsDash.colScope")}</th>
-                  <th className="cc-th">{t("budgetsDash.colEntity")}</th>
-                  <th className="cc-th">{t("budgetsDash.colType")}</th>
-                  <th className="cc-th">{t("budgetsDash.colSkus")}</th>
-                  <th className="cc-th cc-th-num">{t("budgetsDash.colAmount")}</th>
-                  <th className="cc-th cc-th-num">{t("budgetsDash.colConsumed")}</th>
-                  <th className="cc-th cc-th-num">{t("budgetsDash.colRemaining")}</th>
-                  <th className="cc-th">{t("budgetsDash.colHardLimit")}</th>
-                  <th className="cc-th">{t("budgetsDash.colAlerting")}</th>
+                  <SortTh label={t("budgetsDash.colScope")} sortKey="scope" sorter={budgetSorter} className="cc-th" />
+                  <SortTh label={t("budgetsDash.colEntity")} sortKey="entity_name" sorter={budgetSorter} className="cc-th" />
+                  <SortTh label={t("budgetsDash.colType")} sortKey="budget_type" sorter={budgetSorter} className="cc-th" />
+                  <SortTh label={t("budgetsDash.colSkus")} sortKey="skus" sorter={budgetSorter} className="cc-th" />
+                  <SortTh label={t("budgetsDash.colAmount")} sortKey="amount" sorter={budgetSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("budgetsDash.colConsumed")} sortKey="consumed_amount" sorter={budgetSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("budgetsDash.colRemaining")} sortKey="remaining_amount" sorter={budgetSorter} className="cc-th cc-th-num" />
+                  <SortTh label={t("budgetsDash.colHardLimit")} sortKey="prevent_further_usage" sorter={budgetSorter} className="cc-th" />
+                  <SortTh label={t("budgetsDash.colAlerting")} sortKey="will_alert" sorter={budgetSorter} className="cc-th" />
                 </tr>
               </thead>
               <tbody>
-                {data.budgets.map((b: Budget) => (
+                {budgetSorter.rows.map((b: Budget) => (
                   <tr key={b.id} className="cc-table-row">
                     <td className="cc-td">
                       <span
