@@ -75,7 +75,7 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 | 6 | `get_users_usage_report` | Read (Cached) | Get user-level Copilot usage report from cached data. Contains per-user engagement statistics, feature usage patterns, and adoption metrics. |
 | 7 | `get_metrics_detail` | Read (Cached) | Get detailed Copilot metrics (legacy API) including IDE code completions, chat usage, PR summaries, and per-editor/model breakdown. |
 | 8 | `get_ai_credit_usage` | Read (Cached) | Get AI credit usage from cached data. Shows per-model breakdown: model names, credit quantities, pricing, gross/discount/net amounts. |
-| 9 | `get_user_ai_usage` | Read (CSV) | Get per-user AI usage from uploaded CSV data. Shows each user's daily AI credit consumption by AI model, including costs, quota usage, and active days. |
+| 9 | `get_user_ai_usage` | Read (CSV) | Get per-user AI usage from the ingested billing report CSV (`data/ai_usage_csv/ai_usage_latest.csv`). Shows each user's daily AI credit consumption by AI model, including costs, quota usage, and active days. |
 | 10 | `fetch_org_usage_report` | Read (Live) | Fetch LIVE org-level usage report directly from GitHub API. Supports specific day or 28-day report. Data available from Oct 10, 2025 onward. |
 | 11 | `fetch_org_users_usage_report` | Read (Live) | Fetch LIVE user-level usage report directly from GitHub API. Supports specific day or 28-day report. |
 | 12 | `fetch_ai_credit_usage` | Read (Live) | Fetch LIVE AI credit usage from GitHub API. Supports historical queries (year/month, up to 24 months). |

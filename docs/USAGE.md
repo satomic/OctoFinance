@@ -298,7 +298,7 @@ Toggle via **Console**. Shows tool execution logs with timestamps and real-time 
 
 ## AI Usage CSV
 
-Per-user AI credit and billed-spend data lives in GitHub's *detailed* billing report CSVs, not in the regular Copilot APIs. There are two ways to get it in, and both feed the same store and deduplicate against each other.
+Per-user AI credit and billed-spend data lives in GitHub's *detailed* billing report CSVs, not in the regular Copilot APIs. There are two ways to get it in, and both feed the same store and merge by date against each other.
 
 ### Fetch it automatically (recommended)
 
@@ -323,7 +323,51 @@ Two knobs under **Settings → CSV Fetch** (they affect only this button, not Sy
 2. Click **Upload CSV** in the StatusBar and pick the file
 3. The type (AI Usage vs. Usage Report) is auto-detected and the data appears in the matching dashboard tab
 
-Either way ingestion is incremental — duplicate rows are ignored.
+### How the data is stored and merged
+
+Each CSV flavour is kept in a **single** file, mirroring the `{org}_latest.json` convention of the other datasets:
+
+| Flavour | File |
+|---|---|
+| AI credit, per user per model | `data/ai_usage_csv/ai_usage_latest.csv` |
+| Billed usage, per user per SKU | `data/usage_report_csv/usage_report_latest.csv` |
+
+Merging uses **the date as the primary key, and a date is atomic**. A billing export is authoritative for every day it covers, so ingesting one *replaces every stored row for those days* rather than merging row by row. A day can therefore gain or lose rows.
+
+Concretely, suppose the store holds:
+
+```
+2026-08-01   alice, bob, carol      (3 rows)
+2026-08-02   alice, bob             (2 rows)
+2026-08-03   alice, bob, dave       (3 rows)
+```
+
+and you ingest an export that contains **only 2026-08-02**, with four rows:
+
+```
+2026-08-02   alice, bob, erin, frank
+```
+
+The result is:
+
+```
+2026-08-01   alice, bob, carol           unchanged — the export said nothing about this day
+2026-08-02   alice, bob, erin, frank     all 2 old rows dropped, all 4 new rows kept
+2026-08-03   alice, bob, dave            unchanged
+```
+
+The same rule shrinks a day: if the next export has a single row for 2026-08-01, that day ends up with exactly one row and `alice`/`bob`/`carol` are gone. This is what makes restatements self-correcting — when GitHub revises a day's usage after the fact, the correction fully replaces the old figures instead of piling up alongside them.
+
+Re-fetching a range you already have is therefore safe and idempotent: every row comes back, every row is replaced, and the totals do not move.
+
+Two consequences worth knowing:
+
+- **A day absent from the export is never touched.** If a day legitimately becomes empty upstream, its old rows stay until an export covering that day includes it again.
+- **Ingest whole exports, not filtered slices.** Because a day is replaced wholesale, uploading a CSV hand-filtered to one organization will drop the other organizations' rows for the days it covers. The enterprise-level exports that **Fetch CSV** pulls always contain every organization, so this only affects manual uploads.
+
+### Migrating from older versions
+
+Earlier versions wrote one timestamped file per upload. On startup any such files are merged into the single `_latest.csv` — oldest first, so newer exports win per date — and then removed. Nothing is lost: the column set is widened to the union of all files, so the extra `input`/`output`/`cache_read`/`cache_write` columns the API export carries survive alongside older uploads that lack them.
 
 ---
 

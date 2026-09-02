@@ -26,7 +26,7 @@
 | | `get_users_usage_report` | User-level usage from cached data |
 | | `get_metrics_detail` | Detailed metrics (legacy API) |
 | | `get_ai_credit_usage` | Org-level AI credit breakdown from cache |
-| | `get_user_ai_usage` | Per-user AI usage from uploaded CSV data |
+| | `get_user_ai_usage` | Per-user AI usage from the ingested billing report CSV |
 | | `fetch_org_usage_report` | Live org-level usage from GitHub API |
 | | `fetch_org_users_usage_report` | Live user-level usage from GitHub API |
 | | `fetch_ai_credit_usage` | Live AI credit data from GitHub API |
@@ -219,6 +219,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 
 - **Org-level AI credit** tracking via the GitHub Billing API (UBB)
 - **Per-user AI usage** from the detailed billing report CSV, either pulled automatically through the billing reports API or uploaded by hand from the GitHub UI export
+- **Date-keyed merge** into one `_latest.csv` per flavour — an export replaces every stored row for the days it covers, so restatements self-correct and re-fetching is idempotent ([details](USAGE.md#how-the-data-is-stored-and-merged))
 - **Per-model breakdown** (GPT-5.4, Claude Opus 4.7, etc.)
 - **Quota tracking** with visual progress bars
 - **Cost analysis** including gross/discount/net amounts
@@ -289,8 +290,8 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 | `/api/data/billing/{org}` | GET | admin | Billing data for an organization |
 | `/api/data/dashboard` | GET | admin | Aggregated usage-metrics dashboard. Params: `orgs`, `enterprise_team` |
 | `/api/data/csv-dashboard` | GET | admin | Aggregated CSV dashboard (AI usage + usage report). Params include `enterprise_team` |
-| `/api/data/csv-info` | GET | admin | Uploaded CSV coverage info |
-| `/api/data/upload-csv` | POST | admin | Upload an AI usage / usage report CSV (type auto-detected) |
+| `/api/data/csv-info` | GET | admin | Ingested CSV coverage info |
+| `/api/data/upload-csv` | POST | admin | Upload an AI usage / usage report CSV (type auto-detected, merged by date) |
 | `/api/data/fetch-csv` | POST | admin | Pull the detail usage + AI credit report CSVs from the GitHub billing reports API |
 | `/api/data/fetch-csv/status` | GET | admin | Whether a fetch is running, plus the last fetch result |
 | `/api/data/budgets-dashboard` | GET | admin | Budgets with consumed/remaining. Params: `enterprise`, `scope`, `search`, `live`, `period` |
@@ -350,5 +351,6 @@ PATs and settings are managed through the web UI (**Settings** modal):
 | `data/audit_log.json` | Executed operations |
 | `data/{category}/{org}_latest.json` | Synced GitHub data (seats, billing, usage, usage_users, metrics, ai_credits, cost_centers, budgets, enterprise) |
 | `data/enterprise_teams/{slug}_latest.json` | Enterprise team rosters + `login → teams` index used to join teams onto every other dataset |
-| `data/ai_usage_csv/`, `data/usage_report_csv/` | Ingested billing report CSVs (API-fetched or uploaded) |
+| `data/ai_usage_csv/ai_usage_latest.csv` | Per-user, per-model AI credit rows (single merged file) |
+| `data/usage_report_csv/usage_report_latest.csv` | Per-user, per-SKU billed usage rows (single merged file) |
 | `data/sessions/{id}/` | Per-chat-session working directories |
