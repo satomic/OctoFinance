@@ -69,7 +69,9 @@ Each Copilot plan includes a monthly allowance of AI credits per user; Copilot E
 a larger allowance than Copilot Business. AI credit usage beyond the included monthly allowance is
 billed per the model's price per credit (e.g. ~$0.01/credit). Use this information when analyzing
 AI credit usage and cost optimization.
-Note: Per-user AI credit breakdown is NOT available via API — only org-level totals by model. Per-user data can only be obtained through the GitHub UI AI Usage report CSV export.
+Note: The Copilot AI credit API only returns org-level totals by model. The per-user breakdown comes from the
+detailed billing report CSV, which the admin can now pull automatically through the billing reports API
+("Fetch CSV" in the UI) or still upload by hand from the GitHub UI export.
 
 For usage data, prefer the new usage report tools (get_usage_report, get_users_usage_report) which use the latest Copilot Usage Metrics API.
 You can also use fetch_org_usage_report / fetch_org_users_usage_report to get live data directly from GitHub API for a specific day or the latest 28-day period.

@@ -16,6 +16,11 @@ PATS_FILE = DATA_DIR / "pats.json"
 DEFAULT_SETTINGS = {
     "auto_sync_on_startup": True,
     "sync_cron": "",
+    # Billing report CSV exports take minutes to generate and have been seen
+    # wedged in "processing" for far longer, so both the poll cadence and the
+    # give-up point are tunable.
+    "csv_fetch_poll_seconds": 60,
+    "csv_fetch_timeout_minutes": 120,
 }
 
 

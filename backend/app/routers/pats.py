@@ -3,7 +3,7 @@ PAT management router - CRUD for GitHub Personal Access Tokens.
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
@@ -28,6 +28,8 @@ class UpdatePATRequest(BaseModel):
 class UpdateSettingsRequest(BaseModel):
     auto_sync_on_startup: bool | None = None
     sync_cron: str | None = None
+    csv_fetch_poll_seconds: int | None = Field(default=None, ge=10, le=600)
+    csv_fetch_timeout_minutes: int | None = Field(default=None, ge=5, le=1440)
 
 
 @router.get("/pats")
@@ -170,6 +172,10 @@ async def update_settings(request: UpdateSettingsRequest):
         kwargs["auto_sync_on_startup"] = request.auto_sync_on_startup
     if request.sync_cron is not None:
         kwargs["sync_cron"] = request.sync_cron
+    if request.csv_fetch_poll_seconds is not None:
+        kwargs["csv_fetch_poll_seconds"] = request.csv_fetch_poll_seconds
+    if request.csv_fetch_timeout_minutes is not None:
+        kwargs["csv_fetch_timeout_minutes"] = request.csv_fetch_timeout_minutes
 
     settings = pat_manager.update_settings(**kwargs)
 

@@ -3,14 +3,12 @@ Data query router - provides read access to collected data.
 Supports enterprise grouping for org display.
 """
 
-import csv
 import io
 import json
 import re
 import shutil
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -19,8 +17,24 @@ from pydantic import BaseModel, Field
 from ..config import COPILOT_PRICING
 from ..services.api_manager import api_manager
 from ..services.budget_provisioner import current_month_range, fetch_budgets
+from ..services.csv_report_fetcher import (
+    ALL_CSV_TYPES,
+    begin_job,
+    default_date_range,
+    fetch_and_ingest,
+    get_job,
+    validate_date_range,
+)
+from ..services.csv_store import (
+    CSV_TYPE_AI,
+    CSV_TYPE_USAGE,
+    ingest_csv_text,
+    load_all_csv_records,
+    scan_csv_type,
+)
 from ..services.data_collector import data_collector, enterprise_pseudo_org
 from ..services.report_generator import generate_report_zip
+from ..services.sync_manager import sync_manager
 
 router = APIRouter(tags=["data"])
 
@@ -830,8 +844,8 @@ async def get_csv_dashboard(
     usage = _build_usage_report_section(selected_orgs, selected_ccs, selected_products, selected_skus, date_from, date_to, member_filter)
 
     # Gather all filter options from raw data
-    all_ai_usage = _load_all_csv_records(CSV_TYPE_AI)
-    all_usage = _load_all_csv_records(CSV_TYPE_USAGE)
+    all_ai_usage = load_all_csv_records(CSV_TYPE_AI)
+    all_usage = load_all_csv_records(CSV_TYPE_USAGE)
     all_orgs: set[str] = set()
     all_ccs: set[str] = set()
     all_products: set[str] = set()
@@ -900,7 +914,7 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
                                 date_from: str, date_to: str,
                                 member_filter: MemberFilter | None = None) -> dict:
     """Build aggregated AI usage CSV section for the CSV dashboard."""
-    all_records = _load_all_csv_records(CSV_TYPE_AI)
+    all_records = load_all_csv_records(CSV_TYPE_AI)
     if not all_records:
         return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
                 "model_breakdown": [], "org_breakdown": [], "cost_center_breakdown": [], "users": []}
@@ -1016,7 +1030,7 @@ def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str
                                  date_from: str, date_to: str,
                                  member_filter: MemberFilter | None = None) -> dict:
     """Build aggregated usage report CSV section for CSV dashboard."""
-    all_records = _load_all_csv_records(CSV_TYPE_USAGE)
+    all_records = load_all_csv_records(CSV_TYPE_USAGE)
     if not all_records:
         return {"has_data": False, "date_range": {}, "kpi": {}, "daily_trend": [],
                 "product_breakdown": [], "sku_breakdown": [], "org_breakdown": [],
@@ -1140,50 +1154,11 @@ def _build_usage_report_section(selected_orgs: list[str], selected_ccs: list[str
 
 
 # ---------------------------------------------------------------------------
-# CSV helpers
-# ---------------------------------------------------------------------------
-
-CSV_TYPE_AI = "ai_usage"
-CSV_TYPE_USAGE = "usage_report"
-
-
-def _get_csv_dir(csv_type: str = CSV_TYPE_AI) -> Path:
-    if csv_type == CSV_TYPE_USAGE:
-        return data_collector.data_dir / "usage_report_csv"
-    return data_collector.data_dir / "ai_usage_csv"
-
-
-def _detect_csv_type(fieldnames: list[str]) -> str | None:
-    """Detect whether a CSV is an AI usage report or a usage report based on columns.
-
-    - AI Usage report (UBB): has a per-model breakdown, identified by a ``model``
-      column alongside ``username``/``organization``.
-    - Usage report: aggregated by ``product``/``sku``/``unit_type`` with no ``model`` column.
-    """
-    cols = set(fieldnames)
-    if "model" in cols and "username" in cols and "organization" in cols:
-        return CSV_TYPE_AI
-    if "product" in cols and "sku" in cols and "unit_type" in cols:
-        return CSV_TYPE_USAGE
-    return None
-
-
-def _load_all_csv_records(csv_type: str = CSV_TYPE_AI) -> list[dict]:
-    """Load all CSV records from the given type's directory."""
-    csv_dir = _get_csv_dir(csv_type)
-    if not csv_dir.exists():
-        return []
-    records: list[dict] = []
-    for f in sorted(csv_dir.glob("*.csv")):
-        with open(f, encoding="utf-8") as fh:
-            reader = csv.DictReader(fh)
-            for row in reader:
-                records.append(row)
-    return records
-
-
-# ---------------------------------------------------------------------------
-# CSV upload endpoints
+# CSV ingestion endpoints
+#
+# Two ways in, one storage layer (services/csv_store.py): a CSV exported by
+# hand from the billing UI, or the same detail report pulled straight from the
+# billing reports API.
 # ---------------------------------------------------------------------------
 
 @router.post("/data/upload-csv")
@@ -1197,105 +1172,75 @@ async def upload_csv(file: UploadFile = File(...)):
         return {"error": "Only CSV files are accepted."}
 
     content = await file.read()
-    text = content.decode("utf-8-sig")  # handle BOM
+    return ingest_csv_text(content.decode("utf-8-sig"))
 
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames:
-        return {"error": "CSV file has no headers."}
 
-    csv_type = _detect_csv_type(list(reader.fieldnames))
-    if csv_type is None:
-        return {"error": "Unrecognised CSV format. Expected an AI usage CSV (with a 'model' column) "
-                         "or a usage report CSV (with 'product' and 'sku' columns)."}
+class FetchCsvRequest(BaseModel):
+    """Request a billing usage report CSV export straight from the GitHub API."""
 
-    rows = list(reader)
-    if not rows:
-        return {"error": "CSV file is empty."}
+    enterprise: str = Field(default="", description="Enterprise slug; empty means all discovered enterprises")
+    start_date: str = Field(default="")
+    end_date: str = Field(default="")
+    csv_types: list[str] = Field(default_factory=lambda: list(ALL_CSV_TYPES))
 
-    dates = [r.get("date", "") for r in rows if r.get("date")]
-    date_min = min(dates) if dates else "unknown"
-    date_max = max(dates) if dates else "unknown"
 
-    csv_dir = _get_csv_dir(csv_type)
-    csv_dir.mkdir(parents=True, exist_ok=True)
+@router.post("/data/fetch-csv")
+async def fetch_csv(req: FetchCsvRequest):
+    """Pull the detail usage report CSVs from GitHub instead of uploading them by hand.
 
-    # Build deduplication key per type
-    def _key(row: dict) -> str:
-        if csv_type == CSV_TYPE_AI:
-            return f"{row.get('date')}|{row.get('username')}|{row.get('model')}|{row.get('organization')}"
-        return f"{row.get('date')}|{row.get('username')}|{row.get('sku')}|{row.get('organization')}"
+    Runs in the background (a report takes minutes to generate); progress is
+    streamed over the existing /api/sync-stream SSE channel and the outcome is
+    available from /api/data/fetch-csv/status.
+    """
+    csv_types = [t for t in req.csv_types if t in ALL_CSV_TYPES]
+    if not csv_types:
+        return {"status": "error", "error": f"csv_types must be a subset of {list(ALL_CSV_TYPES)}."}
 
-    existing_keys: set[str] = set()
-    for f in csv_dir.glob("*.csv"):
-        with open(f, encoding="utf-8") as fh:
-            for row in csv.DictReader(fh):
-                existing_keys.add(_key(row))
+    if req.enterprise:
+        enterprises = [req.enterprise]
+    else:
+        enterprises = [e["slug"] for e in api_manager.get_all_enterprises()]
+    if not enterprises:
+        return {"status": "error", "error": "No enterprise is configured. "
+                                            "This report is only available at enterprise level."}
 
-    new_rows = [row for row in rows if _key(row) not in existing_keys]
+    default_start, default_end = default_date_range()
+    start_date = req.start_date or default_start
+    end_date = req.end_date or default_end
+    if err := validate_date_range(start_date, end_date):
+        return {"status": "error", "error": err}
 
-    if not new_rows:
-        return {
-            "status": "no_new_data",
-            "csv_type": csv_type,
-            "date_range": {"start": date_min, "end": date_max},
-            "total_rows": len(rows),
-            "new_rows": 0,
-        }
+    if sync_manager.is_syncing:
+        return {"status": "already_syncing"}
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    prefix = "ai_usage" if csv_type == CSV_TYPE_AI else "usage_report"
-    out_path = csv_dir / f"{prefix}_{ts}.csv"
-    fieldnames = list(reader.fieldnames)
-    with open(out_path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(new_rows)
+    async def _run(log_fn):
+        await fetch_and_ingest(enterprises, start_date, end_date, csv_types, log_fn)
 
+    # Register before scheduling so an immediate poll can't observe the
+    # previous run and mistake it for this one.
+    job = begin_job(enterprises, start_date, end_date, csv_types)
+    sync_manager.run_in_background(_run)
     return {
-        "status": "ok",
-        "csv_type": csv_type,
-        "date_range": {"start": date_min, "end": date_max},
-        "total_rows": len(rows),
-        "new_rows": len(new_rows),
-        "duplicates_skipped": len(rows) - len(new_rows),
-        "file_saved": out_path.name,
+        "status": "started",
+        "job_id": job["job_id"],
+        "enterprises": enterprises,
+        "csv_types": csv_types,
+        "date_range": {"start": start_date, "end": end_date},
     }
+
+
+@router.get("/data/fetch-csv/status")
+async def fetch_csv_status():
+    """State of the current or most recent fetch, including its job_id."""
+    return get_job()
 
 
 @router.get("/data/csv-info")
 async def get_csv_info():
     """Get info about all uploaded CSV data (both AI usage and usage report)."""
-    def _scan(csv_type: str) -> dict:
-        csv_dir = _get_csv_dir(csv_type)
-        csv_files = sorted(csv_dir.glob("*.csv")) if csv_dir.exists() else []
-        total_records = 0
-        all_dates: list[str] = []
-        all_orgs: set[str] = set()
-        all_users: set[str] = set()
-        for f in csv_files:
-            with open(f, encoding="utf-8") as fh:
-                for row in csv.DictReader(fh):
-                    total_records += 1
-                    d = row.get("date", "")
-                    if d:
-                        all_dates.append(d)
-                    if row.get("organization"):
-                        all_orgs.add(row["organization"])
-                    if row.get("username"):
-                        all_users.add(row["username"])
-        return {
-            "has_data": total_records > 0,
-            "latest_date": max(all_dates) if all_dates else None,
-            "earliest_date": min(all_dates) if all_dates else None,
-            "file_count": len(csv_files),
-            "total_records": total_records,
-            "orgs": sorted(all_orgs),
-            "user_count": len(all_users),
-        }
-
     return {
-        "ai_usage": _scan(CSV_TYPE_AI),
-        "usage_report": _scan(CSV_TYPE_USAGE),
+        "ai_usage": scan_csv_type(CSV_TYPE_AI),
+        "usage_report": scan_csv_type(CSV_TYPE_USAGE),
     }
 
 
@@ -1556,8 +1501,8 @@ async def get_cost_center_report(enterprise: str = Query(default="")):
     cost_centers    = cc_data.get("cost_centers", [])
     enterprise_name = cc_data.get("enterprise_name", selected_slug)
 
-    all_ai_usage = _load_all_csv_records(CSV_TYPE_AI)
-    all_usage   = _load_all_csv_records(CSV_TYPE_USAGE)
+    all_ai_usage = load_all_csv_records(CSV_TYPE_AI)
+    all_usage   = load_all_csv_records(CSV_TYPE_USAGE)
 
     zip_bytes = generate_report_zip(
         enterprise=selected_slug,
@@ -1763,7 +1708,7 @@ def _aggregate_ai_cost_by_login(org_logins: list[str]) -> dict[str, dict]:
     """Build a `login (lowercase) -> AI credit spend` map from uploaded AI usage CSVs."""
     org_set = {o.lower() for o in org_logins}
     result: dict[str, dict] = {}
-    for r in _load_all_csv_records(CSV_TYPE_AI):
+    for r in load_all_csv_records(CSV_TYPE_AI):
         username = r.get("username", "")
         if not username:
             continue

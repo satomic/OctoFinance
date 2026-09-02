@@ -16,10 +16,10 @@ from fastapi.responses import JSONResponse
 
 from ..services.budget_provisioner import current_month_range, get_user_budget_context
 from ..services.cost_center_provisioner import list_cost_centers_for_user
+from ..services.csv_store import CSV_TYPE_AI, CSV_TYPE_USAGE, load_all_csv_records
 from ..services.data_collector import data_collector
 from .auth import require_user
 from .budget_requests import load_requests_for
-from .data import CSV_TYPE_AI, CSV_TYPE_USAGE, _load_all_csv_records
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -212,7 +212,7 @@ def _my_ai_usage(login: str, date_from: str, date_to: str) -> dict:
     """AI credit consumption for this user from the uploaded AI usage CSVs."""
     target = login.lower()
     records = [
-        r for r in _load_all_csv_records(CSV_TYPE_AI)
+        r for r in load_all_csv_records(CSV_TYPE_AI)
         if str(r.get("username", "")).lower() == target
     ]
     if date_from:
@@ -279,7 +279,7 @@ def _my_spend(login: str, date_from: str, date_to: str) -> dict:
     """Billed spend for this user from the uploaded usage report CSVs."""
     target = login.lower()
     records = [
-        r for r in _load_all_csv_records(CSV_TYPE_USAGE)
+        r for r in load_all_csv_records(CSV_TYPE_USAGE)
         if str(r.get("username", "")).lower() == target
     ]
     if date_from:

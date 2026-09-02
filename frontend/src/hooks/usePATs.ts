@@ -4,6 +4,8 @@ import type { PATInfo } from "../types";
 export interface SyncSettings {
   auto_sync_on_startup: boolean;
   sync_cron: string;
+  csv_fetch_poll_seconds: number;
+  csv_fetch_timeout_minutes: number;
 }
 
 export function usePATs() {
@@ -13,6 +15,8 @@ export function usePATs() {
   const [settings, setSettings] = useState<SyncSettings>({
     auto_sync_on_startup: true,
     sync_cron: "",
+    csv_fetch_poll_seconds: 60,
+    csv_fetch_timeout_minutes: 120,
   });
 
   const loadPATs = useCallback(async () => {

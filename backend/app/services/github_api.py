@@ -621,6 +621,123 @@ class GitHubAPI:
             return None
 
     # =========================================================================
+    # Billing usage report CSV exports
+    # Docs: https://docs.github.com/en/enterprise-cloud@latest/billing/reference/billing-reports
+    #
+    # Public preview since 2026-02-17. This is the API equivalent of the
+    # "request a usage report" button in the enterprise billing UI, which
+    # previously only delivered CSVs by email. Requires an enterprise admin or
+    # billing manager PAT with the `manage_billing:enterprise` scope.
+    #
+    # Only one export can be in flight per enterprise: a second POST while one
+    # is still processing returns HTTP 409.
+    # =========================================================================
+
+    async def create_billing_report(
+        self,
+        enterprise: str,
+        report_type: str,
+        start_date: str,
+        end_date: str | None = None,
+    ) -> dict:
+        """Request a billing usage report CSV export.
+
+        API: POST /enterprises/{enterprise}/settings/billing/reports
+
+        `report_type` is one of ``detailed`` (per-user/per-SKU billed usage),
+        ``ai_credit`` (per-user/per-model AI credit consumption; also accepted
+        under its legacy name ``premium_request``) or ``summarized``.
+
+        Returns the created export object, or ``{"error": ...}`` with the HTTP
+        status so the caller can distinguish a 409 (export already running)
+        from a 403 (missing scope).
+        """
+        payload: dict = {"report_type": report_type, "start_date": start_date}
+        if end_date:
+            payload["end_date"] = end_date
+        try:
+            resp = await self.client.post(
+                f"/enterprises/{enterprise}/settings/billing/reports",
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            self._record_response_failure("create_billing_report", e.response)
+            return {
+                "error": self._error_detail(e.response),
+                "status_code": e.response.status_code,
+            }
+        except httpx.HTTPError as e:
+            self._record_failure("create_billing_report", detail=str(e))
+            return {"error": str(e), "status_code": None}
+
+    async def get_billing_report(self, enterprise: str, report_id: str) -> dict | None:
+        """Get a single billing report export, including its `download_urls` once completed.
+
+        API: GET /enterprises/{enterprise}/settings/billing/reports/{report_id}
+        """
+        try:
+            resp = await self.client.get(
+                f"/enterprises/{enterprise}/settings/billing/reports/{report_id}"
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPError as e:
+            if isinstance(e, httpx.HTTPStatusError):
+                self._record_response_failure("get_billing_report", e.response)
+            else:
+                self._record_failure("get_billing_report", detail=str(e))
+            return None
+
+    async def list_billing_reports(self, enterprise: str) -> list[dict]:
+        """List this enterprise's billing report exports.
+
+        API: GET /enterprises/{enterprise}/settings/billing/reports
+
+        The list response intentionally omits `download_urls`; fetch an
+        individual report to get its download links.
+        """
+        try:
+            resp = await self.client.get(
+                f"/enterprises/{enterprise}/settings/billing/reports"
+            )
+            resp.raise_for_status()
+            body = resp.json()
+        except httpx.HTTPError as e:
+            if isinstance(e, httpx.HTTPStatusError):
+                self._record_response_failure("list_billing_reports", e.response)
+            else:
+                self._record_failure("list_billing_reports", detail=str(e))
+            return []
+        if isinstance(body, list):
+            return body
+        if isinstance(body, dict):
+            return body.get("usage_report_exports") or body.get("reports") or []
+        return []
+
+    @staticmethod
+    async def download_billing_report_csv(download_urls: list[str]) -> list[str]:
+        """Download each signed CSV URL and return the raw CSV text of each part.
+
+        The URLs are pre-signed blob storage links, so they must be fetched
+        without the GitHub Authorization header.
+        """
+        parts: list[str] = []
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as dl:
+            for url in download_urls:
+                try:
+                    resp = await dl.get(url)
+                    resp.raise_for_status()
+                except httpx.HTTPError as e:
+                    logger.warning("Failed to download billing report part: %s", e)
+                    continue
+                text = resp.text.strip()
+                if text:
+                    parts.append(text)
+        return parts
+
+    # =========================================================================
     # Copilot Usage Metrics Reports (new API with download_links)
     # Docs: https://docs.github.com/en/enterprise-cloud@latest/rest/copilot/copilot-usage-metrics
     # =========================================================================

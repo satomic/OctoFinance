@@ -218,7 +218,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 ## AI Credit Analytics
 
 - **Org-level AI credit** tracking via the GitHub Billing API (UBB)
-- **Per-user AI usage** from CSV upload (GitHub UI AI Usage report export)
+- **Per-user AI usage** from the detailed billing report CSV, either pulled automatically through the billing reports API or uploaded by hand from the GitHub UI export
 - **Per-model breakdown** (GPT-5.4, Claude Opus 4.7, etc.)
 - **Quota tracking** with visual progress bars
 - **Cost analysis** including gross/discount/net amounts
@@ -291,6 +291,8 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 | `/api/data/csv-dashboard` | GET | admin | Aggregated CSV dashboard (AI usage + usage report). Params include `enterprise_team` |
 | `/api/data/csv-info` | GET | admin | Uploaded CSV coverage info |
 | `/api/data/upload-csv` | POST | admin | Upload an AI usage / usage report CSV (type auto-detected) |
+| `/api/data/fetch-csv` | POST | admin | Pull the detail usage + AI credit report CSVs from the GitHub billing reports API |
+| `/api/data/fetch-csv/status` | GET | admin | Whether a fetch is running, plus the last fetch result |
 | `/api/data/budgets-dashboard` | GET | admin | Budgets with consumed/remaining. Params: `enterprise`, `scope`, `search`, `live`, `period` |
 | `/api/data/cost-center-dashboard` | GET | admin | Cost centers, members, user mapping |
 | `/api/data/cost-center-report` | GET | admin | Per-cost-center report payload |
@@ -348,5 +350,5 @@ PATs and settings are managed through the web UI (**Settings** modal):
 | `data/audit_log.json` | Executed operations |
 | `data/{category}/{org}_latest.json` | Synced GitHub data (seats, billing, usage, usage_users, metrics, ai_credits, cost_centers, budgets, enterprise) |
 | `data/enterprise_teams/{slug}_latest.json` | Enterprise team rosters + `login → teams` index used to join teams onto every other dataset |
-| `data/ai_usage_csv/`, `data/usage_report_csv/` | Uploaded CSV files |
+| `data/ai_usage_csv/`, `data/usage_report_csv/` | Ingested billing report CSVs (API-fetched or uploaded) |
 | `data/sessions/{id}/` | Per-chat-session working directories |

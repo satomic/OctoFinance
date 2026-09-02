@@ -7,7 +7,7 @@ import { PATSettingsModal } from "./PATSettingsModal";
 import { PeriodToggle } from "./PeriodToggle";
 import { LanguageSelector } from "./LanguageSelector";
 import { SourceCodeLink } from "./SourceCodeLink";
-import type { AuthUser, UpdateInfo } from "../types";
+import type { AuthUser, UpdateInfo, CsvFetchJob } from "../types";
 
 interface Props {
   consoleOpen: boolean;
@@ -27,8 +27,10 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
   const ui = useUIState();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { info: csvInfo, uploadCsv } = useCsvInfo();
+  const { info: csvInfo, uploadCsv, fetchCsvFromApi, readCsvJob, pollCsvFetch } = useCsvInfo();
   const [csvUploading, setCsvUploading] = useState(false);
+  const [csvFetching, setCsvFetching] = useState(false);
+  const [csvProgress, setCsvProgress] = useState("");
   const [csvMessage, setCsvMessage] = useState("");
   const [health, setHealth] = useState<{
     status: string;
@@ -94,6 +96,55 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
     }
   }, [uploadCsv, t]);
 
+  const describeJobResult = useCallback((job: CsvFetchJob) => {
+    if (job.errors.length) {
+      setCsvMessage(`${t("dashboard.csvFetchFailed")}: ${job.errors[0].error}`);
+    } else {
+      setCsvMessage(`${t("dashboard.csvFetchSuccess")}: ${job.new_rows}`);
+    }
+    setTimeout(() => setCsvMessage(""), 10000);
+  }, [t]);
+
+  const trackCsvJob = useCallback(async (jobId: string) => {
+    setCsvFetching(true);
+    try {
+      const job = await pollCsvFetch(jobId, (j) => setCsvProgress(
+        j.total_steps ? `${Math.min(j.step + 1, j.total_steps)}/${j.total_steps}` : ""
+      ));
+      if (job) describeJobResult(job);
+      else setCsvMessage(t("dashboard.csvFetchFailed"));
+    } finally {
+      setCsvFetching(false);
+      setCsvProgress("");
+    }
+  }, [pollCsvFetch, describeJobResult, t]);
+
+  // A fetch takes minutes and lives on the server, so reattach to one that is
+  // still running rather than leaving the user with no sign of it after a reload.
+  useEffect(() => {
+    let cancelled = false;
+    readCsvJob().then((job) => {
+      if (!cancelled && job?.running) trackCsvJob(job.job_id);
+    });
+    return () => { cancelled = true; };
+  }, [readCsvJob, trackCsvJob]);
+
+  const handleCsvFetch = useCallback(async () => {
+    setCsvMessage("");
+    const started = await fetchCsvFromApi();
+    if (started.status === "already_syncing") {
+      setCsvMessage(t("dashboard.csvFetchBusy"));
+      setTimeout(() => setCsvMessage(""), 10000);
+      return;
+    }
+    if (started.status !== "started" || !started.job_id) {
+      setCsvMessage(started.error || t("dashboard.csvFetchFailed"));
+      setTimeout(() => setCsvMessage(""), 10000);
+      return;
+    }
+    await trackCsvJob(started.job_id);
+  }, [fetchCsvFromApi, trackCsvJob, t]);
+
   return (
     <div className="status-bar">
       <div className="status-left">
@@ -154,6 +205,16 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           {theme === "dark" ? "Light" : "Dark"}
         </button>
         <div className="csv-upload-group">
+          <button
+            className="btn btn-small"
+            onClick={handleCsvFetch}
+            disabled={csvFetching || syncing}
+            title={t("dashboard.fetchCsvHint")}
+          >
+            {csvFetching
+              ? `${t("dashboard.csvFetching")}${csvProgress ? ` ${csvProgress}` : ""}`
+              : t("dashboard.fetchCsv")}
+          </button>
           <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} style={{ display: "none" }} />
           <button
             className="btn btn-small"

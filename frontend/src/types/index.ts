@@ -193,6 +193,38 @@ export interface CsvUploadResult {
   status_code?: number;
 }
 
+export interface CsvFetchStartResult {
+  status: "started" | "already_syncing" | "error";
+  job_id?: string;
+  enterprises?: string[];
+  csv_types?: string[];
+  date_range?: { start: string; end: string };
+  error?: string;
+}
+
+export interface CsvFetchJob {
+  job_id: string;
+  running: boolean;
+  step: number;
+  total_steps: number;
+  phase: string;
+  started_at: string | null;
+  finished_at: string | null;
+  date_range: { start: string; end: string } | null;
+  enterprises: string[];
+  new_rows: number;
+  results: Array<{
+    enterprise: string;
+    csv_type?: "ai_usage" | "usage_report";
+    total_rows?: number;
+    new_rows?: number;
+    duplicates_skipped?: number;
+    date_range?: { start: string; end: string } | null;
+    error?: string;
+  }>;
+  errors: Array<{ enterprise: string; csv_type?: string; error?: string }>;
+}
+
 // CSV Dashboard types
 export interface AiUsageSection {
   has_data: boolean;

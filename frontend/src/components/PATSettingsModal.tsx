@@ -49,6 +49,27 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const [includeOrganizations, setIncludeOrganizations] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  // Numeric settings are edited as a draft and committed on blur, so a partially
+  // typed value is never PUT (and rejected) mid-keystroke. A null draft means
+  // "not editing", so the field tracks the saved setting.
+  const [csvPollDraft, setCsvPollDraft] = useState<string | null>(null);
+  const [csvTimeoutDraft, setCsvTimeoutDraft] = useState<string | null>(null);
+  const csvPoll = csvPollDraft ?? String(settings.csv_fetch_poll_seconds);
+  const csvTimeout = csvTimeoutDraft ?? String(settings.csv_fetch_timeout_minutes);
+
+  const commitCsvNumber = (
+    key: "csv_fetch_poll_seconds" | "csv_fetch_timeout_minutes",
+    raw: string,
+    min: number,
+    max: number,
+    clearDraft: (v: string | null) => void,
+  ) => {
+    const n = Math.round(Number(raw));
+    clearDraft(null);
+    if (!Number.isFinite(n) || n < min || n > max) return;
+    if (n !== settings[key]) updateSettings({ [key]: n });
+  };
+
   const handleAdd = async () => {
     if (!token.trim()) return;
     clearError();
@@ -256,6 +277,55 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
               ))}
             </div>
             <p className="pat-form-hint">{t("settings.cronHint")}</p>
+          </div>
+
+          {/* CSV Fetch Settings — these apply only to the Fetch CSV button */}
+          <div className="sync-settings">
+            <h3>{t("settings.csvFetchSettings")}</h3>
+
+            <div className="sync-setting-row">
+              <span className="sync-setting-label">{t("settings.csvPollInterval")}</span>
+              <div className="sync-cron-input-group">
+                <input
+                  type="number"
+                  min={10}
+                  max={600}
+                  className="sync-cron-input"
+                  value={csvPoll}
+                  onChange={(e) => setCsvPollDraft(e.target.value)}
+                  onBlur={() => commitCsvNumber("csv_fetch_poll_seconds", csvPoll, 10, 600, setCsvPollDraft)}
+                />
+                <span className="sync-cron-desc">{t("settings.csvSecondsUnit")}</span>
+              </div>
+            </div>
+
+            <div className="sync-setting-row">
+              <span className="sync-setting-label">{t("settings.csvTimeout")}</span>
+              <div className="sync-cron-input-group">
+                <input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  className="sync-cron-input"
+                  value={csvTimeout}
+                  onChange={(e) => setCsvTimeoutDraft(e.target.value)}
+                  onBlur={() => commitCsvNumber("csv_fetch_timeout_minutes", csvTimeout, 5, 1440, setCsvTimeoutDraft)}
+                />
+                <span className="sync-cron-desc">{t("settings.csvMinutesUnit")}</span>
+              </div>
+            </div>
+
+            <p className="pat-form-hint">{t("settings.csvFetchHint")}</p>
+            <p className="pat-form-hint">
+              {t("settings.csvPreviewNotice")}{" "}
+              <a
+                href="https://github.com/orgs/community/discussions/186162"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t("settings.csvPreviewLink")}
+              </a>
+            </p>
           </div>
 
           <GithubSSOSettings />

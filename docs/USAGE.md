@@ -115,6 +115,7 @@ GitHub assigns each user to at most one cost center, so picking a new one moves 
 | **Language dropdown** | English, 简体中文, 繁體中文, 日本語, 한국어, हिन्दी, Tiếng Việt, ไทย |
 | **Dark / Light** | Switch colour theme |
 | **Upload CSV** | Upload an AI Usage or Usage Report CSV (type auto-detected) |
+| **Fetch CSV** | Pull the last 31 days of detail usage + AI credit report CSVs from the GitHub billing API |
 | **Sync Data** | Manually trigger a full data sync |
 | **Source Code / Report an Issue** | Links to the GitHub repository |
 | **User chip** | Signed-in account, with an Admin badge |
@@ -295,15 +296,34 @@ Toggle via **Console**. Shows tool execution logs with timestamps and real-time 
 
 ---
 
-## AI Usage CSV Upload
+## AI Usage CSV
 
-GitHub exposes per-user AI credit data only through a CSV export, not the API.
+Per-user AI credit and billed-spend data lives in GitHub's *detailed* billing report CSVs, not in the regular Copilot APIs. There are two ways to get it in, and both feed the same store and deduplicate against each other.
+
+### Fetch it automatically (recommended)
+
+Click **Fetch CSV** in the StatusBar. This calls GitHub's billing reports API to request the `detailed` and `ai_credit` reports for the last 31 days, waits for them to generate, downloads them and ingests them. Progress streams into the Console and the button shows a step counter; reloading the page reattaches to a run that is still going.
+
+A full run takes roughly 5-7 minutes — each report takes 2-4 minutes to generate and GitHub only allows one export in flight per enterprise, so the two are fetched one after the other.
+
+Requires a PAT belonging to an enterprise admin or billing manager with the `manage_billing:enterprise` scope.
+
+Two knobs under **Settings → CSV Fetch** (they affect only this button, not Sync Data):
+
+| Setting | Default | Range |
+|---|---|---|
+| Poll interval | 60 seconds | 10-600 |
+| Give up after | 120 minutes | 5-1440 |
+
+> The billing report CSV API is still in [public preview](https://github.com/orgs/community/discussions/186162) and exports have been reported stalling in `processing`. That is why the timeout exists, and why manual upload is still supported.
+
+### Upload it by hand
 
 1. GitHub.com → Organization/Enterprise Settings → Billing → export the usage report as CSV
 2. Click **Upload CSV** in the StatusBar and pick the file
 3. The type (AI Usage vs. Usage Report) is auto-detected and the data appears in the matching dashboard tab
 
-Uploads are incremental — duplicate rows are ignored.
+Either way ingestion is incremental — duplicate rows are ignored.
 
 ---
 

@@ -156,8 +156,9 @@ def create_usage_tools(
 
     @define_tool(
         description=(
-            "Get per-user AI usage from uploaded CSV data (the AI Usage report). "
-            "This data comes from CSV files manually exported from GitHub UI and uploaded by the admin. "
+            "Get per-user AI usage from the ingested AI Usage report CSV data. "
+            "This data comes from the detailed billing report CSV, pulled from the GitHub billing "
+            "reports API or uploaded by the admin. "
             "Under usage-based billing (UBB) each user consumes AI credits per AI model. "
             "Shows each user's daily AI credit consumption broken down by model, "
             "including credit amounts, costs, quota usage percentage, and active days. "
@@ -185,7 +186,8 @@ def create_usage_tools(
                         records.append(row)
 
         if not records:
-            return json.dumps({"error": "No per-user AI usage CSV data found. Please upload an AI Usage CSV from the Dashboard page."})
+            return json.dumps({"error": "No per-user AI usage CSV data found. Fetch it from the GitHub billing "
+                                        "reports API or upload an AI Usage CSV from the Dashboard page."})
 
         # Filter
         if params.org:

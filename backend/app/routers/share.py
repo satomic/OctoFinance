@@ -246,8 +246,7 @@ def _has_access(share: dict, request: Request) -> bool:
 
 def _render_shared_report(share: dict, for_download: bool) -> str | None:
     """Build the report HTML for a shared cost center, or None if data is gone."""
-    # Local import to avoid a circular import (routers.data imports report_generator)
-    from .data import CSV_TYPE_AI, CSV_TYPE_USAGE, _load_all_csv_records
+    from ..services.csv_store import CSV_TYPE_AI, CSV_TYPE_USAGE, load_all_csv_records
 
     enterprise = share["enterprise"]
     cc_data = data_collector.load_latest("cost_centers", enterprise)
@@ -265,8 +264,8 @@ def _render_shared_report(share: dict, for_download: bool) -> str | None:
         enterprise=enterprise,
         enterprise_name=cc_data.get("enterprise_name", enterprise),
         cc=cc,
-        all_ai_usage_records=_load_all_csv_records(CSV_TYPE_AI),
-        all_usage_records=_load_all_csv_records(CSV_TYPE_USAGE),
+        all_ai_usage_records=load_all_csv_records(CSV_TYPE_AI),
+        all_usage_records=load_all_csv_records(CSV_TYPE_USAGE),
         download_url=None if for_download else f"/share/cc/{share['token']}/download",
     )
 

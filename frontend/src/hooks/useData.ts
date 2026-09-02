@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, UnassignedCostCenterUsersData, AssignCostCenterUsersResult, BudgetsDashboardData, EnterpriseTeamsDashboardData, ChatModel, CsvUploadResult } from "../types";
+import type { OrgInfo, Overview, Recommendation, DashboardData, CsvInfo, CsvDashboardData, CostCenterDashboardData, UnassignedCostCenterUsersData, AssignCostCenterUsersResult, BudgetsDashboardData, EnterpriseTeamsDashboardData, ChatModel, CsvUploadResult, CsvFetchStartResult, CsvFetchJob } from "../types";
 
 export function useOrgs() {
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
@@ -243,7 +243,66 @@ export function useCsvInfo() {
     return result;
   }, [fetchInfo]);
 
-  return { info, refetch: fetchInfo, uploadCsv };
+  // Pull the same detail report CSVs straight from GitHub's billing reports API.
+  // Generation takes minutes, so the backend runs it in the background and we
+  // poll until it settles.
+  const fetchCsvFromApi = useCallback(async (): Promise<CsvFetchStartResult> => {
+    const res = await fetch("/api/data/fetch-csv", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) return { status: "error", error: `HTTP ${res.status}` };
+    try {
+      return await res.json();
+    } catch {
+      return { status: "error", error: `Unexpected non-JSON response (HTTP ${res.status}).` };
+    }
+  }, []);
+
+  const readCsvJob = useCallback(async (): Promise<CsvFetchJob | null> => {
+    const res = await fetch("/api/data/fetch-csv/status");
+    // A 401/500/proxy error is not "the job finished" — report nothing so the
+    // caller keeps waiting instead of declaring a running job failed.
+    if (!res.ok) return null;
+    try {
+      const body = (await res.json()) as CsvFetchJob;
+      return typeof body?.running === "boolean" ? body : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Resolves when the given job stops running. `onProgress` fires on each poll
+  // so the caller can show which report is being generated.
+  const pollCsvFetch = useCallback(async (
+    jobId: string,
+    onProgress?: (job: CsvFetchJob) => void,
+  ): Promise<CsvFetchJob | null> => {
+    // The backend enforces its own (configurable) timeout and always flips the
+    // job to not-running, so bound this loop by loss of contact with the server
+    // rather than by wall clock, which no longer has a fixed upper bound.
+    let unreachable = 0;
+    while (unreachable < 60) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const job = await readCsvJob();
+      if (!job) {
+        unreachable += 1;
+        continue;
+      }
+      unreachable = 0;
+      // A different job means ours was superseded; stop tracking it.
+      if (jobId && job.job_id !== jobId) return null;
+      onProgress?.(job);
+      if (!job.running) {
+        await fetchInfo();
+        return job;
+      }
+    }
+    return null;
+  }, [fetchInfo, readCsvJob]);
+
+  return { info, refetch: fetchInfo, uploadCsv, fetchCsvFromApi, readCsvJob, pollCsvFetch };
 }
 
 export function useCostCenterDashboard(params: {
