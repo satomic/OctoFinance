@@ -8,7 +8,9 @@ export interface UIState {
   dashboardTab: "metrics" | "ai" | "usage" | "costcenter" | "unassigned" | "budgets" | "requests" | "entteams";
   consoleOpen: boolean;
   sidebarWidth: number;
+  sidebarHidden: boolean;
   sidebarCollapsed: Record<string, boolean>;
+  sidebarPanelHeights: Record<string, number>;
   currentSessionId: string | null;
   dashboardSections: Record<string, boolean>;
   dashboardSelectedOrgs: string[] | null;
@@ -50,12 +52,14 @@ const DEFAULTS: UIState = {
   dashboardTab: "metrics",
   consoleOpen: false,
   sidebarWidth: 320,
+  sidebarHidden: false,
   sidebarCollapsed: {
     overview: false,
     organizations: false,
     sessions: false,
     actions: true,
   },
+  sidebarPanelHeights: {},
   currentSessionId: null,
   dashboardSections: {},
   dashboardSelectedOrgs: null,

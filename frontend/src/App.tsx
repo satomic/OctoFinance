@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, type ReactNode } from "react";
+import { useState, useCallback, useRef, useEffect, Fragment, type ReactNode } from "react";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { I18nProvider, useI18n } from "./contexts/I18nContext";
 import { UIStateProvider, useUIState } from "./contexts/UIStateContext";
@@ -20,6 +20,7 @@ import "./styles/index.css";
 
 const MIN_SIDEBAR = 240;
 const MAX_SIDEBAR = 600;
+const MIN_PANEL = 80;
 
 interface SidebarPanelProps {
   title: string;
@@ -27,11 +28,23 @@ interface SidebarPanelProps {
   onToggle: () => void;
   extra?: ReactNode;
   children: ReactNode;
+  height?: number;
+  panelRef?: (el: HTMLDivElement | null) => void;
 }
 
-function SidebarPanel({ title, collapsed, onToggle, extra, children }: SidebarPanelProps) {
+function SidebarPanel({ title, collapsed, onToggle, extra, children, height, panelRef }: SidebarPanelProps) {
+  // A dragged panel is pinned to its height; the rest share the leftover space.
+  const style = collapsed
+    ? undefined
+    : height
+      ? { flex: `0 0 ${height}px` }
+      : undefined;
   return (
-    <div className={`sidebar-panel ${collapsed ? "sidebar-panel-collapsed" : "sidebar-panel-expanded"}`}>
+    <div
+      ref={panelRef}
+      className={`sidebar-panel ${collapsed ? "sidebar-panel-collapsed" : "sidebar-panel-expanded"}`}
+      style={style}
+    >
       <div className="sidebar-panel-header" onClick={onToggle}>
         <span className="sidebar-panel-chevron">{collapsed ? "\u25B6" : "\u25BC"}</span>
         <span className="sidebar-panel-title">{title}</span>
@@ -61,9 +74,14 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
   const setCurrentView = useCallback((v: "chat" | "dashboard") => ui.patch({ currentView: v }), [ui.patch]);
   const [refreshKey, setRefreshKey] = useState(0);
   const collapsed = ui.sidebarCollapsed;
+  const sidebarHidden = ui.sidebarHidden;
+  const panelHeights = ui.sidebarPanelHeights;
   const isDragging = useRef(false);
+  const movedDuringDrag = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const panelEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const vDrag = useRef<{ above: string; below: string; startY: number; aboveH: number; belowH: number; base: Record<string, number> } | null>(null);
 
   const chat = useChat();
   const sessions = useSessions();
@@ -189,23 +207,63 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = true;
+    movedDuringDrag.current = false;
     startX.current = e.clientX;
     startWidth.current = sidebarWidth;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }, [sidebarWidth]);
 
+  // The divider doubles as the collapse control: a click toggles the sidebar,
+  // a drag resizes it. Anything under a few pixels counts as a click.
+  const onResizerClick = () => {
+    if (movedDuringDrag.current) return;
+    ui.patch({ sidebarHidden: !ui.sidebarHidden });
+  };
+
+  // Dragging the divider between two expanded panels trades height between just
+  // those two, so the column total stays put and nothing else jumps.
+  const onPanelResizeStart = useCallback((above: string, below: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const a = panelEls.current[above];
+    const b = panelEls.current[below];
+    if (!a || !b) return;
+    vDrag.current = {
+      above, below,
+      startY: e.clientY,
+      aboveH: a.getBoundingClientRect().height,
+      belowH: b.getBoundingClientRect().height,
+      base: ui.sidebarPanelHeights,
+    };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [ui.sidebarPanelHeights]);
+
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
+      if (vDrag.current) {
+        const { above, below, startY, aboveH, belowH, base } = vDrag.current;
+        const total = aboveH + belowH;
+        const delta = e.clientY - startY;
+        const newAbove = Math.min(total - MIN_PANEL, Math.max(MIN_PANEL, aboveH + delta));
+        ui.patch({
+          sidebarPanelHeights: { ...base, [above]: newAbove, [below]: total - newAbove },
+        });
+        return;
+      }
       if (!isDragging.current) return;
       const delta = e.clientX - startX.current;
+      if (Math.abs(delta) > 3) movedDuringDrag.current = true;
+      if (!movedDuringDrag.current) return;
       const newWidth = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, startWidth.current + delta));
       setSidebarWidth(newWidth);
     };
 
     const onMouseUp = () => {
-      if (!isDragging.current) return;
+      if (!isDragging.current && !vDrag.current) return;
       isDragging.current = false;
+      vDrag.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -216,13 +274,38 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };
-  }, []);
+  }, [ui.patch, setSidebarWidth]);
 
   const toggleConsole = useCallback(() => ui.patch({ consoleOpen: !ui.consoleOpen }), [ui.patch, ui.consoleOpen]);
 
   const handlePATChange = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
+
+  const PANELS = [
+    { key: "overview", title: t("sidebar.overview"), extra: undefined as ReactNode,
+      render: () => <OverviewPanel key={refreshKey} /> },
+    { key: "organizations", title: t("sidebar.organizations"), extra: undefined as ReactNode,
+      render: () => <OrgSelector key={refreshKey} /> },
+    { key: "sessions", title: t("sessions.title"),
+      extra: (
+        <button className="session-new-btn" onClick={handleCreateSession} title={t("sessions.new")}>
+          +
+        </button>
+      ) as ReactNode,
+      render: () => (
+        <SessionSelector
+          sessions={sessions.sessions}
+          currentSessionId={sessions.currentSessionId}
+          onSwitch={handleSwitchSession}
+          onCreate={handleCreateSession}
+          onDelete={handleDeleteSession}
+          onRename={handleRenameSession}
+        />
+      ) },
+    { key: "actions", title: t("actions.title"), extra: undefined as ReactNode,
+      render: () => <ActionPanel key={refreshKey} onExecute={handleExecuteAction} /> },
+  ];
 
   return (
     <div className="app">
@@ -237,49 +320,41 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
         user={user}
       />
       <div className="app-body">
-        <aside className="sidebar" style={{ width: sidebarWidth }}>
-          <SidebarPanel
-            title={t("sidebar.overview")}
-            collapsed={collapsed.overview}
-            onToggle={() => togglePanel("overview")}
-          >
-            <OverviewPanel key={refreshKey} />
-          </SidebarPanel>
-          <SidebarPanel
-            title={t("sidebar.organizations")}
-            collapsed={collapsed.organizations}
-            onToggle={() => togglePanel("organizations")}
-          >
-            <OrgSelector key={refreshKey} />
-          </SidebarPanel>
-          <SidebarPanel
-            title={t("sessions.title")}
-            collapsed={collapsed.sessions}
-            onToggle={() => togglePanel("sessions")}
-            extra={
-              <button className="session-new-btn" onClick={handleCreateSession} title={t("sessions.new")}>
-                +
-              </button>
-            }
-          >
-            <SessionSelector
-              sessions={sessions.sessions}
-              currentSessionId={sessions.currentSessionId}
-              onSwitch={handleSwitchSession}
-              onCreate={handleCreateSession}
-              onDelete={handleDeleteSession}
-              onRename={handleRenameSession}
-            />
-          </SidebarPanel>
-          <SidebarPanel
-            title={t("actions.title")}
-            collapsed={collapsed.actions}
-            onToggle={() => togglePanel("actions")}
-          >
-            <ActionPanel key={refreshKey} onExecute={handleExecuteAction} />
-          </SidebarPanel>
-        </aside>
-        <div className="resizer" onMouseDown={onMouseDown} />
+        {!sidebarHidden && (
+          <aside className="sidebar" style={{ width: sidebarWidth }}>
+            {PANELS.map(({ key, title, extra, render }, i) => {
+              const next = PANELS.slice(i + 1).find((p) => !collapsed[p.key]);
+              const showHandle = !collapsed[key] && !!next;
+              return (
+                <Fragment key={key}>
+                  <SidebarPanel
+                    title={title}
+                    collapsed={collapsed[key]}
+                    onToggle={() => togglePanel(key)}
+                    extra={extra}
+                    height={collapsed[key] ? undefined : panelHeights[key]}
+                    panelRef={(el) => { panelEls.current[key] = el; }}
+                  >
+                    {render()}
+                  </SidebarPanel>
+                  {showHandle && (
+                    <div
+                      className="sidebar-panel-resizer"
+                      onMouseDown={onPanelResizeStart(key, next.key)}
+                      title={t("sidebar.dragToResize")}
+                    />
+                  )}
+                </Fragment>
+              );
+            })}
+          </aside>
+        )}
+        <div
+          className={`resizer ${sidebarHidden ? "resizer-collapsed" : ""}`}
+          onMouseDown={onMouseDown}
+          onClick={onResizerClick}
+          title={sidebarHidden ? t("sidebar.expand") : t("sidebar.collapseHint")}
+        />
         <main className="main-content">
           {currentView === "chat" ? (
             <ChatInterface

@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSync, useCsvInfo } from "../hooks/useData";
-import { useTheme } from "../contexts/ThemeContext";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { PATSettingsModal } from "./PATSettingsModal";
 import { PeriodToggle } from "./PeriodToggle";
-import { LanguageSelector } from "./LanguageSelector";
 import { SourceCodeLink } from "./SourceCodeLink";
+import { UserMenu } from "./UserMenu";
 import type { AuthUser, UpdateInfo, CsvFetchJob } from "../types";
 
 interface Props {
@@ -22,7 +21,6 @@ interface Props {
 
 export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user }: Props) {
   const { sync } = useSync();
-  const { theme, toggleTheme } = useTheme();
   const { t } = useI18n();
   const ui = useUIState();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -200,9 +198,8 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         >
           {t("console.title")}
         </button>
-        <LanguageSelector />
-        <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
-          {theme === "dark" ? "Light" : "Dark"}
+        <button className="btn btn-small" onClick={handleSync} disabled={syncing}>
+          {syncing ? t("status.syncing") : t("status.syncData")}
         </button>
         <div className="csv-upload-group">
           <button
@@ -224,21 +221,22 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           >
             {csvUploading ? t("dashboard.csvUploading") : t("dashboard.uploadCsv")}
           </button>
-          {csvInfo?.ai_usage?.has_data && (
-            <span className="csv-date-hint" title={`${t("csvDash.csvType.ai_usage")}: ${csvInfo.ai_usage.earliest_date} ~ ${csvInfo.ai_usage.latest_date}`}>
-              AI:{csvInfo.ai_usage.latest_date}
-            </span>
-          )}
-          {csvInfo?.usage_report?.has_data && (
-            <span className="csv-date-hint" title={`${t("csvDash.csvType.usage_report")}: ${csvInfo.usage_report.earliest_date} ~ ${csvInfo.usage_report.latest_date}`}>
-              U:{csvInfo.usage_report.latest_date}
-            </span>
+          {(csvInfo?.ai_usage?.has_data || csvInfo?.usage_report?.has_data) && (
+            <div className="csv-date-hints">
+              {csvInfo?.ai_usage?.has_data && (
+                <span className="csv-date-hint" title={`${t("csvDash.csvType.ai_usage")}: ${csvInfo.ai_usage.earliest_date} ~ ${csvInfo.ai_usage.latest_date}`}>
+                  AI:{csvInfo.ai_usage.latest_date}
+                </span>
+              )}
+              {csvInfo?.usage_report?.has_data && (
+                <span className="csv-date-hint" title={`${t("csvDash.csvType.usage_report")}: ${csvInfo.usage_report.earliest_date} ~ ${csvInfo.usage_report.latest_date}`}>
+                  U:{csvInfo.usage_report.latest_date}
+                </span>
+              )}
+            </div>
           )}
           {csvMessage && <span className="csv-upload-msg">{csvMessage}</span>}
         </div>
-        <button className="btn btn-small" onClick={handleSync} disabled={syncing}>
-          {syncing ? t("status.syncing") : t("status.syncData")}
-        </button>
         <SourceCodeLink update={health?.update} />
         <a
           className="btn btn-small btn-link-icon"
@@ -253,23 +251,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
           </svg>
           {t("nav.feedback")}
         </a>
-        {user && (
-          <div className="user-chip" title={`${user.login}${user.is_admin ? " · admin" : ""}`}>
-            {user.avatar_url && <img src={user.avatar_url} alt="" className="user-chip-avatar" />}
-            <span>{user.name || user.login}</span>
-            {user.is_admin && <span className="user-chip-role">{t("auth.roleAdmin")}</span>}
-          </div>
-        )}
-        <button
-          className="btn btn-small btn-ghost"
-          onClick={async () => {
-            await fetch("/api/auth/logout", { method: "POST" });
-            onLogout();
-          }}
-          title={t("auth.logout")}
-        >
-          {t("auth.logout")}
-        </button>
+        {user && <UserMenu user={user} onLogout={onLogout} />}
       </div>
       {settingsOpen && (
         <PATSettingsModal onClose={() => setSettingsOpen(false)} onPATChange={handlePATChange} />

@@ -98,6 +98,27 @@ body {
   gap: 8px;
 }
 
+/* Every control in the bar shares one height so the row reads as a single strip. */
+.status-bar .btn-small,
+.status-bar .view-toggle,
+.status-bar .user-chip,
+.status-bar .csv-date-hints {
+  height: 26px;
+  box-sizing: border-box;
+}
+
+.status-bar .btn-small,
+.status-bar .user-chip {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.status-bar .view-toggle .btn-small {
+  height: 100%;
+}
+
 .csv-upload-group {
   display: flex;
   align-items: center;
@@ -225,17 +246,42 @@ body {
 
 /* Kept for potential sub-headers within sidebar sections */
 
-/* Resizer */
+/* Resizer — drag to resize the sidebar, click to collapse/expand it */
 .resizer {
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
   background: var(--border);
   flex-shrink: 0;
   transition: background 0.15s;
+  position: relative;
 }
 
 .resizer:hover {
   background: var(--accent);
+}
+
+/* Grip dots hint that the bar is interactive */
+.resizer::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 26px;
+  border-radius: 1px;
+  background: var(--text-muted);
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.resizer:hover::after {
+  background: #fff;
+  opacity: 0.9;
+}
+
+.resizer-collapsed {
+  cursor: e-resize;
 }
 
 /* Overview Cards */
@@ -1063,6 +1109,22 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+/* Drag handle between two expanded sidebar panels */
+.sidebar-panel-resizer {
+  height: 5px;
+  margin-top: -3px;
+  flex-shrink: 0;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-panel-resizer:hover {
+  background: var(--accent);
 }
 
 /* Session Selector */
@@ -2764,8 +2826,15 @@ th.th-sorted .th-sort-arrow {
 }
 
 /* CSV upload hint & message */
+.csv-date-hints {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+}
+
 .csv-date-hint {
-  font-size: 11px;
+  font-size: 9px;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -2894,6 +2963,12 @@ th.th-sorted .th-sort-arrow {
 }
 
 /* Signed-in user chip in the status bar */
+.user-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .user-chip {
   display: inline-flex;
   align-items: center;
@@ -2905,6 +2980,145 @@ th.th-sorted .th-sort-arrow {
   font-size: 12px;
   color: var(--text-secondary);
   white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.user-chip:hover,
+.user-chip-open {
+  border-color: var(--accent);
+}
+
+.user-chip-caret {
+  font-size: 8px;
+  color: var(--text-muted);
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  min-width: 210px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.user-menu-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-menu-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+}
+
+.user-menu-identity-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.user-menu-identity-login {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.user-menu-section {
+  padding: 8px 6px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-menu-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.user-menu-choices {
+  display: flex;
+  gap: 6px;
+}
+
+.user-menu-choice {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.user-menu-choice-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.user-menu-langs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.user-menu-lang {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.user-menu-lang:hover {
+  background: var(--bg-tertiary);
+}
+
+.user-menu-lang-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.user-menu-lang-flag {
+  font-size: 14px;
+}
+
+.user-menu-logout {
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-menu-logout:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .user-chip-avatar {
