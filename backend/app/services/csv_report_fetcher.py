@@ -271,3 +271,24 @@ async def fetch_and_ingest(
             "errors": [r for r in results if r.get("error")],
         })
     return dict(_job)
+
+
+def resolve_enterprises() -> list[str]:
+    """Every enterprise the configured PATs can reach."""
+    return [e["slug"] for e in api_manager.get_all_enterprises()]
+
+
+async def fetch_latest(log_fn: Callable[[str, str], None]) -> dict | None:
+    """Pull the newest detail reports for every enterprise, using the default window.
+
+    Shared by the Fetch CSV button and the startup/scheduled syncs. Returns None
+    when there is no enterprise to fetch for.
+    """
+    enterprises = resolve_enterprises()
+    if not enterprises:
+        log_fn("info", "No enterprise configured; skipping billing report CSV fetch")
+        return None
+    start_date, end_date = default_date_range()
+    csv_types = list(ALL_CSV_TYPES)
+    begin_job(enterprises, start_date, end_date, csv_types)
+    return await fetch_and_ingest(enterprises, start_date, end_date, csv_types, log_fn)

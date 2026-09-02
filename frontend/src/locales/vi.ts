@@ -80,6 +80,7 @@ export const vi = {
   "settings.syncCron": "Đồng bộ theo lịch",
   "settings.cronHint": "Cú pháp cron: */30 * * * * (mỗi 30 phút), 0 */6 * * * (mỗi 6 giờ), 0 0 * * * (hàng ngày). Để trống để tắt.",
   "settings.csvFetchSettings": "Lấy CSV",
+  "settings.syncIncludesCsv": "Đồng bộ khi khởi động và đồng bộ theo lịch cũng chạy Lấy CSV, nên các CSV báo cáo thanh toán luôn được cập nhật mà không cần nhấp tay (thêm khoảng 5-7 phút mỗi lần). Nút Đồng bộ dữ liệu ở trên không bao gồm CSV để giữ tốc độ nhanh.",
   "settings.csvPollInterval": "Chu kỳ kiểm tra",
   "settings.csvTimeout": "Dừng sau",
   "settings.csvSecondsUnit": "giây (10-600)",

@@ -277,6 +277,7 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
               ))}
             </div>
             <p className="pat-form-hint">{t("settings.cronHint")}</p>
+            <p className="pat-form-hint">{t("settings.syncIncludesCsv")}</p>
           </div>
 
           {/* CSV Fetch Settings — these apply only to the Fetch CSV button */}

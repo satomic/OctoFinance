@@ -23,6 +23,7 @@ from ..services.csv_report_fetcher import (
     default_date_range,
     fetch_and_ingest,
     get_job,
+    resolve_enterprises,
     validate_date_range,
 )
 from ..services.csv_store import (
@@ -1199,7 +1200,7 @@ async def fetch_csv(req: FetchCsvRequest):
     if req.enterprise:
         enterprises = [req.enterprise]
     else:
-        enterprises = [e["slug"] for e in api_manager.get_all_enterprises()]
+        enterprises = resolve_enterprises()
     if not enterprises:
         return {"status": "error", "error": "No enterprise is configured. "
                                             "This report is only available at enterprise level."}

@@ -116,7 +116,7 @@ GitHub assigns each user to at most one cost center, so picking a new one moves 
 | **Dark / Light** | Switch colour theme |
 | **Upload CSV** | Upload an AI Usage or Usage Report CSV (type auto-detected) |
 | **Fetch CSV** | Pull the last 31 days of detail usage + AI credit report CSVs from the GitHub billing API |
-| **Sync Data** | Manually trigger a full data sync |
+| **Sync Data** | Manually trigger a full data sync (JSON datasets only — CSVs come from **Fetch CSV** or a scheduled sync) |
 | **Source Code / Report an Issue** | Links to the GitHub repository |
 | **User chip** | Signed-in account, with an Admin badge |
 | **Logout** | End session |
@@ -282,6 +282,17 @@ These are the scopes for the **data-sync PAT** you add here — the token that r
 - **Auto Sync on Startup** — sync automatically when the backend starts
 - **Sync Cron Schedule** — presets (30min, 1h, 6h, 24h, Off) or a custom cron expression
 
+**Unattended syncs also fetch the billing report CSVs.** Startup and scheduled runs do the JSON sync and then run the same job as the **Fetch CSV** button, so per-user AI credit and spend data stays current without anyone clicking. That adds roughly 5-7 minutes per run.
+
+| Trigger | JSON datasets | Billing report CSVs |
+|---|---|---|
+| **Sync Data** button | yes | no — kept fast and interactive |
+| **Auto Sync on Startup** | yes | yes |
+| **Sync Cron Schedule** | yes | yes |
+| **Fetch CSV** button | no | yes |
+
+A CSV failure is logged but does not fail the scheduled sync. Because a run can outlast a short cron interval, ticks that arrive while one is still running are skipped rather than queued, so jobs never stack.
+
 > Every sync also checks GitHub for a newer OctoFinance release. If one exists, the **Source Code** button in the top bar turns into a highlighted **New version vX.Y.Z** button that links to that release. The check is detached from the sync and gives up after **30 seconds**, so an offline deployment is unaffected — it only needs outbound access to `github.com` to work.
 
 ### GitHub SSO
@@ -304,11 +315,13 @@ Per-user AI credit and billed-spend data lives in GitHub's *detailed* billing re
 
 Click **Fetch CSV** in the StatusBar. This calls GitHub's billing reports API to request the `detailed` and `ai_credit` reports for the last 31 days, waits for them to generate, downloads them and ingests them. Progress streams into the Console and the button shows a step counter; reloading the page reattaches to a run that is still going.
 
+You usually will not need the button at all: **startup and scheduled syncs run this same job automatically** (see [Sync configuration](#sync-configuration)). The button is there for an on-demand refresh.
+
 A full run takes roughly 5-7 minutes — each report takes 2-4 minutes to generate and GitHub only allows one export in flight per enterprise, so the two are fetched one after the other.
 
 Requires a PAT belonging to an enterprise admin or billing manager with the `manage_billing:enterprise` scope.
 
-Two knobs under **Settings → CSV Fetch** (they affect only this button, not Sync Data):
+Two knobs under **Settings → CSV Fetch** (they affect only the CSV fetch — whether triggered by the button or by a scheduled sync — not the JSON sync):
 
 | Setting | Default | Range |
 |---|---|---|

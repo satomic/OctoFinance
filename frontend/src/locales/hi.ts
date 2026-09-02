@@ -80,6 +80,7 @@ export const hi = {
   "settings.syncCron": "निर्धारित सिंक",
   "settings.cronHint": "cron सिंटैक्स उपयोग करें: */30 * * * * (हर 30 मिनट), 0 */6 * * * (हर 6 घंटे), 0 0 * * * (दैनिक)। बंद करने के लिए खाली छोड़ें।",
   "settings.csvFetchSettings": "CSV फ़ेच",
+  "settings.syncIncludesCsv": "स्टार्टअप और निर्धारित सिंक CSV लाएँ भी चलाते हैं, इसलिए बिलिंग रिपोर्ट CSV बिना मैन्युअल क्लिक के अप-टू-डेट रहती हैं (प्रति रन लगभग 5-7 मिनट अधिक)। शीर्ष का डेटा सिंक बटन तेज़ रखने के लिए CSV शामिल नहीं करता।",
   "settings.csvPollInterval": "पोल अंतराल",
   "settings.csvTimeout": "इतने समय बाद छोड़ें",
   "settings.csvSecondsUnit": "सेकंड (10-600)",

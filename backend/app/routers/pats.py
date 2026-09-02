@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
 from ..services.pat_manager import pat_manager
+from ..services.sync_jobs import run_full_sync
 from ..services.sync_manager import sync_manager
 
 router = APIRouter(tags=["pats"])
@@ -183,9 +184,6 @@ async def update_settings(request: UpdateSettingsRequest):
     if request.sync_cron is not None:
         sync_manager.stop_cron_scheduler()
         if request.sync_cron.strip():
-            sync_manager.start_cron_scheduler(
-                request.sync_cron.strip(),
-                lambda log_fn: data_collector.sync_all(log_fn=log_fn),
-            )
+            sync_manager.start_cron_scheduler(request.sync_cron.strip(), run_full_sync)
 
     return settings

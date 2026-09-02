@@ -80,6 +80,7 @@ export const th = {
   "settings.syncCron": "ซิงค์ตามกำหนดเวลา",
   "settings.cronHint": "ใช้รูปแบบ cron: */30 * * * * (ทุก 30 นาที), 0 */6 * * * (ทุก 6 ชม.), 0 0 * * * (ทุกวัน) เว้นว่างเพื่อปิดใช้งาน",
   "settings.csvFetchSettings": "การดึง CSV",
+  "settings.syncIncludesCsv": "การซิงค์ตอนเริ่มระบบและตามกำหนดเวลาจะรัน ดึง CSV ด้วย ทำให้ไฟล์ CSV รายงานการเรียกเก็บเงินทันสมัยโดยไม่ต้องกดเอง (เพิ่มเวลาราว 5-7 นาทีต่อครั้ง) ส่วนปุ่ม ซิงค์ข้อมูล ด้านบนไม่รวม CSV เพื่อให้ทำงานได้เร็ว",
   "settings.csvPollInterval": "ช่วงเวลา poll",
   "settings.csvTimeout": "เลิกรอหลังจาก",
   "settings.csvSecondsUnit": "วินาที (10-600)",

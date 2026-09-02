@@ -27,6 +27,7 @@ from .services.data_collector import data_collector
 from .services.ops_executor import ops_executor
 from .services.pat_manager import pat_manager
 from .services.session_manager import session_manager
+from .services.sync_jobs import run_full_sync
 from .services.sync_manager import sync_manager
 from .services.update_checker import update_checker
 
@@ -93,19 +94,14 @@ async def lifespan(app: FastAPI):
             # Initial data collection (controlled by settings)
             if settings.get("auto_sync_on_startup", True):
                 print("[OctoFinance] Starting initial data sync (background)...")
-                sync_manager.run_in_background(
-                    lambda log_fn: data_collector.sync_all(log_fn=log_fn)
-                )
+                sync_manager.run_in_background(run_full_sync)
             else:
                 print("[OctoFinance] Auto sync on startup is disabled, skipping initial sync.")
 
             # Start cron scheduler if configured
             cron_expr = settings.get("sync_cron", "").strip()
             if cron_expr:
-                sync_manager.start_cron_scheduler(
-                    cron_expr,
-                    lambda log_fn: data_collector.sync_all(log_fn=log_fn),
-                )
+                sync_manager.start_cron_scheduler(cron_expr, run_full_sync)
         except asyncio.TimeoutError:
             print("[OctoFinance] Startup discovery warning: timed out; continue startup and retry from Settings/Sync.")
         except Exception as e:

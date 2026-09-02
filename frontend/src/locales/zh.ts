@@ -80,6 +80,7 @@ export const zh = {
   "settings.syncCron": "定时同步",
   "settings.cronHint": "Cron 语法：*/30 * * * *（每30分钟）、 0 */6 * * *（每6小时）、 0 0 * * *（每天）。留空则禁用。",
   "settings.csvFetchSettings": "CSV 拉取",
+  "settings.syncIncludesCsv": "启动同步和定时同步会一并执行「拉取 CSV」，无需人工点击即可保持账单报表 CSV 是最新的，每次约多耗 5-7 分钟。顶部的「同步数据」按钮不包含 CSV，以保持秒级响应。",
   "settings.csvPollInterval": "轮询间隔",
   "settings.csvTimeout": "超时放弃",
   "settings.csvSecondsUnit": "秒（10-600）",

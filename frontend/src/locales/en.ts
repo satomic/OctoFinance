@@ -79,6 +79,7 @@ export const en = {
   "settings.autoSync": "Auto sync on startup",
   "settings.syncCron": "Scheduled sync",
   "settings.cronHint": "Use cron syntax: */30 * * * * (every 30min), 0 */6 * * * (every 6h), 0 0 * * * (daily). Leave empty to disable.",
+  "settings.syncIncludesCsv": "Startup and scheduled syncs also run Fetch CSV, so the billing report CSVs stay current without anyone clicking. That adds roughly 5-7 minutes per run. The Sync Data button stays CSV-free so it remains fast.",
   "settings.csvFetchSettings": "CSV Fetch",
   "settings.csvPollInterval": "Poll interval",
   "settings.csvTimeout": "Give up after",

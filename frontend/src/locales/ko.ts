@@ -80,6 +80,7 @@ export const ko = {
   "settings.syncCron": "예약 동기화",
   "settings.cronHint": "cron 문법 사용: */30 * * * *(30분마다), 0 */6 * * *(6시간마다), 0 0 * * *(매일). 비워두면 비활성화됩니다.",
   "settings.csvFetchSettings": "CSV 가져오기",
+  "settings.syncIncludesCsv": "시작 동기화와 예약 동기화는 'CSV 가져오기'도 함께 실행하므로 수동 클릭 없이도 청구 리포트 CSV가 최신으로 유지됩니다(회당 약 5~7분 추가). 상단의 '데이터 동기화' 버튼은 빠른 응답을 위해 CSV를 포함하지 않습니다.",
   "settings.csvPollInterval": "폴링 간격",
   "settings.csvTimeout": "포기 시간",
   "settings.csvSecondsUnit": "초 (10-600)",

@@ -201,6 +201,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 
 - **Auto-sync on startup** (configurable)
 - **Cron-based scheduling** (e.g., `*/30 * * * *` for every 30 minutes)
+- **Unattended runs also fetch the billing report CSVs** — startup and cron syncs run the JSON sync and then the same job as the **Fetch CSV** button, so per-user AI credit data stays current without manual clicks (~5-7 min extra). The **Sync Data** button stays JSON-only so it remains fast. Overlapping cron ticks are skipped rather than queued
 - **SSE streaming** of sync progress to the frontend
 - **Per-organization** and **per-dataset** sync capability
 - **Dual-write**: syncs to both the global data store and the per-session working directory
@@ -333,8 +334,9 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 PATs and settings are managed through the web UI (**Settings** modal):
 
 - **Add/Remove PATs** — manage multiple GitHub PATs with labels and an "Include Organizations" toggle
-- **Auto Sync on Startup** — toggle automatic data sync when the backend starts
-- **Sync Cron Schedule** — set periodic sync (e.g. `*/30 * * * *`)
+- **Auto Sync on Startup** — toggle automatic data sync when the backend starts (also fetches the billing report CSVs)
+- **Sync Cron Schedule** — set periodic sync (e.g. `*/30 * * * *`), likewise including the CSV fetch
+- **CSV Fetch** — poll interval and give-up timeout for the billing report export
 - **GitHub SSO** — OAuth Client ID/Secret, callback URL, admin allow-list, and whether any GitHub user may sign in
 
 ### Data files

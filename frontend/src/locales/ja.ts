@@ -80,6 +80,7 @@ export const ja = {
   "settings.syncCron": "定期同期",
   "settings.cronHint": "cron 構文を使用します: */30 * * * *（30 分ごと）、0 */6 * * *（6 時間ごと）、0 0 * * *（毎日）。空欄で無効化。",
   "settings.csvFetchSettings": "CSV 取得",
+  "settings.syncIncludesCsv": "起動時同期とスケジュール同期では「CSV 取得」も実行され、手動操作なしで請求レポート CSV が最新に保たれます（毎回約 5〜7 分増）。上部の「データ同期」ボタンは高速なままにするため CSV を含みません。",
   "settings.csvPollInterval": "ポーリング間隔",
   "settings.csvTimeout": "タイムアウト",
   "settings.csvSecondsUnit": "秒（10-600）",
