@@ -13,7 +13,7 @@ The fastest path is Docker — the image is fully self-contained (FastAPI backen
 ### Option A — Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.2.3)
+# Pull the latest release (or pin a version, e.g. :v1.3.0)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -97,7 +97,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v1.2.3`), change it to the new tag in both the `pull` and the `run` command — `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v1.3.0`), change it to the new tag in both the `pull` and the `run` command — `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -325,7 +325,7 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.2.3
+./scripts/docker-build.sh v1.3.0
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -336,9 +336,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.2.3
-git push origin v1.2.3
-# → publishes ghcr.io/<owner>/<repo>:v1.2.3, :1.2.3, :1.2, :1 and :latest
+git tag v1.3.0
+git push origin v1.3.0
+# → publishes ghcr.io/<owner>/<repo>:v1.3.0, :1.3.0, :1.3, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.
