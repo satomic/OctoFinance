@@ -167,23 +167,10 @@ def create_usage_tools(
         )
     )
     def get_user_ai_usage(params: GetUserAiUsageParams) -> str:
-        import csv as csv_mod
-        # Check both primary and fallback (global) data dirs for CSV files
-        csv_dirs = [collector.data_dir / "ai_usage_csv"]
-        if collector._fallback_dir:
-            csv_dirs.append(collector._fallback_dir / "ai_usage_csv")
-        records: list[dict] = []
-        seen_files: set[str] = set()
-        for csv_dir in csv_dirs:
-            if not csv_dir.exists():
-                continue
-            for f in sorted(csv_dir.glob("*.csv")):
-                if f.name in seen_files:
-                    continue
-                seen_files.add(f.name)
-                with open(f, encoding="utf-8") as fh:
-                    for row in csv_mod.DictReader(fh):
-                        records.append(row)
+        # CSVs are only ever ingested into the global data dir, so read them
+        # through the shared store rather than the (possibly session) collector.
+        from ..services.csv_store import CSV_TYPE_AI, load_all_csv_records
+        records = load_all_csv_records(CSV_TYPE_AI)
 
         if not records:
             return json.dumps({"error": "No per-user AI usage CSV data found. Fetch it from the GitHub billing "

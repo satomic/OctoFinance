@@ -69,6 +69,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[OctoFinance] Session title backfill warning: {e}")
 
+    # Fold any pre-`_latest` per-upload CSVs into the single merged file
+    try:
+        from .services.csv_store import CSV_TYPE_AI, CSV_TYPE_USAGE, ensure_migrated
+        folded = sum(ensure_migrated(t) for t in (CSV_TYPE_AI, CSV_TYPE_USAGE))
+        if folded:
+            print(f"[OctoFinance] Merged {folded} legacy CSV file(s) into the latest snapshots")
+    except Exception as e:
+        print(f"[OctoFinance] CSV migration warning: {e}")
+
     # Read settings
     settings = pat_manager.get_settings()
 

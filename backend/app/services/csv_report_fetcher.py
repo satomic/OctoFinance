@@ -208,7 +208,7 @@ async def _fetch_one(api, enterprise: str, csv_type: str,
         return {"enterprise": enterprise, "csv_type": csv_type,
                 "error": "Could not download the report CSV."}
 
-    total_rows = new_rows = 0
+    total_rows = new_rows = replaced_rows = stored_rows = 0
     dates: list[str] = []
     for text in parts:
         result = ingest_csv_text(text)
@@ -216,16 +216,20 @@ async def _fetch_one(api, enterprise: str, csv_type: str,
             return {"enterprise": enterprise, "csv_type": csv_type, "error": result["error"]}
         total_rows += result.get("total_rows", 0)
         new_rows += result.get("new_rows", 0)
+        replaced_rows += result.get("replaced_rows", 0)
+        stored_rows = result.get("stored_rows", stored_rows)
         rng = result.get("date_range") or {}
         dates += [d for d in (rng.get("start"), rng.get("end")) if d and d != "unknown"]
 
-    log_fn("info", f"[{enterprise}] {csv_type}: {new_rows} new rows of {total_rows}")
+    log_fn("info", f"[{enterprise}] {csv_type}: merged {total_rows} rows "
+                   f"({new_rows} new, {replaced_rows} superseded), {stored_rows} stored")
     return {
         "enterprise": enterprise,
         "csv_type": csv_type,
         "total_rows": total_rows,
         "new_rows": new_rows,
-        "duplicates_skipped": total_rows - new_rows,
+        "replaced_rows": replaced_rows,
+        "stored_rows": stored_rows,
         "date_range": {"start": min(dates), "end": max(dates)} if dates else None,
     }
 

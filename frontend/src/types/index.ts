@@ -187,7 +187,8 @@ export interface CsvUploadResult {
   date_range?: { start: string; end: string };
   total_rows?: number;
   new_rows?: number;
-  duplicates_skipped?: number;
+  replaced_rows?: number;
+  stored_rows?: number;
   file_saved?: string;
   error?: string;
   status_code?: number;
@@ -218,7 +219,8 @@ export interface CsvFetchJob {
     csv_type?: "ai_usage" | "usage_report";
     total_rows?: number;
     new_rows?: number;
-    duplicates_skipped?: number;
+    replaced_rows?: number;
+    stored_rows?: number;
     date_range?: { start: string; end: string } | null;
     error?: string;
   }>;
