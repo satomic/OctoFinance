@@ -6,7 +6,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { useCsvDashboard } from "../hooks/useData";
-import { resolveRange } from "../utils/period";
+import { currentMonthRange, resolveRange } from "../utils/period";
 import { UserFilterSelect } from "./UserFilterSelect";
 import { SortTh } from "./SortTh";
 import { useSortableRows } from "../hooks/useSortableRows";
@@ -528,9 +528,24 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
   const skus = ui.csvDashSkus;
   const setSkus = useCallback((v: string[]) => ui.patch({ csvDashSkus: v }), [ui.patch]);
   const dateFrom = ui.csvDashDateFrom;
-  const setDateFrom = useCallback((v: string) => ui.patch({ csvDashDateFrom: v }), [ui.patch]);
+  // Current Month pins the range, so picking a date has to leave that mode or the
+  // choice would be silently discarded. The untouched bound keeps the month value
+  // that was on screen.
+  const setDateFrom = useCallback((v: string) => {
+    if (ui.periodMode === "current_month") {
+      ui.patch({ periodMode: "all", csvDashDateFrom: v, csvDashDateTo: currentMonthRange().end });
+    } else {
+      ui.patch({ csvDashDateFrom: v });
+    }
+  }, [ui.patch, ui.periodMode]);
   const dateTo = ui.csvDashDateTo;
-  const setDateTo = useCallback((v: string) => ui.patch({ csvDashDateTo: v }), [ui.patch]);
+  const setDateTo = useCallback((v: string) => {
+    if (ui.periodMode === "current_month") {
+      ui.patch({ periodMode: "all", csvDashDateTo: v, csvDashDateFrom: currentMonthRange().start });
+    } else {
+      ui.patch({ csvDashDateTo: v });
+    }
+  }, [ui.patch, ui.periodMode]);
   const enterpriseTeam = ui.csvDashEnterpriseTeam;
   const selectedUser = ui.csvDashUser;
 
@@ -611,14 +626,14 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
           <input
             type="date"
             className="dashboard-date-input"
-            value={dateFrom || activeDateRange?.start || ""}
+            value={range.from || activeDateRange?.start || ""}
             onChange={(e) => setDateFrom(e.target.value)}
           />
           <span className="dashboard-date-sep">—</span>
           <input
             type="date"
             className="dashboard-date-input"
-            value={dateTo || activeDateRange?.end || ""}
+            value={range.to || activeDateRange?.end || ""}
             onChange={(e) => setDateTo(e.target.value)}
           />
         </div>

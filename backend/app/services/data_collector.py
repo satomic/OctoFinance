@@ -836,6 +836,18 @@ class DataCollector:
         """Refresh cached cost center data for a single enterprise."""
         return await self._sync_cost_centers([enterprise], log_fn=log_fn)
 
+    def update_cached_cost_center(self, enterprise: str, cost_center_id: str, fields: dict) -> bool:
+        """Patch one cost center's cached fields, avoiding a full member re-expansion."""
+        data = self.load_latest("cost_centers", enterprise)
+        if not isinstance(data, dict):
+            return False
+        for cc in data.get("cost_centers", []):
+            if cc.get("id") == cost_center_id:
+                cc.update(fields)
+                self._save_json("cost_centers", enterprise, data)
+                return True
+        return False
+
     async def _sync_enterprise_teams(self, enterprises: list[dict], log_fn: LogFn = None) -> dict:
         """Sync enterprise teams, their members and org assignments.
 

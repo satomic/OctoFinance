@@ -377,6 +377,28 @@ class GitHubAPI:
             self._record_failure(f"enterprise_team_orgs {team_slug}", detail=str(e))
             return []
 
+    async def update_cost_center(
+        self,
+        enterprise: str,
+        cost_center_id: str,
+        name: str | None = None,
+        ai_credit_pool_enabled: bool | None = None,
+    ) -> dict:
+        """Rename a cost center and/or toggle its AI credit included usage cap."""
+        body: dict = {}
+        if name is not None:
+            body["name"] = name
+        if ai_credit_pool_enabled is not None:
+            body["ai_credit_pool_enabled"] = ai_credit_pool_enabled
+
+        resp = await self.client.patch(
+            f"/enterprises/{enterprise}/settings/billing/cost-centers/{cost_center_id}",
+            json=body,
+            headers={"X-GitHub-Api-Version": "2026-03-10"},
+        )
+        resp.raise_for_status()
+        return resp.json() if resp.content else {"success": True}
+
     async def add_cost_center_resources(
         self,
         enterprise: str,

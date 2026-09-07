@@ -1,10 +1,10 @@
 # OctoFinance — Feature Details & API Reference
 
-> Applies to **v1.3.0**.
+> Applies to **v1.3.1**.
 
 ## Copilot SDK Agentic AI (Core)
 
-- **42 custom tools** registered via `define_tool()` from `github-copilot-sdk`
+- **43 custom tools** registered via `define_tool()` from `github-copilot-sdk`
 - **Session management** with resume capability across backend restarts
 - **Streaming responses** via SSE (Server-Sent Events)
 - **Tool transparency**: real-time tool execution indicators in the chat UI
@@ -37,15 +37,16 @@
 | | `get_recommendations` | Retrieve pending/approved/rejected recommendations |
 | **Cost Centers** (8) | `get_synced_enterprise_data` | Enterprise + cost center data from the last sync |
 | | `list_cost_centers` | List enterprise cost centers |
-| | `create_cost_center` | Create a cost center |
+| | `create_cost_center` | Create a cost center. `ai_credit_pool_enabled` (AI credit included usage cap) defaults to **true** |
 | | `get_cost_center` | Get one cost center with members |
-| | `update_cost_center` | Rename / update a cost center |
+| | `update_cost_center` | Rename a cost center and/or toggle its AI credit included usage cap |
 | | `delete_cost_center` | Delete a cost center |
 | | `add_cost_center_resources` | Add users/orgs/repos to a cost center |
 | | `remove_cost_center_resources` | Remove resources from a cost center |
-| **Budgets — UBB** (6) | `get_all_budgets` | List budgets for an enterprise/org, filterable by scope |
+| **Budgets — UBB** (7) | `get_all_budgets` | List budgets for an enterprise/org, filterable by scope |
 | | `get_budget_detail` | Get a single budget by ID |
 | | `create_user_budget` | Create a universal or individual user budget |
+| | `create_cost_center_budget` | Create a `cost_center` (shared) or `multi_user_cost_center` (per member) AI-credit budget, resolving the cost center by name or ID |
 | | `update_budget` | Change budget amount / hard-limit flag |
 | | `delete_budget` | Delete a budget |
 | | `batch_create_user_budgets` | Create individual budgets for many users at once |
@@ -300,6 +301,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 | `/api/data/cost-center-report` | GET | admin | Per-cost-center report payload |
 | `/api/data/cost-center-unassigned-users` | GET | admin | Seat holders with no active cost center |
 | `/api/data/cost-center-unassigned-users/assign` | POST | admin | Bulk-assign users to a cost center |
+| `/api/data/cost-center-ai-credit-pool` | POST | admin | Turn a cost center's AI credit included usage cap on or off |
 | `/api/data/cost-center-shares` | GET | admin | List share links |
 | `/api/data/cost-center-share` | POST/DELETE | admin | Create/update or disable a share link |
 | `/api/data/enterprise-teams-dashboard` | GET | admin | Enterprise teams joined with seats, usage and AI spend. Params: `enterprise`, `teams`, `search` |

@@ -47,9 +47,24 @@ export function Dashboard({ refreshKey }: Props) {
   }, [ui.patch, ui.dashboardSelectedOrgs]);
   const period = ui.periodMode;
   const dateFrom = period === "current_month" ? currentMonthRange().start : ui.dashboardDateFrom;
-  const setDateFrom = useCallback((v: string) => ui.patch({ dashboardDateFrom: v }), [ui.patch]);
+  // Current Month pins the range, so picking a date has to leave that mode or the
+  // choice would be silently discarded. The untouched bound keeps the month value
+  // that was on screen.
+  const setDateFrom = useCallback((v: string) => {
+    if (ui.periodMode === "current_month") {
+      ui.patch({ periodMode: "all", dashboardDateFrom: v, dashboardDateTo: currentMonthRange().end });
+    } else {
+      ui.patch({ dashboardDateFrom: v });
+    }
+  }, [ui.patch, ui.periodMode]);
   const dateTo = period === "current_month" ? currentMonthRange().end : ui.dashboardDateTo;
-  const setDateTo = useCallback((v: string) => ui.patch({ dashboardDateTo: v }), [ui.patch]);
+  const setDateTo = useCallback((v: string) => {
+    if (ui.periodMode === "current_month") {
+      ui.patch({ periodMode: "all", dashboardDateTo: v, dashboardDateFrom: currentMonthRange().start });
+    } else {
+      ui.patch({ dashboardDateTo: v });
+    }
+  }, [ui.patch, ui.periodMode]);
   const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser, dateFrom, dateTo);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

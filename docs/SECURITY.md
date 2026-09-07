@@ -1,6 +1,6 @@
 # OctoFinance — Responsible AI & Security
 
-> Applies to **v1.3.0**.
+> Applies to **v1.3.1**.
 
 ## Responsible AI (RAI) Notes
 

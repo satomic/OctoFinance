@@ -1,6 +1,6 @@
 # OctoFinance — Architecture
 
-> Applies to **v1.3.0**.
+> Applies to **v1.3.1**.
 
 ## System Architecture
 
@@ -41,7 +41,7 @@
 │  │  (multi-worker)  │  │  │  System Prompt: FinOps Assistant           │  │  │
 │  └──────────────────┘  │  │  Session Persistence (.copilot_session_id) │  │  │
 │                        │  └──────────────────┬─────────────────────────┘  │  │
-│  ┌──────────────────┐  │                     │  42 Custom Tools           │  │
+│  ┌──────────────────┐  │                     │  43 Custom Tools           │  │
 │  │ BudgetProvisioner│  │  ┌──────────────────┴─────────────────────────┐  │  │
 │  │ real GitHub      │  │  │ Seats (4)      │ Usage (8)                 │  │  │
 │  │ user budgets     │  │  │ Billing (2)    │ Actions (3)               │  │  │
@@ -151,7 +151,7 @@ OctoFinance/
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings
 │   │   │   ├── report_generator.py     # Cost center HTML/ZIP report generation
 │   │   │   └── ops_executor.py         # Operation executor
-│   │   └── tools/                      # 42 Copilot SDK tools
+│   │   └── tools/                      # 43 Copilot SDK tools
 │   │       ├── seat_tools.py           # 4 seat management tools
 │   │       ├── usage_tools.py          # 8 usage analysis tools
 │   │       ├── billing_tools.py        # 2 billing/ROI tools

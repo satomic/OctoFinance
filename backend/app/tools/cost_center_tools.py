@@ -49,6 +49,15 @@ class CreateCostCenterParams(BaseModel):
         description="Enterprise slug. Leave empty to auto-detect from synced data.",
     )
     name: str = Field(description="Name for the new cost center")
+    ai_credit_pool_enabled: bool = Field(
+        default=True,
+        description=(
+            "AI credit included usage cap. True (default) caps the cost center at the "
+            "included credits its members' licenses already cover, so usage stops there. "
+            "False lets it draw from the shared enterprise pool with no cap. "
+            "Can only be enabled for cost centers holding user or team resources only."
+        ),
+    )
 
 
 class GetCostCenterParams(BaseModel):
@@ -65,7 +74,16 @@ class UpdateCostCenterParams(BaseModel):
         description="Enterprise slug. Leave empty to auto-detect from synced data.",
     )
     cost_center_id: str = Field(description="The unique ID of the cost center")
-    name: str = Field(description="New name for the cost center")
+    name: str = Field(default="", description="New name for the cost center. Leave empty to keep the current name.")
+    ai_credit_pool_enabled: bool | None = Field(
+        default=None,
+        description=(
+            "AI credit included usage cap. True caps the cost center at the included "
+            "credits its members' licenses already cover, so usage stops there. "
+            "False lets it draw from the shared enterprise pool with no cap. "
+            "Leave unset to keep the current setting."
+        ),
+    )
 
 
 class DeleteCostCenterParams(BaseModel):
@@ -285,6 +303,10 @@ def create_cost_center_tools(
         description=(
             "Create a new cost center for a GitHub Enterprise. "
             "Returns the created cost center object including its ID. "
+            "The AI credit included usage cap (ai_credit_pool_enabled) defaults to true, "
+            "which caps the cost center at the included credits its members' licenses "
+            "already cover so usage stops there instead of drawing from the shared "
+            "enterprise pool. "
             "This is a write operation — confirm the name before executing. "
             "Leave enterprise empty to auto-detect from synced data."
         )
@@ -302,7 +324,7 @@ def create_cost_center_tools(
 
         resp = await api.client.post(
             f"/enterprises/{enterprise}/settings/billing/cost-centers",
-            json={"name": params.name},
+            json={"name": params.name, "ai_credit_pool_enabled": params.ai_credit_pool_enabled},
             headers=_VERSION_HEADER,
         )
         if resp.status_code == 404:
@@ -337,9 +359,12 @@ def create_cost_center_tools(
 
     @define_tool(
         description=(
-            "Update the name of an existing cost center. "
+            "Update an existing cost center: rename it and/or turn its AI credit included "
+            "usage cap (ai_credit_pool_enabled) on or off. Enabling the cap stops usage at "
+            "the included credits the members' licenses already cover; disabling it lets the "
+            "cost center draw from the shared enterprise pool. "
             "Returns the updated cost center object. "
-            "This is a write operation — confirm the new name before executing. "
+            "This is a write operation — confirm the change before executing. "
             "Leave enterprise empty to auto-detect from synced data."
         )
     )
@@ -354,8 +379,16 @@ def create_cost_center_tools(
         if not api:
             return json.dumps({"error": f"No API client found for enterprise '{enterprise}'."})
 
+        body: dict = {}
+        if params.name.strip():
+            body["name"] = params.name.strip()
+        if params.ai_credit_pool_enabled is not None:
+            body["ai_credit_pool_enabled"] = params.ai_credit_pool_enabled
+        if not body:
+            return json.dumps({"error": "Provide a new name and/or ai_credit_pool_enabled."})
+
         url = f"/enterprises/{enterprise}/settings/billing/cost-centers/{params.cost_center_id}"
-        resp = await api.client.patch(url, json={"name": params.name}, headers=_VERSION_HEADER)
+        resp = await api.client.patch(url, json=body, headers=_VERSION_HEADER)
         if resp.status_code == 404:
             return json.dumps({"error": f"Cost center '{params.cost_center_id}' not found."})
         resp.raise_for_status()

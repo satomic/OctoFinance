@@ -56,7 +56,7 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 
 ---
 
-## Tool Catalog (42 Tools)
+## Tool Catalog (43 Tools)
 
 ### Seat Management Tools (`backend/app/tools/seat_tools.py`)
 
@@ -101,9 +101,9 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 |---|------|------|-------------|
 | 18 | `get_synced_enterprise_data` | Read (Cached) | Get enterprise list and cost center data captured by the last sync. |
 | 19 | `list_cost_centers` | Read (Live) | List an enterprise's cost centers with members and resources. |
-| 20 | `create_cost_center` | Write | Create a new enterprise cost center. |
+| 20 | `create_cost_center` | Write | Create a new enterprise cost center. `ai_credit_pool_enabled` (AI credit included usage cap) defaults to **true**, capping the cost center at the credits its members' licenses already include. |
 | 21 | `get_cost_center` | Read (Live) | Get a single cost center by ID, including its members. |
-| 22 | `update_cost_center` | Write | Rename or otherwise update a cost center. |
+| 22 | `update_cost_center` | Write | Rename a cost center and/or toggle its AI credit included usage cap (`ai_credit_pool_enabled`). |
 | 23 | `delete_cost_center` | Write | Delete a cost center. Destructive — requires admin confirmation. |
 | 24 | `add_cost_center_resources` | Write | Add users, orgs or repos to a cost center. |
 | 25 | `remove_cost_center_resources` | Write | Remove resources from a cost center. |
@@ -115,9 +115,10 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 | 26 | `get_all_budgets` | Read (Live) | List budgets for an enterprise/org. Filterable by scope: `multi_user_customer` (universal), `user`, `enterprise`, `cost_center`, `organization`, `repository`. Includes `consumed_amount` for user-scope budgets. |
 | 27 | `get_budget_detail` | Read (Live) | Get one budget by ID. |
 | 28 | `create_user_budget` | Write | Create a universal (all users) or individual user AI-credit budget. |
-| 29 | `update_budget` | Write | Change a budget's amount or hard-limit flag. Scope cannot be changed. |
-| 30 | `delete_budget` | Write | Delete a budget. Destructive — requires admin confirmation. |
-| 31 | `batch_create_user_budgets` | Write | Create individual budgets for many users in one call. |
+| 29 | `create_cost_center_budget` | Write | Create a cost center AI-credit budget: `cost_center` scope for one shared budget, or `multi_user_cost_center` for the same personal budget for every member. Accepts the cost center by name or ID and resolves it against synced data. |
+| 30 | `update_budget` | Write | Change a budget's amount or hard-limit flag. Scope cannot be changed. |
+| 31 | `delete_budget` | Write | Delete a budget. Destructive — requires admin confirmation. |
+| 32 | `batch_create_user_budgets` | Write | Create individual budgets for many users in one call. |
 
 > Budget writes require the PAT to carry the `manage_billing:copilot` scope.
 
@@ -125,17 +126,17 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 
 | # | Tool | Type | Description |
 |---|------|------|-------------|
-| 32 | `list_enterprise_teams` | Read (Cached/Live) | List enterprise teams with member counts and assigned organizations. |
-| 33 | `get_enterprise_team` | Read (Cached) | Get one team's full detail, including its member roster. |
-| 34 | `get_user_enterprise_teams` | Read (Cached) | Look up which enterprise teams a user belongs to — the join key for attributing seats/usage/AI spend to a team. |
-| 35 | `get_enterprise_team_copilot_usage` | Read (Cached) | Per-team Copilot adoption and cost: seats, members without a seat, active members, interactions, estimated seat cost, plus seat holders no team covers. |
-| 36 | `create_enterprise_team` | Write | Create a new enterprise team. Supports description, IdP group binding and organization assignment mode. |
-| 37 | `update_enterprise_team` | Write | Rename a team or change its description, org assignment mode or notification setting. |
-| 38 | `delete_enterprise_team` | Write | Delete an enterprise team and its IdP mappings. Destructive — requires admin confirmation. |
-| 39 | `add_enterprise_team_organizations` | Write | Assign a team to one or more organizations, granting its members org membership. |
-| 40 | `remove_enterprise_team_organizations` | Write | Unassign a team from organizations. Destructive — requires admin confirmation. |
-| 41 | `add_enterprise_team_members` | Write | Bulk add users to an enterprise team. |
-| 42 | `remove_enterprise_team_members` | Write | Bulk remove users from an enterprise team. Destructive — requires admin confirmation. |
+| 33 | `list_enterprise_teams` | Read (Cached/Live) | List enterprise teams with member counts and assigned organizations. |
+| 34 | `get_enterprise_team` | Read (Cached) | Get one team's full detail, including its member roster. |
+| 35 | `get_user_enterprise_teams` | Read (Cached) | Look up which enterprise teams a user belongs to — the join key for attributing seats/usage/AI spend to a team. |
+| 36 | `get_enterprise_team_copilot_usage` | Read (Cached) | Per-team Copilot adoption and cost: seats, members without a seat, active members, interactions, estimated seat cost, plus seat holders no team covers. |
+| 37 | `create_enterprise_team` | Write | Create a new enterprise team. Supports description, IdP group binding and organization assignment mode. |
+| 38 | `update_enterprise_team` | Write | Rename a team or change its description, org assignment mode or notification setting. |
+| 39 | `delete_enterprise_team` | Write | Delete an enterprise team and its IdP mappings. Destructive — requires admin confirmation. |
+| 40 | `add_enterprise_team_organizations` | Write | Assign a team to one or more organizations, granting its members org membership. |
+| 41 | `remove_enterprise_team_organizations` | Write | Unassign a team from organizations. Destructive — requires admin confirmation. |
+| 42 | `add_enterprise_team_members` | Write | Bulk add users to an enterprise team. |
+| 43 | `remove_enterprise_team_members` | Write | Bulk remove users from an enterprise team. Destructive — requires admin confirmation. |
 
 > Enterprise team endpoints only accept **classic** PATs: `read:enterprise` for reads, `admin:enterprise` for writes. Fine-grained and GitHub App tokens are rejected.
 >
@@ -257,7 +258,7 @@ def _build_tools_for_session(self, working_directory):
 | File | Purpose |
 |------|---------|
 | `backend/app/services/copilot_engine.py` | SDK client, session management, system prompt |
-| `backend/app/tools/*.py` | All 42 custom tools |
+| `backend/app/tools/*.py` | All 43 custom tools |
 | `backend/app/routers/auth.py` | Local login + GitHub OAuth SSO, role helpers |
 | `backend/app/routers/me.py` | Per-user ("me") data — a regular user's own usage/budget |
 | `backend/app/routers/budget_requests.py` | Budget request → approval → real GitHub budget |

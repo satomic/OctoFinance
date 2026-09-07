@@ -145,7 +145,7 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                   )}
                   <div className="pat-item-info">
                     <div className="pat-item-user">
-                      <strong>{pat.user_login || "Validating..."}</strong>
+                      <strong>{pat.label || pat.user_login || "Untitled"}</strong>
                       <span className="pat-item-orgs">{pat.orgs?.length || 0} orgs</span>
                       {pat.enterprise_slugs?.length > 0 && (
                         <span className="pat-item-enterprise">
@@ -154,7 +154,7 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                       )}
                     </div>
                     <div className="pat-item-meta">
-                      {pat.label} &middot; {pat.token_masked}
+                      {pat.user_login || "Validating..."} &middot; {pat.token_masked}
                     </div>
                     <div className="pat-item-include-orgs">
                       <label className="toggle-switch toggle-switch-small">

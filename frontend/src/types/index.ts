@@ -292,6 +292,8 @@ export interface CostCenter {
   resources: { type: string; name: string }[];
   members: CostCenterMember[];
   member_count: number;
+  ai_credit_pool_enabled?: boolean;
+  ai_credit_pool_state?: { target_amount: number | null; current_amount: number | null } | null;
 }
 
 export interface UserCostCenterEntry {

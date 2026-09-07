@@ -128,6 +128,41 @@ class DeleteBudgetParams(BaseModel):
     )
 
 
+class CreateCostCenterBudgetParams(BaseModel):
+    enterprise: str = Field(
+        default="",
+        description="Enterprise slug. Leave empty to auto-detect when only one enterprise is configured.",
+    )
+    cost_center: str = Field(
+        description="Cost center name or ID to apply the budget to"
+    )
+    budget_amount: float = Field(
+        description="Budget amount in whole USD per billing cycle",
+        gt=0
+    )
+    budget_scope: str = Field(
+        default="cost_center",
+        description=(
+            "Budget scope:\n"
+            "- 'cost_center' (default): one shared budget for the whole cost center\n"
+            "- 'multi_user_cost_center': the same per-user budget for every member of the cost center "
+            "(the cost center must already have at least one user member)"
+        ),
+    )
+    prevent_further_usage: bool = Field(
+        default=True,
+        description="Block usage when the limit is reached (hard limit)"
+    )
+    enable_alerts: bool = Field(
+        default=False,
+        description="Enable budget threshold alerts"
+    )
+    alert_recipients: list[str] = Field(
+        default_factory=list,
+        description="GitHub logins that receive alerts when enable_alerts is true"
+    )
+
+
 class BatchCreateUserBudgetsParams(BaseModel):
     entity_type: str = Field(
         description="Entity type: 'enterprise' or 'organization'"
@@ -183,6 +218,29 @@ def create_budget_tools(
             api = api_manager.get_api_for_enterprise(entity_name)
             logger.info(f"get_api_for_enterprise('{entity_name}') returned: {api is not None}")
             return api
+        return None
+
+    def _resolve_enterprise(requested: str) -> str:
+        """Return the enterprise slug to use, auto-detecting a single configured one."""
+        if requested:
+            return requested
+        enterprises = api_manager.get_all_enterprises() if api_manager else []
+        if not enterprises and collector:
+            synced = collector.load_latest("enterprise", "all")
+            enterprises = synced if isinstance(synced, list) else []
+        return enterprises[0]["slug"] if len(enterprises) == 1 else ""
+
+    def _find_cost_center(enterprise: str, wanted: str) -> dict | None:
+        """Look up a synced cost center by ID or (case-insensitive) name."""
+        if not collector:
+            return None
+        data = collector.load_latest("cost_centers", enterprise)
+        if not isinstance(data, dict):
+            return None
+        target = wanted.strip().lower()
+        for cc in data.get("cost_centers", []):
+            if cc.get("id", "").lower() == target or (cc.get("name", "") or "").lower() == target:
+                return cc
         return None
 
     # ------------------------------------------------------------------
@@ -272,7 +330,8 @@ def create_budget_tools(
             "or 'user' scope for Individual budget (specific user override). "
             "Universal budget is the default personal limit for all Copilot users. "
             "Individual budget overrides Universal budget for specific users (e.g., high-frequency users, core engineers). "
-            "Each enterprise/org can only have one Universal budget. Returns 409 if already exists."
+            "Each enterprise/org can only have one Universal budget. Returns 409 if already exists. "
+            "For cost center budgets use create_cost_center_budget instead."
         )
     )
     async def create_user_budget(params: CreateUserBudgetParams) -> str:
@@ -280,6 +339,15 @@ def create_budget_tools(
         if not api:
             return json.dumps({
                 "error": f"No API client available for {params.entity_type} '{params.entity_name}'."
+            })
+
+        if params.budget_scope not in ("multi_user_customer", "user"):
+            return json.dumps({
+                "error": (
+                    f"budget_scope '{params.budget_scope}' is not supported by this tool. "
+                    "Use 'multi_user_customer' or 'user' here, or create_cost_center_budget "
+                    "for 'cost_center' / 'multi_user_cost_center' budgets."
+                )
             })
 
         if params.budget_scope == "user" and not params.username:
@@ -449,6 +517,79 @@ def create_budget_tools(
 
     @define_tool(
         description=(
+            "Create a cost center budget for Copilot AI credits. "
+            "Use budget_scope='cost_center' for one shared budget covering the whole cost center, "
+            "or 'multi_user_cost_center' to give every member of the cost center the same personal budget "
+            "(that scope requires the cost center to already have at least one user member). "
+            "The cost center can be given by name or ID; it is resolved against the synced cost center data, "
+            "so run Sync Data first if the cost center was just created. "
+            "Requires a PAT with the manage_billing:copilot scope."
+        )
+    )
+    async def create_cost_center_budget(params: CreateCostCenterBudgetParams) -> str:
+        enterprise = _resolve_enterprise(params.enterprise)
+        if not enterprise:
+            return json.dumps({
+                "error": "Could not determine the enterprise. Pass the enterprise slug explicitly."
+            })
+
+        if params.budget_scope not in ("cost_center", "multi_user_cost_center"):
+            return json.dumps({
+                "error": "budget_scope must be 'cost_center' or 'multi_user_cost_center'."
+            })
+
+        cc = _find_cost_center(enterprise, params.cost_center)
+        if not cc:
+            return json.dumps({
+                "error": (
+                    f"Cost center '{params.cost_center}' not found in enterprise '{enterprise}'. "
+                    "Run Sync Data or use list_cost_centers to see the available cost centers."
+                )
+            })
+
+        api = _get_api("enterprise", enterprise)
+        if not api:
+            return json.dumps({"error": f"No API client available for enterprise '{enterprise}'."})
+
+        # GitHub matches the cost center by ID here, and echoes its name back in the response.
+        budget_data = {
+            "budget_type": "BundlePricing",
+            "budget_product_sku": "ai_credits",
+            "budget_scope": params.budget_scope,
+            "budget_entity_name": cc["id"],
+            "budget_amount": int(params.budget_amount),
+            "prevent_further_usage": params.prevent_further_usage,
+            "budget_alerting": {
+                "will_alert": params.enable_alerts,
+                "alert_recipients": params.alert_recipients if params.enable_alerts else [],
+            },
+        }
+
+        result = await api.create_budget(
+            entity_type="enterprise",
+            entity_name=enterprise,
+            budget_data=budget_data,
+        )
+
+        if result and "error" in result:
+            if result.get("status_code") == 409:
+                return json.dumps({
+                    "error": "A budget with this scope already exists for the cost center.",
+                    "hint": "Use update_budget to change the amount, or delete_budget first.",
+                    "result": result,
+                })
+            return json.dumps({
+                **result,
+                "cost_center": {"id": cc["id"], "name": cc.get("name", "")},
+            }, default=str)
+
+        return json.dumps({
+            **(result or {}),
+            "cost_center": {"id": cc["id"], "name": cc.get("name", "")},
+        }, default=str)
+
+    @define_tool(
+        description=(
             "Batch create Individual user-level budgets for multiple users. "
             "Useful for onboarding new team members, setting limits for specific project teams, "
             "or applying uniform budgets to high-frequency user groups. "
@@ -548,6 +689,7 @@ def create_budget_tools(
         get_all_budgets,
         get_budget_detail,
         create_user_budget,
+        create_cost_center_budget,
         update_budget,
         delete_budget,
         batch_create_user_budgets,

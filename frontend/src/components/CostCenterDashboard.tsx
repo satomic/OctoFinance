@@ -213,13 +213,19 @@ function ShareModal({
 }
 
 /* ---------- Cost Center row (expandable members) ---------- */
-function CostCenterRow({ cc, share, onOpenShare }: {
+function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap }: {
   cc: CostCenter;
   share: CostCenterShareInfo | null;
+  aiCapOn: boolean;
   onOpenShare: (cc: CostCenter) => void;
+  onToggleAiCap: (cc: CostCenter, enabled: boolean) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  // GitHub rejects the cap on cost centers that hold orgs or repos.
+  const capSupported = cc.resources.every((r) => r.type === "User" || r.type === "Team");
+  const capEditable = cc.state === "active" && capSupported;
+  const capState = cc.ai_credit_pool_state;
 
   return (
     <>
@@ -247,6 +253,25 @@ function CostCenterRow({ cc, share, onOpenShare }: {
         </td>
         <td className="cc-td cc-td-num">
           <strong>{cc.member_count}</strong>
+        </td>
+        <td className="cc-td cc-td-aicap" onClick={(e) => e.stopPropagation()}>
+          <label
+            className="toggle-switch toggle-switch-small"
+            title={capSupported ? t("ccDash.aiCapHint") : t("ccDash.aiCapUserOnly")}
+          >
+            <input
+              type="checkbox"
+              checked={aiCapOn}
+              disabled={!capEditable}
+              onChange={(e) => onToggleAiCap(cc, e.target.checked)}
+            />
+            <span className="toggle-slider" />
+          </label>
+          {aiCapOn && capState?.target_amount != null && (
+            <span className="cc-aicap-amounts">
+              {(capState.current_amount ?? 0).toLocaleString()} / {capState.target_amount.toLocaleString()}
+            </span>
+          )}
         </td>
         <td className="cc-td cc-td-share" onClick={(e) => e.stopPropagation()}>
           {share ? (
@@ -296,6 +321,7 @@ function CostCenterRow({ cc, share, onOpenShare }: {
               {m.source_name}
             </span>
           </td>
+          <td className="cc-td" />
           <td className="cc-td" />
           <td className="cc-td" />
         </tr>
@@ -467,6 +493,67 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
     [effectiveEnterprise, fetchShares],
   );
 
+  // ---- AI credit included usage cap ----
+  // The toggle flips right away and the request runs behind it; a failure rolls
+  // the override back so the switch never lies about the GitHub state.
+  const [aiCapOverrides, setAiCapOverrides] = useState<Record<string, boolean>>({});
+  const [aiCapPending, setAiCapPending] = useState<Record<string, boolean>>({});
+  const [aiCapError, setAiCapError] = useState("");
+
+  const handleToggleAiCap = useCallback(
+    async (cc: CostCenter, enabled: boolean) => {
+      if (aiCapPending[cc.id]) return;
+      const previous = cc.ai_credit_pool_enabled === true;
+      setAiCapOverrides((m) => ({ ...m, [cc.id]: enabled }));
+      setAiCapPending((m) => ({ ...m, [cc.id]: true }));
+      setAiCapError("");
+      try {
+        const res = await fetch("/api/data/cost-center-ai-credit-pool", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enterprise: effectiveEnterprise,
+            cost_center_id: cc.id,
+            enabled,
+          }),
+        });
+        const json = await res.json();
+        if (json.error) {
+          setAiCapOverrides((m) => ({ ...m, [cc.id]: previous }));
+          setAiCapError(`${cc.name}: ${json.error}`);
+        } else {
+          refetch();
+        }
+      } catch (e) {
+        setAiCapOverrides((m) => ({ ...m, [cc.id]: previous }));
+        setAiCapError(`${cc.name}: ${String(e)}`);
+      } finally {
+        setAiCapPending((m) => {
+          const next = { ...m };
+          delete next[cc.id];
+          return next;
+        });
+      }
+    },
+    [effectiveEnterprise, refetch, aiCapPending],
+  );
+
+  // Drop overrides once the refreshed data agrees with them.
+  useEffect(() => {
+    if (!data) return;
+    setAiCapOverrides((m) => {
+      const next = { ...m };
+      let changed = false;
+      for (const cc of data.cost_centers) {
+        if (cc.id in next && next[cc.id] === (cc.ai_credit_pool_enabled === true)) {
+          delete next[cc.id];
+          changed = true;
+        }
+      }
+      return changed ? next : m;
+    });
+  }, [data]);
+
   const setEnterprise = useCallback(
     (v: string) => ui.patch({ ccDashEnterprise: v }),
     [ui.patch],
@@ -482,9 +569,11 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
 
   const ccSorter = useSortableRows<CostCenter>(data?.cost_centers ?? [], {
     resource_count: (cc) => cc.resources.length,
+    ai_credit_pool_enabled: (cc) => (cc.ai_credit_pool_enabled ? 1 : 0),
   });
 
-  if (loading) return <div className="dashboard-loading">{t("loading")}</div>;
+  // Only blank the page on the first load; a background refetch keeps the table on screen.
+  if (loading && !data) return <div className="dashboard-loading">{t("loading")}</div>;
 
   if (!data || data.no_data) {
     return <div className="dashboard-empty">{t("ccDash.noData")}</div>;
@@ -590,6 +679,7 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
 
       {/* Cost Centers → Members table */}
       <Section sectionKey="costcenters" title={t("ccDash.sectionCostCenters")}>
+        {aiCapError && <div className="settings-error">{aiCapError}</div>}
         <div className="cc-table-wrap">
           <table className="cc-table">
             <thead>
@@ -598,6 +688,13 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
                 <SortTh label={t("ccDash.colState")} sortKey="state" sorter={ccSorter} className="cc-th" />
                 <SortTh label={t("ccDash.colResources")} sortKey="resource_count" sorter={ccSorter} className="cc-th" />
                 <SortTh label={t("ccDash.colMembers")} sortKey="member_count" sorter={ccSorter} className="cc-th cc-th-num" />
+                <SortTh
+                  label={t("ccDash.colAiCap")}
+                  sortKey="ai_credit_pool_enabled"
+                  sorter={ccSorter}
+                  className="cc-th"
+                  title={t("ccDash.aiCapHint")}
+                />
                 <th className="cc-th">{t("ccDash.colShare")}</th>
               </tr>
             </thead>
@@ -607,7 +704,9 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
                   key={cc.id}
                   cc={cc}
                   share={shares[cc.id] ?? null}
+                  aiCapOn={aiCapOverrides[cc.id] ?? cc.ai_credit_pool_enabled === true}
                   onOpenShare={setShareModalCC}
+                  onToggleAiCap={handleToggleAiCap}
                 />
               ))}
             </tbody>

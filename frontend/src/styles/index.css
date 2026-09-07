@@ -1708,6 +1708,22 @@ body {
   border: 1px solid var(--border);
 }
 
+/* ---- Cost Center AI credit cap column ---- */
+
+.cc-td-aicap {
+  white-space: nowrap;
+}
+
+.cc-td-aicap .toggle-switch {
+  vertical-align: middle;
+}
+
+.cc-aicap-amounts {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 /* ---- Cost Center share column & modal ---- */
 
 .cc-td-share {

@@ -48,6 +48,14 @@ class AssignCostCenterUsersRequest(BaseModel):
     users: list[str] = Field(default_factory=list)
 
 
+class CostCenterAiCreditPoolRequest(BaseModel):
+    """Request to toggle a cost center's AI credit included usage cap."""
+
+    enterprise: str = Field(default="")
+    cost_center_id: str
+    enabled: bool
+
+
 # ---------------------------------------------------------------------------
 # Enterprise team filtering
 #
@@ -1475,6 +1483,80 @@ async def assign_cost_center_unassigned_users(request: AssignCostCenterUsersRequ
         "assigned_users": users,
         "api_result": api_result,
         "sync_result": sync_result,
+    }
+
+
+@router.post("/data/cost-center-ai-credit-pool")
+async def set_cost_center_ai_credit_pool(request: CostCenterAiCreditPoolRequest):
+    """Turn a cost center's AI credit included usage cap on or off.
+
+    With the cap on, the cost center stops at the included credits its members'
+    licenses already cover; with it off, it draws from the shared enterprise pool.
+    GitHub only accepts the cap on cost centers holding user or team resources.
+    """
+    if not request.cost_center_id.strip():
+        return {"error": "Select a cost center."}
+
+    selected_slug, selected_enterprise, _ = _resolve_enterprise(request.enterprise)
+    if not selected_slug or not selected_enterprise:
+        return {"error": "No enterprise data found. Run Sync Data first."}
+
+    cc_data = data_collector.load_latest("cost_centers", selected_slug)
+    target_cc = next(
+        (cc for cc in _active_cost_centers(cc_data) if cc.get("id") == request.cost_center_id),
+        None,
+    )
+    if not target_cc:
+        return {"error": f"Active cost center '{request.cost_center_id}' was not found."}
+
+    api = api_manager.get_api_for_enterprise(selected_slug)
+    if not api:
+        return {"error": f"No API client found for enterprise '{selected_slug}'."}
+
+    cc_name = target_cc.get("name", "") or request.cost_center_id
+    action = "Enabling" if request.enabled else "Disabling"
+    sync_manager.log("info", f"{action} AI credit included usage cap for cost center '{cc_name}' ({selected_slug})")
+
+    try:
+        api_result = await api.update_cost_center(
+            selected_slug, request.cost_center_id, ai_credit_pool_enabled=request.enabled
+        )
+    except Exception as e:
+        sync_manager.log("error", f"Cost center '{cc_name}': AI credit cap update failed - {e}")
+        return {"error": f"GitHub API update failed: {e}"}
+
+    # Patch only this cost center in the cache; a full resync would re-expand
+    # every org's members and take seconds for a one-field change.
+    pool_state = api_result.get("ai_credit_pool_state") if isinstance(api_result, dict) else None
+    data_collector.update_cached_cost_center(selected_slug, request.cost_center_id, {
+        "ai_credit_pool_enabled": request.enabled,
+        "ai_credit_pool_state": pool_state,
+    })
+
+    cap_target = (pool_state or {}).get("target_amount")
+    sync_manager.log(
+        "info",
+        f"Cost center '{cc_name}': AI credit cap {'enabled' if request.enabled else 'disabled'}"
+        + (f" (included allowance {cap_target})" if request.enabled and cap_target is not None else ""),
+    )
+
+    _append_audit_log({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "set_cost_center_ai_credit_pool",
+        "enterprise": selected_slug,
+        "cost_center_id": request.cost_center_id,
+        "cost_center_name": target_cc.get("name", ""),
+        "ai_credit_pool_enabled": request.enabled,
+        "api_result": api_result,
+    })
+
+    return {
+        "status": "ok",
+        "enterprise": selected_slug,
+        "cost_center": {"id": request.cost_center_id, "name": target_cc.get("name", "")},
+        "ai_credit_pool_enabled": request.enabled,
+        "ai_credit_pool_state": pool_state,
+        "api_result": api_result,
     }
 
 

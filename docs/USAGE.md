@@ -1,6 +1,6 @@
 # OctoFinance Usage Guide
 
-> Applies to **v1.3.0**.
+> Applies to **v1.3.1**.
 
 OctoFinance has two experiences, chosen automatically by role:
 
@@ -212,6 +212,7 @@ Built from uploaded CSVs. Daily trend, model / product / SKU / org / cost-center
 
 Cost centers with members and resources, plus a user → cost center mapping.
 
+- **AI credit cap** — a per-cost-center switch for GitHub's *included usage cap*: with it on, the cost center stops at the AI credits its members' licenses already include instead of drawing from the shared enterprise pool. When on, the column also shows `consumed / included allowance`. The switch flips immediately and rolls back with an error if GitHub rejects it, and every change is streamed to the Console panel and written to the audit log. GitHub only allows the cap on cost centers whose resources are users or teams, so rows containing an organization or repository are disabled
 - **Download Report** — standalone HTML report for a cost center
 - **Share** — publish a tokenized link (`/share/cc/{token}`) that needs no OctoFinance account. Choose **Public** or **Password protected**; update or disable it at any time
 
