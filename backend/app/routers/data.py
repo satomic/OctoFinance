@@ -1787,11 +1787,9 @@ def _aggregate_usage_users_by_login(org_logins: list[str]) -> dict[str, dict]:
     return usage
 
 
-def _aggregate_ai_cost_by_login(org_logins: list[str]) -> dict[str, dict]:
-    """Build a `login (lowercase) -> AI credit spend` map from uploaded AI usage CSVs."""
-    org_set = {o.lower() for o in org_logins}
+def _sum_ai_records(records: list[dict], org_set: set[str]) -> dict[str, dict]:
     result: dict[str, dict] = {}
-    for r in load_all_csv_records(CSV_TYPE_AI):
+    for r in records:
         username = r.get("username", "")
         if not username:
             continue
@@ -1815,6 +1813,22 @@ def _aggregate_ai_cost_by_login(org_logins: list[str]) -> dict[str, dict]:
         cc = r.get("cost_center_name") or ""
         if cc and cc not in entry["cost_centers"]:
             entry["cost_centers"].append(cc)
+    return result
+
+
+def _aggregate_ai_cost_by_login(org_logins: list[str], records: list[dict]) -> dict[str, dict]:
+    """Build a `login (lowercase) -> AI credit spend` map from uploaded AI usage CSVs."""
+    # Pseudo-org keys exist only in this app's storage. Billing CSVs always carry
+    # the real organization login, so filtering on them discards every row.
+    pseudo = {enterprise_pseudo_org(e.get("slug", "")).lower() for e in _load_enterprise_list()}
+    org_set = {o.lower() for o in org_logins} - pseudo
+
+    result = _sum_ai_records(records, org_set)
+    # An org list that matches nothing at all is a mapping failure, not an
+    # absence of spend. Attribution still happens by login downstream, so a
+    # login-only join is far better than reporting $0.00.
+    if not result and org_set:
+        result = _sum_ai_records(records, set())
     return result
 
 
@@ -1854,7 +1868,8 @@ async def get_enterprise_teams_dashboard(
     org_logins = await _get_enterprise_org_logins(selected_slug, selected_enterprise)
     seat_map = _aggregate_seats_by_login(org_logins)
     usage_map = _aggregate_usage_users_by_login(org_logins)
-    ai_map = _aggregate_ai_cost_by_login(org_logins)
+    ai_records = load_all_csv_records(CSV_TYPE_AI)
+    ai_map = _aggregate_ai_cost_by_login(org_logins, ai_records)
 
     price_per_seat = COPILOT_PRICING.get("business", 19.0)
 
@@ -1967,7 +1982,7 @@ async def get_enterprise_teams_dashboard(
         "orgs": org_logins,
         "totals": totals,
         "unassigned_seat_users": unassigned,
-        "ai_usage_available": bool(ai_map),
+        "ai_usage_available": bool(ai_records),
         "no_data": not all_teams,
     }
 
