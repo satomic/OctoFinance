@@ -1,5 +1,9 @@
 # OctoFinance: AI-Powered GitHub Copilot FinOps Platform
 
+> **Start here:** **[English Complete User Guide](docs/USER_GUIDE_EN.md)** | **[中文完整使用指南](docs/USER_GUIDE_CN.md)**
+>
+> The complete guide walks through every screen for all three roles (administrator, cost center owner, regular user) with annotated screenshots. Other documents are listed under [Documentation](#documentation).
+
 ## Why "OctoFinance"?
 
 **Octo** comes from [**Octocat**](https://github.com/octocat), GitHub's mascot, the half-cat, half-octopus that has stood for GitHub since the beginning. **Finance** is what this project does: it brings FinOps discipline (cost visibility, budget control and waste reduction) to GitHub Copilot spend.
@@ -195,33 +199,42 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 
 ### Chat
 > Do you think the current budget setting is reasonable?
-![alt text](images/chat.png)
+![AI chat answering a Copilot ROI question with a cost summary table and a per-organization breakdown](images/chat.png)
 
 > Who consumed the most AI Credits in the past week?
-![alt text](images/chat2.png)
+![AI chat ranking the top AI credit consumers for the past week](images/chat2.png)
 
 ### Dashboards
 
 > Usage Metrics
-![alt text](images/metrics.png)
+![Usage Metrics dashboard with seat KPIs, daily active trend and code productivity](images/usage_metrics_en.png)
 
 > AI Usage
-![alt text](images/aiusage.png)
+![AI Usage tab with AI credit KPIs and the daily credit trend](images/ai_usage_en.png)
 
 > Input, Output & Cache: totals and daily trends (illustrative data)
 ![Input, output, cache read and cache write totals with four daily trend lines](images/ai_usage_tokens.png)
 
-> Cost Centers
-![alt text](images/cc.png)
+> Usage Report
+![Usage Report tab with gross, net and discount totals plus product and SKU breakdowns](images/usage_report_en.png)
 
 > Cost Centers
-![alt text](images/cc_shares.png)
+![Cost center list with resource tags, AI Credit Cap toggles and the user to cost center mapping](images/cost_centers_en.png)
+
+> Cost Centers: shared report link
+![Share Report dialog with the share link and public or password-protected access options](images/cc_shares.png)
 
 > Unassigned Users
-![alt text](images/unassigned_users.png)
+![Unassigned Users tab listing seat holders that belong to no active cost center](images/unassigned_users_en.png)
+
+> Enterprise Teams
+![Enterprise Teams tab with coverage KPIs, the team table and seat holders outside every team](images/enterprise_teams_en.png)
 
 > Budgets
-![alt text](images/budgets.png)
+![Budgets tab with budget KPIs, the scope chart and the budget table](images/budgets_en.png)
+
+> Requests
+![Requests review tab with request KPIs, approval controls and the request table](images/requests_review_en.png)
 
 ### Cost Center Owner
 
@@ -373,6 +386,8 @@ Every tagged build also updates the `latest` tag.
 
 | Document | Description |
 |----------|-------------|
+| **[English Complete User Guide](docs/USER_GUIDE_EN.md)** | Full administrator, cost center owner and regular-user workflows with English light-theme screenshots |
+| **[中文完整使用指南](docs/USER_GUIDE_CN.md)** | 按管理员、成本中心负责人、普通用户分章，配套步骤、权限说明与共用截图 |
 | [docs/USAGE.md](docs/USAGE.md) | Usage guide: UI walkthrough, chat examples, dashboard |
 | [docs/FEATURES.md](docs/FEATURES.md) | Detailed features, tool catalog, API reference |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture diagram, data flow, tech stack, project structure |

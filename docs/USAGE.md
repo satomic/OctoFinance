@@ -2,6 +2,8 @@
 
 > Applies to **v1.4.0**.
 
+For the complete role-based walkthrough with shared English light-theme screenshots, see the [English guide](USER_GUIDE_EN.md) or [中文指南](USER_GUIDE_CN.md).
+
 OctoFinance's interface depends on your sign-in role and any cost center ownership grants:
 
 | You are… | You get… |
