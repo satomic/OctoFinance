@@ -63,7 +63,11 @@ class APIManager:
                 # rather than organizations)
                 include_organizations = pat.get("include_organizations", True)
                 if include_organizations:
-                    orgs = await api.discover_orgs()
+                    try:
+                        orgs = await api.discover_orgs()
+                    except Exception as e:
+                        orgs = []
+                        print(f"[APIManager] Failed to discover organizations for PAT '{pat['label']}': {e}")
                 else:
                     orgs = []
                     print(f"[APIManager] PAT '{pat['label']}' has organization scanning disabled, skipping org discovery")
@@ -260,14 +264,12 @@ class APIManager:
         return list(self._all_enterprises)
 
     def get_enterprise_pseudo_orgs(self) -> list[dict]:
-        """Return enterprises whose owning PAT has no discovered organizations.
+        """Return enterprises eligible for enterprise-level usage aggregation.
 
         This covers both cases: the PAT owner unchecked "include organizations"
         when configuring the PAT, or the enterprise genuinely has no orgs and
-        grants Copilot access purely through enterprise teams. These enterprises
-        are synced using enterprise-level Copilot endpoints and their data is
-        stored under a pseudo-org key so it flows through the existing
-        org-based dashboard aggregation.
+        grants Copilot access purely through enterprise teams. Seat sync is
+        independent of this selection and always includes all enterprises.
         """
         orgs_per_pat: dict[str, int] = {}
         for o in self._all_orgs:

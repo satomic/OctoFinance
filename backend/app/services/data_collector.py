@@ -55,11 +55,9 @@ def _empty_result_log(api: "GitHubAPI", scope: str, dataset: str) -> tuple[str, 
 def enterprise_pseudo_org(slug: str) -> str:
     """Return the pseudo-org key used to store enterprise-level Copilot data.
 
-    Used for enterprises that have no organizations (Copilot granted purely via
-    enterprise teams, or organization scanning was disabled for the owning PAT).
-    Storing enterprise data under this key lets it flow through the existing
-    org-keyed dashboard aggregation (seats/billing/usage/usage_users/ai_credits)
-    without any changes to that logic.
+    Seats are synced for every enterprise and deduplicated against organization
+    seats on read. Usage datasets use this key when no organizations were
+    discovered for the owning PAT.
     """
     return f"{slug}-enterprise"
 
@@ -299,6 +297,11 @@ class DataCollector:
 
     def load_latest(self, category: str, org: str) -> dict | list | None:
         """Load the latest data file. Checks primary dir first, then fallback."""
+        if category in {"seats", "billing"}:
+            return self.load_all_latest(category).get(org)
+        return self._load_latest_raw(category, org)
+
+    def _load_latest_raw(self, category: str, org: str) -> dict | list | None:
         filepath = self._data_dir / category / f"{org}_latest.json"
         if filepath.exists():
             return json.loads(filepath.read_text(encoding="utf-8"))
@@ -313,6 +316,62 @@ class DataCollector:
 
     def load_all_latest(self, category: str) -> dict[str, dict | list]:
         """Load latest data for all orgs. Checks primary dir first, fills from fallback."""
+        if category not in {"seats", "billing"}:
+            return self._load_all_latest_raw(category)
+
+        raw_seats = self._load_all_latest_raw("seats")
+        enterprises = (
+            self._api_manager.get_all_enterprises() if self._api_manager
+            else self._load_latest_raw("enterprise", "all") or []
+        )
+        enterprise_keys = {enterprise_pseudo_org(enterprise["slug"]) for enterprise in enterprises}
+        enterprise_keys.update(
+            scope for scope, payload in raw_seats.items() if payload.get("_enterprise_slug")
+        )
+        raw_billing = self._load_all_latest_raw("billing")
+        enterprise_keys.update(
+            scope for scope, payload in raw_billing.items()
+            if payload.get("_source") == "enterprise_seats_aggregate"
+        )
+        if self._api_manager:
+            org_keys = set(self._api_manager.get_all_org_logins())
+            enterprise_keys &= {
+                enterprise_pseudo_org(enterprise["slug"]) for enterprise in enterprises
+            }
+        else:
+            org_keys = (raw_seats.keys() | raw_billing.keys()) - enterprise_keys
+
+        seat_views = {scope: payload for scope, payload in raw_seats.items() if scope in org_keys}
+        covered_logins = {
+            (seat.get("assignee", {}).get("login") or "").lower()
+            for payload in seat_views.values() for seat in payload.get("seats", [])
+        } - {""}
+        for scope in sorted(enterprise_keys):
+            payload = raw_seats.get(scope)
+            if payload is None:
+                continue
+            remaining = []
+            for seat in payload.get("seats", []):
+                login = (seat.get("assignee", {}).get("login") or "").lower()
+                if login and login in covered_logins:
+                    continue
+                remaining.append(seat)
+                if login:
+                    covered_logins.add(login)
+            seat_views[scope] = {**payload, "seats": remaining, "total_seats": len(remaining)}
+
+        if category == "seats":
+            return seat_views
+        billing_views = {
+            scope: payload for scope, payload in raw_billing.items()
+            if scope in org_keys or scope in enterprise_keys
+        }
+        for scope, seats in seat_views.items():
+            if scope in enterprise_keys or scope not in billing_views:
+                billing_views[scope] = self._build_synthetic_enterprise_billing(seats)
+        return billing_views
+
+    def _load_all_latest_raw(self, category: str) -> dict[str, dict | list]:
         result = {}
 
         # Read from primary directory
@@ -560,22 +619,26 @@ class DataCollector:
         summary["synced"].extend(cc_summary["synced"] + bd_summary["synced"] + et_summary["synced"])
         summary["errors"].extend(cc_summary["errors"] + bd_summary["errors"] + et_summary["errors"])
 
-        # Enterprise-level Copilot data (seats/usage) for enterprises with no
-        # organizations — either genuinely orgless, or organization scanning was
-        # disabled for the owning PAT.
-        pseudo_orgs = self._api_manager.get_enterprise_pseudo_orgs()
-        for ent in pseudo_orgs:
-            ent_summary = await self.sync_enterprise_copilot_data(ent, log_fn=log_fn)
+        usage_slugs = {
+            enterprise["slug"]
+            for enterprise in self._api_manager.get_enterprise_pseudo_orgs()
+        }
+        for ent in enterprises:
+            ent_summary = await self.sync_enterprise_copilot_data(
+                ent, log_fn=log_fn, seats_only=ent["slug"] not in usage_slugs,
+            )
             summary["synced"].extend(ent_summary["synced"])
             summary["errors"].extend(ent_summary["errors"])
 
         return summary
 
-    async def sync_enterprise_copilot_data(self, enterprise: dict, log_fn: LogFn = None) -> dict:
-        """Sync enterprise-level Copilot seats/usage data for an enterprise without
-        organizations, using the enterprise-scoped Copilot APIs. Data is stored
-        under a pseudo-org key (see `enterprise_pseudo_org`) so it flows through
-        the existing org-keyed dashboard aggregation unchanged.
+    async def sync_enterprise_copilot_data(
+        self, enterprise: dict, log_fn: LogFn = None, *, seats_only: bool = False,
+    ) -> dict:
+        """Sync enterprise seats regardless of organization discovery.
+
+        Usage datasets retain their existing scope selection to avoid summing
+        enterprise usage together with the organizations it already covers.
         """
         slug = enterprise["slug"]
         summary: dict = {"org": slug, "synced": [], "errors": []}
@@ -593,13 +656,14 @@ class DataCollector:
         pseudo_org = enterprise_pseudo_org(slug)
 
         if log_fn:
-            log_fn("info", f"Syncing {slug} (enterprise-level, no organizations)...")
+            log_fn("info", f"Syncing {slug} (enterprise-level)...")
 
         # Seats (across enterprise teams)
         seats = None
         try:
             seats = await api.get_enterprise_billing_seats(slug)
             if seats:
+                seats = {**seats, "_enterprise_slug": slug}
                 self._save_json("seats", pseudo_org, seats)
                 summary["synced"].append(f"seats ({seats.get('total_seats', 0)} total)")
                 if log_fn:
@@ -626,6 +690,9 @@ class DataCollector:
                 summary["errors"].append(f"billing: {e}")
                 if log_fn:
                     log_fn("error", f"  {slug}: billing synthesis error - {e}")
+
+        if seats_only:
+            return summary
 
         # Usage Report (enterprise-level 28-day)
         try:

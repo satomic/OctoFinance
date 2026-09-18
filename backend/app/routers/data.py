@@ -243,13 +243,11 @@ async def get_orgs():
 async def get_overview():
     """Get a quick overview across all organizations.
 
-    Also folds in enterprise-level Copilot data for enterprises that have no
-    organizations (Copilot granted via enterprise teams, or organization
-    scanning disabled for the owning PAT), so KPIs stay accurate even when
-    the organizations list itself is empty.
+    Enterprise seat data supplements organization data. The collector removes
+    seats already covered by organizations before synthesizing enterprise billing.
     """
     all_orgs = api_manager.get_all_orgs()
-    pseudo_orgs = api_manager.get_enterprise_pseudo_orgs()
+    pseudo_orgs = api_manager.get_all_enterprises()
     org_keys = [o["login"] for o in all_orgs] + [enterprise_pseudo_org(e["slug"]) for e in pseudo_orgs]
     total_seats = 0
     total_active = 0
@@ -421,9 +419,8 @@ async def get_dashboard(
     not consulted here; they drive the AI Usage and Usage Report tabs instead.
 
     Query param ``orgs`` is a comma-separated list of org logins to include.
-    Empty means all orgs with Copilot billing data. Also includes pseudo-org
-    entries for enterprises with no organizations (see `enterprise_pseudo_org`)
-    so the dashboard stays populated even when the organizations list is empty.
+    Empty means all orgs with Copilot billing data, plus enterprise seats not
+    covered by organizations. Usage datasets retain their original scope selection.
 
     When ``enterprise_team`` is set, every section is restricted to that team's
     members and the usage aggregates are recomputed from user-level records.
@@ -436,8 +433,12 @@ async def get_dashboard(
     """
     all_orgs = api_manager.get_all_orgs()
     pseudo_orgs = api_manager.get_enterprise_pseudo_orgs()
-    all_org_names = [o["login"] for o in all_orgs] + [enterprise_pseudo_org(e["slug"]) for e in pseudo_orgs]
-    selected = [o.strip() for o in orgs.split(",") if o.strip()] if orgs.strip() else all_org_names
+    usage_org_names = [o["login"] for o in all_orgs] + [enterprise_pseudo_org(e["slug"]) for e in pseudo_orgs]
+    all_org_names = [o["login"] for o in all_orgs] + [
+        enterprise_pseudo_org(enterprise["slug"]) for enterprise in api_manager.get_all_enterprises()
+    ]
+    selected_seat_orgs = [o.strip() for o in orgs.split(",") if o.strip()] if orgs.strip() else all_org_names
+    selected = [scope for scope in selected_seat_orgs if scope in usage_org_names]
     team_filter = _team_member_logins(enterprise_team)
     selected_user = user.strip()
     member_filter = _with_user_filter(team_filter, selected_user)
@@ -449,7 +450,7 @@ async def get_dashboard(
     monthly_waste = 0.0
     available_orgs: list[str] = []
 
-    for org_name in selected:
+    for org_name in selected_seat_orgs:
         billing = data_collector.load_latest("billing", org_name)
         if not billing:
             continue
@@ -471,7 +472,7 @@ async def get_dashboard(
         active_seats = 0
         monthly_cost = 0.0
         monthly_waste = 0.0
-        for org_name in selected:
+        for org_name in selected_seat_orgs:
             billing = data_collector.load_latest("billing", org_name) or {}
             price = billing.get("_detected_price_per_seat", 19.0)
             seats_data = data_collector.load_latest("seats", org_name)
@@ -507,7 +508,7 @@ async def get_dashboard(
         "features": {},  # feature -> enabled/disabled
         "seats": [],  # individual seat records
     }
-    for org_name in selected:
+    for org_name in selected_seat_orgs:
         billing = data_collector.load_latest("billing", org_name)
         if billing:
             sb = billing.get("seat_breakdown", {})
@@ -788,7 +789,7 @@ async def get_dashboard(
         "selected_enterprise_team": enterprise_team or None,
         "team_filtered": team_filter is not None,
         "team_member_count": len(team_filter) if isinstance(team_filter, set) else None,
-        "users": _dashboard_user_options(selected, team_filter),
+        "users": _dashboard_user_options(selected_seat_orgs, team_filter),
         "selected_user": selected_user or None,
         "date_range": {"start": date_start, "end": date_end},
     }
