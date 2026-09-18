@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
-import { useTheme } from "../contexts/ThemeContext";
 import { MyDashboard } from "./MyDashboard";
 import { BudgetRequestPanel } from "./BudgetRequestPanel";
 import { PeriodToggle } from "./PeriodToggle";
-import { LanguageSelector } from "./LanguageSelector";
 import { SourceCodeLink } from "./SourceCodeLink";
+import { UserMenu } from "./UserMenu";
 import type { AuthUser, UpdateInfo } from "../types";
 
 interface Props {
@@ -22,7 +21,6 @@ interface Props {
  */
 export function UserPortal({ user, version, update, onLogout }: Props) {
   const { t } = useI18n();
-  const { theme, toggleTheme } = useTheme();
   const ui = useUIState();
   const period = ui.periodMode ?? "all";
   const [tab, setTab] = useState<"usage" | "budget">("usage");
@@ -52,10 +50,6 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
               {t("me.tabBudget")}
             </button>
           </div>
-          <LanguageSelector />
-          <button className="btn btn-small btn-toggle" onClick={toggleTheme} title="Switch theme">
-            {theme === "dark" ? "Light" : "Dark"}
-          </button>
           <SourceCodeLink update={update} />
           <a
             className="btn btn-small btn-link-icon"
@@ -70,19 +64,7 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
             </svg>
             {t("nav.feedback")}
           </a>
-          <div className="user-chip" title={user.login}>
-            {user.avatar_url && <img src={user.avatar_url} alt="" className="user-chip-avatar" />}
-            <span>{user.name || user.login}</span>
-          </div>
-          <button
-            className="btn btn-small btn-ghost"
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
-              onLogout();
-            }}
-          >
-            {t("auth.logout")}
-          </button>
+          <UserMenu user={user} onLogout={onLogout} />
         </div>
       </div>
       <div className="app-body">

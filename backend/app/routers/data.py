@@ -1300,6 +1300,10 @@ async def _get_enterprise_org_logins(enterprise_slug: str, enterprise_info: dict
     if not orgs and len(_load_enterprise_list()) <= 1:
         orgs = list(data_collector.load_all_latest("seats").keys())
 
+    pseudo_org = enterprise_pseudo_org(enterprise_slug)
+    if data_collector.load_latest("seats", pseudo_org) is not None:
+        orgs.append(pseudo_org)
+
     return sorted(set(orgs), key=str.lower)
 
 

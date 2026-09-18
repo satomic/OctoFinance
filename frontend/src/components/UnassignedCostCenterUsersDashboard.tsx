@@ -319,6 +319,19 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
         >
           {syncing ? t("status.syncing") : t("ccDash.sync")}
         </button>
+        <span className="cc-unassigned-help">
+          <button
+            type="button"
+            className="cc-unassigned-help-button"
+            aria-label={t("ccUnassigned.help")}
+            aria-describedby="cc-unassigned-help-tooltip"
+          >
+            <span aria-hidden="true">?</span>
+          </button>
+          <span id="cc-unassigned-help-tooltip" role="tooltip" className="cc-unassigned-help-tooltip">
+            {t("ccUnassigned.description")}
+          </span>
+        </span>
       </div>
 
       <div className="dashboard-kpi">
@@ -361,7 +374,9 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
       </div>
 
       {!users.length ? (
-        <div className="dashboard-empty">{t("ccUnassigned.noUsers")}</div>
+        <div className="dashboard-empty">
+          {t(search.trim() ? "ccUnassigned.noMatches" : data.total_copilot_users ? "ccUnassigned.noUsers" : "ccUnassigned.noSeats")}
+        </div>
       ) : (
         <div className="cc-table-wrap">
           <table className="cc-table cc-unassigned-table">
