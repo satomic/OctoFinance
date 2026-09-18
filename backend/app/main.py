@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .routers import actions, auth, budget_requests, chat, data, me, pats, sessions, share, sync
+from .routers import actions, auth, budget_requests, chat, cost_center_owner, data, me, pats, sessions, share, sync
 from .routers.auth import (
     ADMIN_ONLY_PATHS,
     AUTH_PUBLIC_PATHS,
@@ -146,6 +146,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
+app.include_router(cost_center_owner.router, prefix="/api")
 app.include_router(budget_requests.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")

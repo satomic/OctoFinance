@@ -377,6 +377,14 @@ class GitHubAPI:
             self._record_failure(f"enterprise_team_orgs {team_slug}", detail=str(e))
             return []
 
+    async def get_cost_center(self, enterprise: str, cost_center_id: str) -> dict:
+        resp = await self.client.get(
+            f"/enterprises/{enterprise}/settings/billing/cost-centers/{cost_center_id}",
+            headers={"X-GitHub-Api-Version": "2026-03-10"},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
     async def update_cost_center(
         self,
         enterprise: str,
@@ -1070,10 +1078,14 @@ class GitHubAPI:
         entity_type: str,
         entity_name: str,
         scope: str | None = None,
+        *,
+        strict: bool = False,
     ) -> list[dict]:
         """Fetch all budgets across pages for an enterprise/organization.
 
         Returns a flat list of budget dicts (empty list on error or no data).
+        With strict=True, incomplete or failed reads raise instead of returning
+        an empty or partial list, so callers can safely decide whether to create.
         """
         all_budgets: list[dict] = []
         page = 1
@@ -1081,10 +1093,14 @@ class GitHubAPI:
             result = await self.get_budgets(
                 entity_type, entity_name, scope=scope, page=page, per_page=100
             )
-            if not isinstance(result, dict) or result.get("error"):
+            if not isinstance(result, dict) or result.get("error") or not isinstance(result.get("budgets"), list):
+                if strict:
+                    raise ValueError("Unable to read complete budget data from GitHub")
                 break
             batch = result.get("budgets", []) or []
             all_budgets.extend(batch)
+            if strict and result.get("has_next_page") and not batch:
+                raise ValueError("Incomplete budget pagination from GitHub")
             if not result.get("has_next_page") or not batch:
                 break
             page += 1

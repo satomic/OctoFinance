@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { useUIState } from "../contexts/UIStateContext";
 import { MyDashboard } from "./MyDashboard";
@@ -6,7 +6,8 @@ import { BudgetRequestPanel } from "./BudgetRequestPanel";
 import { PeriodToggle } from "./PeriodToggle";
 import { SourceCodeLink } from "./SourceCodeLink";
 import { UserMenu } from "./UserMenu";
-import type { AuthUser, UpdateInfo } from "../types";
+import { OwnerCostCenterDashboard } from "./OwnerCostCenterDashboard";
+import type { AuthUser, OwnedCostCenter, UpdateInfo } from "../types";
 
 interface Props {
   user: AuthUser;
@@ -24,6 +25,29 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
   const ui = useUIState();
   const period = ui.periodMode ?? "all";
   const [tab, setTab] = useState<"usage" | "budget">("usage");
+  const [ownedCenters, setOwnedCenters] = useState<OwnedCostCenter[]>([]);
+  const [selectedRole, setSelectedRole] = useState("");
+  const [rolesError, setRolesError] = useState(false);
+
+  useEffect(() => {
+    let disposed = false;
+    const loadRoles = async () => {
+      try {
+        const response = await fetch("/api/me/owned-cost-centers");
+        if (!response.ok) throw new Error("Unable to load roles");
+        const result = await response.json();
+        if (!disposed) { setOwnedCenters(result.cost_centers); setRolesError(false); }
+      } catch {
+        if (!disposed) { setOwnedCenters([]); setRolesError(true); }
+      }
+    };
+    loadRoles();
+    window.addEventListener("focus", loadRoles);
+    const timer = window.setInterval(loadRoles, 60000);
+    return () => { disposed = true; window.removeEventListener("focus", loadRoles); window.clearInterval(timer); };
+  }, [user.login]);
+
+  const selectedCenter = ownedCenters.find((center) => JSON.stringify([center.enterprise, center.id]) === selectedRole);
 
   return (
     <div className="app">
@@ -35,8 +59,17 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
           <span className="status-text">{t("me.portalTitle")}</span>
         </div>
         <div className="status-right">
+          {ownedCenters.length > 0 && <select
+            className="cc-native-select cc-role-select"
+            aria-label={t("ccOwner.switchRole")}
+            value={selectedCenter ? selectedRole : ""}
+            onChange={(event) => setSelectedRole(event.target.value)}
+          >
+            <option value="">{t("ccOwner.personal")}</option>
+            {ownedCenters.map((center) => <option key={JSON.stringify([center.enterprise, center.id])} value={JSON.stringify([center.enterprise, center.id])}>{t("ccOwner.owner")}: {center.name} ({center.enterprise})</option>)}
+          </select>}
           <PeriodToggle value={period} onChange={(v) => ui.patch({ periodMode: v })} />
-          <div className="view-toggle">
+          {!selectedCenter && <div className="view-toggle">
             <button
               className={`btn btn-small btn-toggle ${tab === "usage" ? "btn-toggle-active" : ""}`}
               onClick={() => setTab("usage")}
@@ -49,7 +82,7 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
             >
               {t("me.tabBudget")}
             </button>
-          </div>
+          </div>}
           <SourceCodeLink update={update} />
           <a
             className="btn btn-small btn-link-icon"
@@ -70,7 +103,8 @@ export function UserPortal({ user, version, update, onLogout }: Props) {
       <div className="app-body">
         <main className="main-content">
           <div className="unified-dashboard">
-            {tab === "usage" ? <MyDashboard period={period} /> : <BudgetRequestPanel />}
+            {rolesError && <p className="settings-error" role="alert">{t("ccOwner.loadFailed")}</p>}
+            {selectedCenter ? <OwnerCostCenterDashboard key={`${selectedRole}:${period}`} center={selectedCenter} period={period} /> : tab === "usage" ? <MyDashboard period={period} /> : <BudgetRequestPanel />}
           </div>
         </main>
       </div>

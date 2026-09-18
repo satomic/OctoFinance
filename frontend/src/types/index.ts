@@ -331,6 +331,44 @@ export interface CostCenterOption {
   member_count: number;
 }
 
+export interface OwnedCostCenter {
+  enterprise: string;
+  id: string;
+  name: string;
+}
+
+export interface OwnerDashboardData {
+  enterprise: string;
+  cost_center: CostCenter;
+  period: { mode: string; start: string; end: string };
+  credit_status: "live" | "cached" | "unavailable";
+  credit_error: string | null;
+  credit_checked_at: string | null;
+  ambiguous_billing_scope: boolean;
+  cap_verified: boolean;
+  budget_status: "live" | "unavailable";
+  budget_read_only_reason: "cap_off" | "cap_unknown" | "budgets_unavailable" | null;
+  user_budgets: {
+    login: string;
+    can_edit: boolean;
+    budgets: { id: string; amount: number; consumed_amount: number | null; remaining_amount: number | null; prevent_further_usage: boolean }[];
+  }[];
+  ai_usage: {
+    has_data: boolean;
+    date_range?: { start: string; end: string };
+    kpi?: { total_requests: number; total_cost: number; unique_users: number };
+    daily_trend?: { day: string; requests: number; amount: number }[];
+    model_breakdown?: { model: string; requests: number; amount: number }[];
+    users?: { user: string; requests: number; gross_amount: number; net_amount: number; days_active: number }[];
+  };
+  usage: {
+    has_data: boolean;
+    date_range?: { start: string; end: string };
+    kpi?: { total_gross: number; total_net: number; total_discount: number; unique_users: number };
+    users?: { user: string; gross_amount: number; net_amount: number }[];
+  };
+}
+
 export interface UnassignedCostCenterUser {
   login: string;
   avatar_url: string;

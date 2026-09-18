@@ -213,15 +213,18 @@ function ShareModal({
 }
 
 /* ---------- Cost Center row (expandable members) ---------- */
-function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap }: {
+function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap, owners, onToggleOwner }: {
   cc: CostCenter;
   share: CostCenterShareInfo | null;
   aiCapOn: boolean;
   onOpenShare: (cc: CostCenter) => void;
   onToggleAiCap: (cc: CostCenter, enabled: boolean) => void;
+  owners: string[] | null;
+  onToggleOwner: (cc: CostCenter, login: string, enabled: boolean) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  const [pendingOwner, setPendingOwner] = useState<string | null>(null);
   // GitHub rejects the cap on cost centers that hold orgs or repos.
   const capSupported = cc.resources.every((r) => r.type === "User" || r.type === "Team");
   const capEditable = cc.state === "active" && capSupported;
@@ -323,7 +326,29 @@ function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap }: {
           </td>
           <td className="cc-td" />
           <td className="cc-td" />
-          <td className="cc-td" />
+          <td className="cc-td">
+            <label className="cc-owner-toggle">
+              <span className="toggle-switch toggle-switch-small">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  aria-label={`${t("ccOwner.owner")}: ${m.login}`}
+                  checked={owners?.includes(m.login.toLowerCase()) ?? false}
+                  disabled={owners === null || pendingOwner !== null || cc.state !== "active"}
+                  onChange={async (event) => {
+                    setPendingOwner(m.login);
+                    try {
+                      await onToggleOwner(cc, m.login, event.target.checked);
+                    } finally {
+                      setPendingOwner(null);
+                    }
+                  }}
+                />
+                <span className="toggle-slider" />
+              </span>
+              <span>{t("ccOwner.owner")}</span>
+            </label>
+          </td>
         </tr>
       ))}
     </>
@@ -438,6 +463,40 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
   const [shares, setShares] = useState<Record<string, CostCenterShareInfo>>({});
   const [shareModalCC, setShareModalCC] = useState<CostCenter | null>(null);
   const effectiveEnterprise = data?.selected_enterprise || enterprise;
+  const [ownerState, setOwnerState] = useState<{ enterprise: string; owners: Record<string, string[]> } | null>(null);
+  const [ownerError, setOwnerError] = useState("");
+
+  useEffect(() => {
+    if (!effectiveEnterprise) return;
+    const controller = new AbortController();
+    fetch(`/api/data/cost-center-owners?${new URLSearchParams({ enterprise: effectiveEnterprise })}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(t("ccOwner.loadFailed"));
+        const result = await response.json();
+        setOwnerState({ enterprise: effectiveEnterprise, owners: result.owners });
+        setOwnerError("");
+      })
+      .catch((error) => { if (!controller.signal.aborted) setOwnerError(String(error)); });
+    return () => controller.abort();
+  }, [effectiveEnterprise, t]);
+
+  const handleToggleOwner = async (cc: CostCenter, login: string, enabled: boolean) => {
+    setOwnerError("");
+    try {
+      const response = await fetch("/api/data/cost-center-owner", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enterprise: effectiveEnterprise, cost_center_id: cc.id, login, enabled }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || t("ccOwner.saveFailed"));
+      setOwnerState((previous) => previous?.enterprise === effectiveEnterprise
+        ? { ...previous, owners: { ...previous.owners, [cc.id]: result.owners } }
+        : previous);
+    } catch (error) {
+      setOwnerError(String(error));
+    }
+  };
 
   const fetchShares = useCallback(async (ent: string) => {
     if (!ent) return;
@@ -680,6 +739,7 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
       {/* Cost Centers → Members table */}
       <Section sectionKey="costcenters" title={t("ccDash.sectionCostCenters")}>
         {aiCapError && <div className="settings-error">{aiCapError}</div>}
+        {ownerError && <div className="settings-error" role="alert">{ownerError}</div>}
         <div className="cc-table-wrap">
           <table className="cc-table">
             <thead>
@@ -701,8 +761,10 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
             <tbody>
               {ccSorter.rows.map((cc) => (
                 <CostCenterRow
-                  key={cc.id}
+                  key={`${effectiveEnterprise}:${cc.id}`}
                   cc={cc}
+                  owners={ownerState?.enterprise === effectiveEnterprise ? ownerState.owners[cc.id] ?? [] : null}
+                  onToggleOwner={handleToggleOwner}
                   share={shares[cc.id] ?? null}
                   aiCapOn={aiCapOverrides[cc.id] ?? cc.ai_credit_pool_enabled === true}
                   onOpenShare={setShareModalCC}
