@@ -2,12 +2,13 @@
 
 > Applies to **v1.4.0**.
 
-OctoFinance has two experiences, chosen automatically by role:
+OctoFinance's interface depends on your sign-in role and any cost center ownership grants:
 
 | You are… | You get… |
 |----------|----------|
-| **Administrator** | The full platform — AI chat, all dashboards, PAT/SSO settings, approvals |
-| **Regular GitHub user** | A personal portal — your own usage, your budget and cost centers, budget requests |
+| **Administrator** | Full platform: AI chat, all dashboards, PAT/SSO settings, approvals |
+| **Regular GitHub user** | Personal portal: your own usage, your budget and cost centers, budget requests |
+| **Cost center owner** | Personal portal plus a role selector for each cost center you own, with center usage and eligible member budget management |
 
 ---
 
@@ -81,6 +82,33 @@ GitHub Copilot budgets run on a single monthly billing cycle, so there is no per
 GitHub assigns each user to at most one cost center, so picking a new one moves you out of the current one. If you belong to a cost center because your whole organization or team is attached to it, that membership is listed as **Inherited** and cannot be changed for you individually.
 
 **Tracking** — both types appear in **My Request History** with status (pending / approved / rejected) and a **GitHub Budget** column telling you whether the change actually landed on GitHub. Pending requests can be withdrawn.
+
+---
+
+## Cost Center Owner Portal
+
+An administrator grants ownership from **Dashboard > Cost Centers** by expanding a center and enabling **Cost center owner** beside a member. A center can have multiple owners, and one user can own multiple centers. Ownership does not grant administrator access.
+
+After signing in, use the role selector in the top bar to switch between your personal view and any center you own. Screenshots below show the actual interface with illustrative users, usage and budget values.
+
+### Review center usage
+
+The **Cost center usage** view shows the current credit pool, consumed and remaining credits, CSV costs and trends, model breakdowns and member details. The credit pool reflects the current billing cycle; CSV usage follows the selected period. The **Input, Output & Cache** section provides the same four metrics as the personal and administrator dashboards.
+
+![Owner usage view with AI Credit Cap status, current-cycle credit pool, costs and daily consumption](../images/cost_center_owner_usage.png)
+
+**AI Credit Cap is read-only for owners.** Only administrators can change it. Owners can still review consumption when the cap is disabled.
+
+### Manage member budgets
+
+1. Open **Settings** in the selected cost center view.
+2. Choose **Edit budget** or **Set budget** beside an eligible current member.
+3. Enter the monthly amount in USD and choose whether to enforce a hard limit.
+4. Review the confirmation, then select **Confirm and save** to create or update the member's individual Copilot AI credits budget on GitHub.
+
+![Member budget confirmation with the current amount and consumption, a monthly amount field, and a hard-limit checkbox](../images/cost_center_owner_budget.png)
+
+The example shows the editor before saving. Budget editing requires a verified enabled AI Credit Cap and available budget data. If the cap is off, its state cannot be verified, or budget data is unavailable, the interface remains read-only and explains why. Membership and cap status are checked again before saving.
 
 ---
 
@@ -206,7 +234,9 @@ Eight tabs, each with its own filters. Sections are collapsible.
 
 ### 2. AI Usage · 3. Usage Report
 
-Built from uploaded CSVs. Daily trend, model / product / SKU / org / cost-center breakdowns, and a per-user table with quota bars. Filter by org, cost center, product, SKU and date range.
+Built from fetched or uploaded CSVs. Daily trend, model / product / SKU / org / cost-center breakdowns, and a per-user table with quota bars. Filter by org, cost center, product, SKU and date range.
+
+AI Usage also includes an **Input, Output & Cache** section with four summary values and daily trend lines. Its model and user tables include the same four fields as sortable columns. See [Input, output and cache metrics](#input-output-and-cache-metrics) for field names, role visibility and missing-value handling.
 
 ### 4. Cost Centers
 
@@ -336,6 +366,35 @@ Two knobs under **Settings → CSV Fetch** (they affect only the CSV fetch — w
 1. GitHub.com → Organization/Enterprise Settings → Billing → export the usage report as CSV
 2. Click **Upload CSV** in the StatusBar and pick the file
 3. The type (AI Usage vs. Usage Report) is auto-detected and the data appears in the matching dashboard tab
+
+### Input, output and cache metrics
+
+The detailed AI Usage CSV can include four additional numeric fields:
+
+| CSV field | Interface label |
+|-----------|-----------------|
+| `input` | Input |
+| `output` | Output |
+| `cache_read` | Cache Read |
+| `cache_write` | Cache Write |
+
+![Input, output, cache read and cache write summary values and daily trends](../images/ai_usage_tokens.png)
+
+*Illustrative data shown in the shared metrics section used by administrator, personal and cost center owner views.*
+
+These values are summed directly from the matching CSV records. They are displayed separately from AI credits and monetary amounts, without conversion into credits or cost.
+
+| View | Visible data and where to find it |
+|------|----------------------------------|
+| Administrator | **Dashboard > AI Usage**: totals, daily trends, and model/user table columns, respecting the selected organization, cost center, enterprise team, user and date filters |
+| Regular user | Personal dashboard: own totals, daily trends and model details within the selected period |
+| Cost center owner | Select an authorized cost center in the role selector, then open its usage view: center totals, daily trends, model details and member table columns within the selected period |
+
+The section is shown when the view has AI Usage CSV records. Missing columns, blank cells and invalid values are not treated as zero. A metric with no valid values displays **Not reported** (localized in the selected interface language), while a reported zero displays **0**. Trend lines are drawn only for fields with reported daily values.
+
+If a period combines older exports without these fields and newer exports with them, only the reported values contribute to each metric. The four totals may therefore cover fewer records than the AI credit or cost totals.
+
+Existing CSVs containing these columns do not need to be imported again: refresh the page after deploying the update. Fetch or upload a newer detailed export only if the stored data lacks the fields. On narrow screens, scroll the detail tables horizontally to see all columns.
 
 ### How the data is stored and merged
 

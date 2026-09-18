@@ -137,7 +137,7 @@ The dashboard is split into eight tabs.
 | Tab | Contents |
 |-----|----------|
 | **Usage Metrics** | Active user trends (MAU/WAU/DAU), code productivity & acceptance rate, feature usage, language distribution, model & AI credits, IDE distribution, seat management, top active users |
-| **AI Usage** | Uploaded AI-credit CSV: daily trend, model/org/cost-center breakdowns, per-user table with quota bars |
+| **AI Usage** | Fetched or uploaded AI-credit CSV: daily trend, model/org/cost-center breakdowns, per-user table with quota bars, plus input/output/cache totals, trends and model/user details |
 | **Usage Report** | Uploaded usage-report CSV: daily trend, product/SKU/org/cost-center breakdowns, per-user table |
 | **Cost Centers** | Cost centers with members and resources, user → cost center mapping, downloadable and shareable HTML report |
 | **Unassigned Users** | Copilot seat holders not in any active cost center, with bulk assignment |
@@ -221,6 +221,9 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 
 - **Org-level AI credit** tracking via the GitHub Billing API (UBB)
 - **Per-user AI usage** from the detailed billing report CSV, either pulled automatically through the billing reports API or uploaded by hand from the GitHub UI export
+- **Input, output and cache metrics**: `input`, `output`, `cache_read` and `cache_write` are shown as four summary values, daily trend lines, and model/user table columns. Regular users see their own totals, trends and model details; cost center owners see the same metrics for their authorized center and its users
+- **Scoped aggregation**: each view applies its existing permissions, period and available filters before summing these fields. The display supports all eight interface languages, and wide detail tables scroll horizontally on narrow screens
+- **Missing values stay distinct from zero**: missing, blank or invalid fields show **Not reported** when no valid values are available. Mixed exports sum only reported values; these totals can cover fewer records than the credit and cost totals. Existing CSV data containing these columns needs no re-import
 - **Date-keyed merge** into one `_latest.csv` per flavour — an export replaces every stored row for the days it covers, so restatements self-correct and re-fetching is idempotent ([details](USAGE.md#how-the-data-is-stored-and-merged))
 - **Per-model breakdown** (GPT-5.4, Claude Opus 4.7, etc.)
 - **Quota tracking** with visual progress bars

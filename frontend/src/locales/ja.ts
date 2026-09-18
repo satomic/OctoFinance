@@ -1,6 +1,12 @@
 // 日本語 (Japanese)
 // Keys are kept in the same order across every locale file.
 export const ja = {
+  "aiMetrics.title": "入力・出力・キャッシュ",
+  "aiMetrics.input": "入力",
+  "aiMetrics.output": "出力",
+  "aiMetrics.cacheRead": "キャッシュ読み取り",
+  "aiMetrics.cacheWrite": "キャッシュ書き込み",
+  "aiMetrics.notReported": "未報告",
   "status.notConnected": "未接続",
   "status.orgs": "組織",
   "status.aiReady": "AI 準備完了",

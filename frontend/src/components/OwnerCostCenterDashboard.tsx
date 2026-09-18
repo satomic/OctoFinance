@@ -3,6 +3,8 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, Res
 import { useI18n } from "../contexts/I18nContext";
 import { SortTh } from "./SortTh";
 import { useSortableRows } from "../hooks/useSortableRows";
+import { AiUsageMetricsPanel } from "./AiUsageMetricsPanel";
+import { AI_USAGE_METRICS, formatAiMetric } from "../utils/aiUsageMetrics";
 import type { OwnedCostCenter, OwnerDashboardData } from "../types";
 
 interface Props {
@@ -111,7 +113,8 @@ function OwnerSection({ title, extra, children }: { title: string; extra?: React
 }
 
 export function OwnerCostCenterDashboard({ center, period }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const metricValue = (value: number | null | undefined) => formatAiMetric(value, t("aiMetrics.notReported"), lang);
   const [data, setData] = useState<OwnerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -161,6 +164,10 @@ export function OwnerCostCenterDashboard({ center, period }: Props) {
     aiCost: aiUsers.get(login)?.gross_amount ?? 0,
     billed: spendUsers.get(login)?.net_amount ?? 0,
     source: members.get(login)?.source_name ?? "",
+    input: aiUsers.get(login)?.input,
+    output: aiUsers.get(login)?.output,
+    cache_read: aiUsers.get(login)?.cache_read,
+    cache_write: aiUsers.get(login)?.cache_write,
   }));
   const sorter = useSortableRows(userRows);
 
@@ -288,14 +295,21 @@ export function OwnerCostCenterDashboard({ center, period }: Props) {
               </ResponsiveContainer>
             </div>}
           </OwnerSection>
+          {data.ai_usage.has_data && <OwnerSection title={t("aiMetrics.title")}>
+            <AiUsageMetricsPanel totals={data.ai_usage.kpi} daily={data.ai_usage.daily_trend} />
+          </OwnerSection>}
           {!!data.ai_usage.model_breakdown?.length && <OwnerSection title={t("ccOwner.models")}>
             <ConsumptionChart
               title={t("ccOwner.models")}
               rows={data.ai_usage.model_breakdown.map((model) => ({ label: model.model, credits: model.requests, aiCost: model.amount }))}
               metrics={[{ key: "credits", label: t("ccOwner.credits") }, { key: "aiCost", label: t("ccOwner.aiCost"), currency: true }]}
             />
-            <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th className="cc-th">{t("ccOwner.model")}</th><th className="cc-th cc-th-num">{t("ccOwner.credits")}</th><th className="cc-th cc-th-num">{t("ccOwner.aiCost")}</th></tr></thead>
-              <tbody>{data.ai_usage.model_breakdown.map((model) => <tr key={model.model} className="cc-table-row"><td className="cc-td">{model.model}</td><td className="cc-td cc-td-num">{number(model.requests)}</td><td className="cc-td cc-td-num">{money(model.amount)}</td></tr>)}</tbody>
+            <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th className="cc-th">{t("ccOwner.model")}</th><th className="cc-th cc-th-num">{t("ccOwner.credits")}</th><th className="cc-th cc-th-num">{t("ccOwner.aiCost")}</th>
+              {AI_USAGE_METRICS.map(({ key, label }) => <th key={key} className="cc-th cc-th-num">{t(label)}</th>)}
+            </tr></thead>
+              <tbody>{data.ai_usage.model_breakdown.map((model) => <tr key={model.model} className="cc-table-row"><td className="cc-td">{model.model}</td><td className="cc-td cc-td-num">{number(model.requests)}</td><td className="cc-td cc-td-num">{money(model.amount)}</td>
+                {AI_USAGE_METRICS.map(({ key }) => <td key={key} className="cc-td cc-td-num">{metricValue(model[key])}</td>)}
+              </tr>)}</tbody>
             </table></div>
           </OwnerSection>}
           <OwnerSection title={t("ccOwner.members")}>
@@ -312,11 +326,13 @@ export function OwnerCostCenterDashboard({ center, period }: Props) {
               <SortTh label={t("ccOwner.credits")} sortKey="credits" sorter={sorter} className="cc-th cc-th-num" />
               <SortTh label={t("ccOwner.aiCost")} sortKey="aiCost" sorter={sorter} className="cc-th cc-th-num" />
               <SortTh label={t("ccOwner.billedCost")} sortKey="billed" sorter={sorter} className="cc-th cc-th-num" />
+              {AI_USAGE_METRICS.map(({ key, label }) => <SortTh key={key} label={t(label)} sortKey={key} sorter={sorter} className="cc-th cc-th-num" />)}
             </tr></thead><tbody>{sorter.rows.map((user) => <tr key={user.login} className="cc-table-row">
               <td className="cc-td"><div className="cc-member-info">{user.avatar && <img src={user.avatar} alt="" className="cc-member-avatar" />}<span>{user.login}</span></div></td>
               <td className="cc-td cc-td-num">{data.ai_usage.has_data ? number(user.credits) : t("ccOwner.unknown")}</td>
               <td className="cc-td cc-td-num">{data.ai_usage.has_data ? money(user.aiCost) : t("ccOwner.unknown")}</td>
               <td className="cc-td cc-td-num">{data.usage.has_data ? money(user.billed) : t("ccOwner.unknown")}</td>
+              {AI_USAGE_METRICS.map(({ key }) => <td key={key} className="cc-td cc-td-num">{metricValue(user[key])}</td>)}
             </tr>)}</tbody></table></div>
           </OwnerSection>
         </>

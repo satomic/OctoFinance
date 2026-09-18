@@ -16,7 +16,10 @@ from fastapi.responses import JSONResponse
 
 from ..services.budget_provisioner import current_month_range, get_user_budget_context
 from ..services.cost_center_provisioner import list_cost_centers_for_user
-from ..services.csv_store import CSV_TYPE_AI, CSV_TYPE_USAGE, load_all_csv_records
+from ..services.csv_store import (
+    AI_USAGE_METRIC_FIELDS, CSV_TYPE_AI, CSV_TYPE_USAGE,
+    add_ai_usage_metrics, load_all_csv_records,
+)
 from ..services.data_collector import data_collector
 from .auth import require_user
 from .budget_requests import load_requests_for
@@ -225,6 +228,7 @@ def _my_ai_usage(login: str, date_from: str, date_to: str) -> dict:
 
     daily: dict[str, dict] = defaultdict(lambda: {"requests": 0.0, "amount": 0.0})
     models: dict[str, dict] = defaultdict(lambda: {"requests": 0.0, "amount": 0.0})
+    metric_totals: dict = {}
     quota = 0
     org = ""
     cost_center = ""
@@ -233,9 +237,12 @@ def _my_ai_usage(login: str, date_from: str, date_to: str) -> dict:
         qty = _f(r.get("quantity"))
         gross = _f(r.get("gross_amount"))
         day = r.get("date", "")
+        add_ai_usage_metrics(metric_totals, r)
+        add_ai_usage_metrics(daily[day], r)
         daily[day]["requests"] += qty
         daily[day]["amount"] += gross
         model = r.get("model", "unknown")
+        add_ai_usage_metrics(models[model], r)
         models[model]["requests"] += qty
         models[model]["amount"] += gross
         org = r.get("organization", "") or org
@@ -263,13 +270,16 @@ def _my_ai_usage(login: str, date_from: str, date_to: str) -> dict:
             "usage_pct": round(total_requests / quota * 100, 1) if quota > 0 else 0,
             "active_days": len([d for d in daily if d]),
             "models_used": len(models),
+            **metric_totals,
         },
         "daily_trend": [
-            {"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4)}
+            {"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+             **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}}
             for d, v in sorted(daily.items()) if d
         ],
         "model_breakdown": [
-            {"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4)}
+            {"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
+             **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}}
             for m, v in sorted(models.items(), key=lambda x: -x[1]["requests"])
         ],
     }

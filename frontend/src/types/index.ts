@@ -141,7 +141,14 @@ export interface DashboardData {
   date_range: { start: string; end: string };
 }
 
-export interface AiUsageRecord {
+export interface AiUsageMetricValues {
+  input?: number | null;
+  output?: number | null;
+  cache_read?: number | null;
+  cache_write?: number | null;
+}
+
+export interface AiUsageRecord extends AiUsageMetricValues {
   user: string;
   org: string;
   cost_center: string;
@@ -231,11 +238,11 @@ export interface CsvFetchJob {
 export interface AiUsageSection {
   has_data: boolean;
   date_range: { start: string; end: string };
-  kpi: { total_requests: number; total_cost: number; unique_users: number; unique_orgs: number };
-  daily_trend: { day: string; requests: number; amount: number; active_users: number }[];
-  model_breakdown: { model: string; requests: number; amount: number; user_count: number }[];
-  org_breakdown: { org: string; requests: number; amount: number; user_count: number }[];
-  cost_center_breakdown: { cost_center: string; requests: number; amount: number; user_count: number }[];
+  kpi: AiUsageMetricValues & { total_requests: number; total_cost: number; unique_users: number; unique_orgs: number };
+  daily_trend: (AiUsageMetricValues & { day: string; requests: number; amount: number; active_users: number })[];
+  model_breakdown: (AiUsageMetricValues & { model: string; requests: number; amount: number; user_count: number })[];
+  org_breakdown: (AiUsageMetricValues & { org: string; requests: number; amount: number; user_count: number })[];
+  cost_center_breakdown: (AiUsageMetricValues & { cost_center: string; requests: number; amount: number; user_count: number })[];
   users: AiUsageRecord[];
 }
 
@@ -356,10 +363,10 @@ export interface OwnerDashboardData {
   ai_usage: {
     has_data: boolean;
     date_range?: { start: string; end: string };
-    kpi?: { total_requests: number; total_cost: number; unique_users: number };
-    daily_trend?: { day: string; requests: number; amount: number }[];
-    model_breakdown?: { model: string; requests: number; amount: number }[];
-    users?: { user: string; requests: number; gross_amount: number; net_amount: number; days_active: number }[];
+    kpi?: AiUsageMetricValues & { total_requests: number; total_cost: number; unique_users: number };
+    daily_trend?: (AiUsageMetricValues & { day: string; requests: number; amount: number })[];
+    model_breakdown?: (AiUsageMetricValues & { model: string; requests: number; amount: number })[];
+    users?: (AiUsageMetricValues & { user: string; requests: number; gross_amount: number; net_amount: number; days_active: number })[];
   };
   usage: {
     has_data: boolean;
@@ -770,7 +777,7 @@ export interface MyDashboardData {
     org?: string;
     cost_center?: string;
     date_range: { start?: string; end?: string };
-    kpi: {
+    kpi: AiUsageMetricValues & {
       total_requests: number;
       total_cost: number;
       net_cost: number;
@@ -779,8 +786,8 @@ export interface MyDashboardData {
       active_days: number;
       models_used: number;
     };
-    daily_trend: { day: string; requests: number; amount: number }[];
-    model_breakdown: { model: string; requests: number; amount: number }[];
+    daily_trend: (AiUsageMetricValues & { day: string; requests: number; amount: number })[];
+    model_breakdown: (AiUsageMetricValues & { model: string; requests: number; amount: number })[];
   };
   spend: {
     has_data: boolean;

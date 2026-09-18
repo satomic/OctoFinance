@@ -1,6 +1,12 @@
 // 한국어 (Korean)
 // Keys are kept in the same order across every locale file.
 export const ko = {
+  "aiMetrics.title": "입력, 출력 및 캐시",
+  "aiMetrics.input": "입력",
+  "aiMetrics.output": "출력",
+  "aiMetrics.cacheRead": "캐시 읽기",
+  "aiMetrics.cacheWrite": "캐시 쓰기",
+  "aiMetrics.notReported": "보고되지 않음",
   "status.notConnected": "연결 안 됨",
   "status.orgs": "조직",
   "status.aiReady": "AI 준비 완료",

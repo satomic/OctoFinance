@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import math
 from pathlib import Path
 
 from .data_collector import data_collector
@@ -33,6 +34,21 @@ logger = logging.getLogger(__name__)
 
 CSV_TYPE_AI = "ai_usage"
 CSV_TYPE_USAGE = "usage_report"
+
+AI_USAGE_METRIC_FIELDS = ("input", "output", "cache_read", "cache_write")
+
+
+def add_ai_usage_metrics(total: dict, record: dict) -> None:
+    """Accumulate reported values, preserving unknown fields as None."""
+    for field in AI_USAGE_METRIC_FIELDS:
+        total.setdefault(field, None)
+        try:
+            value = float(record.get(field))
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(value) and value >= 0:
+            total[field] = (total[field] or 0) + value
+
 
 # GitHub billing report type backing each CSV flavour. Both are row-level
 # detail reports; "summarized" is deliberately not offered.

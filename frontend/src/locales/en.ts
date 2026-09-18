@@ -1,6 +1,12 @@
 // English
 // Keys are kept in the same order across every locale file.
 export const en = {
+  "aiMetrics.title": "Input, Output & Cache",
+  "aiMetrics.input": "Input",
+  "aiMetrics.output": "Output",
+  "aiMetrics.cacheRead": "Cache Read",
+  "aiMetrics.cacheWrite": "Cache Write",
+  "aiMetrics.notReported": "Not reported",
   "status.notConnected": "Not connected",
   "status.orgs": "orgs",
   "status.aiReady": "AI Ready",

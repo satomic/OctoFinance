@@ -208,6 +208,9 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 > AI Usage
 ![alt text](images/aiusage.png)
 
+> Input, Output & Cache: totals and daily trends (illustrative data)
+![Input, output, cache read and cache write totals with four daily trend lines](images/ai_usage_tokens.png)
+
 > Cost Centers
 ![alt text](images/cc.png)
 
@@ -219,6 +222,14 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 
 > Budgets
 ![alt text](images/budgets.png)
+
+### Cost Center Owner
+
+Owners can review their center's usage and credit pool, view the administrator-controlled AI Credit Cap, and manage eligible member budgets when the cap is verified as enabled. This screenshot uses illustrative data.
+
+![Cost center owner overview showing a read-only AI Credit Cap, consumed and remaining credits, costs and daily usage](images/cost_center_owner_usage.png)
+
+See the [owner usage and budget guide](docs/USAGE.md#cost-center-owner-portal) for role switching and a screenshot of the member budget editor.
 
 ---
 
@@ -232,6 +243,8 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 - **Human-in-the-loop**: AI recommends, admin approves before destructive operations
 - **Multi-dashboard analytics**: Rich usage, AI credits, budgets, Cost Center and Enterprise Team views
 - **Multi-org management**: Multiple PATs, auto-discovery, cross-org analysis
+
+AI Usage also displays the CSV fields `input`, `output`, `cache_read` and `cache_write` as totals, daily trends and model/user details. These metrics are available to admins, regular users viewing their own usage, and cost center owners viewing their authorized center. See the [usage guide](docs/USAGE.md#input-output-and-cache-metrics).
 
 ---
 

@@ -1,6 +1,12 @@
 // 简体中文 (Simplified Chinese)
 // Keys are kept in the same order across every locale file.
 export const zh = {
+  "aiMetrics.title": "输入、输出与缓存",
+  "aiMetrics.input": "输入",
+  "aiMetrics.output": "输出",
+  "aiMetrics.cacheRead": "缓存读取",
+  "aiMetrics.cacheWrite": "缓存写入",
+  "aiMetrics.notReported": "未提供",
   "status.notConnected": "未连接",
   "status.orgs": "个组织",
   "status.aiReady": "AI 就绪",

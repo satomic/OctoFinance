@@ -1,6 +1,12 @@
 // हिन्दी (Hindi)
 // Keys are kept in the same order across every locale file.
 export const hi = {
+  "aiMetrics.title": "इनपुट, आउटपुट और कैश",
+  "aiMetrics.input": "इनपुट",
+  "aiMetrics.output": "आउटपुट",
+  "aiMetrics.cacheRead": "कैश पढ़ना",
+  "aiMetrics.cacheWrite": "कैश लिखना",
+  "aiMetrics.notReported": "रिपोर्ट नहीं किया गया",
   "status.notConnected": "कनेक्ट नहीं है",
   "status.orgs": "संगठन",
   "status.aiReady": "AI तैयार",

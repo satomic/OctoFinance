@@ -144,12 +144,13 @@ OctoFinance/
 │   │   │   ├── budget_provisioner.py   # Real GitHub budget create/update + budget reads
 │   │   │   ├── github_api.py           # GitHub REST API client
 │   │   │   ├── data_collector.py       # Data collection, merge & atomic caching
+│   │   │   ├── csv_store.py            # CSV merge + shared input/output/cache aggregation
 │   │   │   ├── api_manager.py          # Multi-PAT API management & discovery
 │   │   │   ├── session_manager.py      # Chat session persistence
 │   │   │   ├── sync_manager.py         # Sync state & cron scheduler
 │   │   │   ├── update_checker.py       # Latest-release lookup (30s cap, non-blocking)
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings
-│   │   │   ├── report_generator.py     # Cost center HTML/ZIP report generation
+│   │   │   ├── report_generator.py     # Cost center reports + owner CSV aggregation
 │   │   │   └── ops_executor.py         # Operation executor
 │   │   └── tools/                      # 43 Copilot SDK tools
 │   │       ├── seat_tools.py           # 4 seat management tools
@@ -173,6 +174,8 @@ OctoFinance/
 │   │   │   ├── UnifiedDashboard.tsx    # 8 admin dashboard tabs
 │   │   │   ├── Dashboard.tsx           # Usage metrics (9 sections)
 │   │   │   ├── CsvDashboard.tsx        # AI usage / usage report CSV
+│   │   │   ├── AiUsageMetricsPanel.tsx # Shared input/output/cache totals and trends
+│   │   │   ├── OwnerCostCenterDashboard.tsx # Authorized center usage and member budgets
 │   │   │   ├── CostCenterDashboard.tsx # Cost centers + sharing
 │   │   │   ├── UnassignedCostCenterUsersDashboard.tsx
 │   │   │   ├── EnterpriseTeamsDashboard.tsx # Per-team adoption, cost & rosters

@@ -1,6 +1,12 @@
 // 繁體中文 (Traditional Chinese)
 // Keys are kept in the same order across every locale file.
 export const zh_TW = {
+  "aiMetrics.title": "輸入、輸出與快取",
+  "aiMetrics.input": "輸入",
+  "aiMetrics.output": "輸出",
+  "aiMetrics.cacheRead": "快取讀取",
+  "aiMetrics.cacheWrite": "快取寫入",
+  "aiMetrics.notReported": "未提供",
   "status.notConnected": "未連線",
   "status.orgs": "個組織",
   "status.aiReady": "AI 就緒",

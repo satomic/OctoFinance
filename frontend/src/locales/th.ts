@@ -1,6 +1,12 @@
 // ไทย (Thai)
 // Keys are kept in the same order across every locale file.
 export const th = {
+  "aiMetrics.title": "อินพุต เอาต์พุต และแคช",
+  "aiMetrics.input": "อินพุต",
+  "aiMetrics.output": "เอาต์พุต",
+  "aiMetrics.cacheRead": "การอ่านแคช",
+  "aiMetrics.cacheWrite": "การเขียนแคช",
+  "aiMetrics.notReported": "ไม่ได้รายงาน",
   "status.notConnected": "ไม่ได้เชื่อมต่อ",
   "status.orgs": "องค์กร",
   "status.aiReady": "AI พร้อมใช้งาน",

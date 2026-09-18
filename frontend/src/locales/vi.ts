@@ -1,6 +1,12 @@
 // Tiếng Việt (Vietnamese)
 // Keys are kept in the same order across every locale file.
 export const vi = {
+  "aiMetrics.title": "Đầu vào, đầu ra và bộ nhớ đệm",
+  "aiMetrics.input": "Đầu vào",
+  "aiMetrics.output": "Đầu ra",
+  "aiMetrics.cacheRead": "Đọc bộ nhớ đệm",
+  "aiMetrics.cacheWrite": "Ghi bộ nhớ đệm",
+  "aiMetrics.notReported": "Chưa được báo cáo",
   "status.notConnected": "Chưa kết nối",
   "status.orgs": "tổ chức",
   "status.aiReady": "AI Sẵn sàng",

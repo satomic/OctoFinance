@@ -6,6 +6,7 @@ import { useI18n } from "../contexts/I18nContext";
 import { useMyDashboard } from "../hooks/useMe";
 import { SortTh } from "./SortTh";
 import { useSortableRows } from "../hooks/useSortableRows";
+import { AiUsageMetricsPanel } from "./AiUsageMetricsPanel";
 import type { MyDashboardData, UserBudget } from "../types";
 
 interface Props {
@@ -296,6 +297,9 @@ export function MyDashboard({ refreshKey = 0, period = "all" }: Props) {
       {/* AI credit usage */}
       {ai.has_data && (
         <>
+          <Section title={t("aiMetrics.title")}>
+            <AiUsageMetricsPanel totals={ai.kpi} daily={ai.daily_trend} models={ai.model_breakdown} />
+          </Section>
           {ai.daily_trend.length > 0 && (
             <Section title={t("me.creditTrend")}>
               <ResponsiveContainer width="100%" height={220}>

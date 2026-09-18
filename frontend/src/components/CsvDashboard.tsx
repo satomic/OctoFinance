@@ -10,6 +10,8 @@ import { currentMonthRange, resolveRange } from "../utils/period";
 import { UserFilterSelect } from "./UserFilterSelect";
 import { SortTh } from "./SortTh";
 import { useSortableRows } from "../hooks/useSortableRows";
+import { AiUsageMetricsPanel } from "./AiUsageMetricsPanel";
+import { AI_USAGE_METRICS, formatAiMetric } from "../utils/aiUsageMetrics";
 import type { AiUsageSection, UsageReportSection } from "../types";
 
 const COLORS = ["#58a6ff", "#3fb950", "#d29922", "#f85149", "#bc8cff", "#f778ba", "#79c0ff", "#56d364"];
@@ -106,7 +108,8 @@ function Section({ sectionKey, title, defaultOpen = true, children }: {
 
 /* ---------- AI Usage content ---------- */
 function AiUsageContent({ data }: { data: AiUsageSection }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const metricValue = (value: number | null | undefined) => formatAiMetric(value, t("aiMetrics.notReported"), lang);
   const modelTotal = useMemo(
     () => data.model_breakdown.reduce((s, m) => s + m.requests, 0),
     [data.model_breakdown],
@@ -138,6 +141,10 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
           <div className="stat-label">{t("csvDash.uniqueOrgs")}</div>
         </div>
       </div>
+
+      <Section sectionKey="aiMetrics" title={t("aiMetrics.title")}>
+        <AiUsageMetricsPanel totals={data.kpi} daily={data.daily_trend} />
+      </Section>
 
       <Section sectionKey="aiTrend" title={t("csvDash.dailyTrend")}>
         <div className="dashboard-charts">
@@ -223,6 +230,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                       <SortTh label={t("csvDash.share")} sortKey="share" sorter={modelSorter} />
                       <SortTh label={t("csvDash.cost")} sortKey="amount" sorter={modelSorter} />
                       <SortTh label={t("csvDash.uniqueUsers")} sortKey="user_count" sorter={modelSorter} />
+                      {AI_USAGE_METRICS.map(({ key, label }) => <SortTh key={key} label={t(label)} sortKey={key} sorter={modelSorter} />)}
                     </tr>
                   </thead>
                   <tbody>
@@ -247,6 +255,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                           </td>
                           <td>${m.amount.toFixed(2)}</td>
                           <td>{m.user_count}</td>
+                          {AI_USAGE_METRICS.map(({ key }) => <td key={key}>{metricValue(m[key])}</td>)}
                         </tr>
                       );
                     })}
@@ -259,6 +268,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                       <td>100%</td>
                       <td>${data.model_breakdown.reduce((s, m) => s + m.amount, 0).toFixed(2)}</td>
                       <td />
+                      {AI_USAGE_METRICS.map(({ key }) => <td key={key}>{metricValue(data.kpi[key])}</td>)}
                     </tr>
                   </tfoot>
                 </table>
@@ -286,6 +296,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                       <SortTh label={t("csvDash.quotaUsage")} sortKey="usage_pct" sorter={userSorter} />
                       <SortTh label={t("csvDash.autoShare")} sortKey="auto_share" sorter={userSorter} />
                       <SortTh label={t("csvDash.daysActive")} sortKey="days_active" sorter={userSorter} />
+                      {AI_USAGE_METRICS.map(({ key, label }) => <SortTh key={key} label={t(label)} sortKey={key} sorter={userSorter} />)}
                       <th>{t("csvDash.models")}</th>
                     </tr>
                   </thead>
@@ -321,6 +332,7 @@ function AiUsageContent({ data }: { data: AiUsageSection }) {
                           </div>
                         </td>
                         <td>{u.days_active}</td>
+                        {AI_USAGE_METRICS.map(({ key }) => <td key={key}>{metricValue(u[key])}</td>)}
                         <td className="model-tags">
                           {u.models.slice(0, 3).map((m) => (
                             <span key={m.model} className="dash-badge dash-badge-muted">

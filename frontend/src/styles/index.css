@@ -2900,6 +2900,40 @@ body {
   color: var(--accent);
 }
 
+.ai-metrics-panel {
+  min-width: 0;
+}
+
+.dashboard-kpi.ai-metrics-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+}
+
+.ai-metrics-summary .stat-card {
+  min-width: 0;
+}
+
+.dashboard-kpi.ai-metrics-summary .stat-value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.ai-metrics-summary .stat-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.ai-metrics-chart {
+  height: 260px;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.dashboard-charts > .chart-card {
+  min-width: 0;
+}
+
 /* Charts Grid */
 .dashboard-charts {
   display: grid;

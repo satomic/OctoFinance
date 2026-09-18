@@ -13,6 +13,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from html import escape
 
+from .csv_store import AI_USAGE_METRIC_FIELDS, add_ai_usage_metrics
+
 # ── colour palette ────────────────────────────────────────────────────────────
 
 _TYPE_COLORS: dict[str, str] = {
@@ -606,6 +608,7 @@ def _build_ai_usage_section(records: list[dict]) -> dict:
     day_map:   dict[str, dict] = defaultdict(lambda: {"requests": 0.0, "amount": 0.0, "users": set()})
     model_map: dict[str, dict] = defaultdict(lambda: {"requests": 0.0, "amount": 0.0, "users": set()})
 
+    metric_totals: dict = {}
     for r in records:
         user  = r.get("username", "")
         qty   = float(r.get("quantity", 0) or 0)
@@ -615,6 +618,8 @@ def _build_ai_usage_section(records: list[dict]) -> dict:
         day   = r.get("date", "")
 
         u = user_map[user]
+        add_ai_usage_metrics(metric_totals, r)
+        add_ai_usage_metrics(u, r)
         u["requests"]     += qty
         u["gross_amount"] += gross
         u["net_amount"]   += net
@@ -627,11 +632,13 @@ def _build_ai_usage_section(records: list[dict]) -> dict:
             pass
 
         dm = day_map[day]
+        add_ai_usage_metrics(dm, r)
         dm["requests"] += qty
         dm["amount"]   += gross
         dm["users"].add(user)
 
         mm = model_map[model]
+        add_ai_usage_metrics(mm, r)
         mm["requests"] += qty
         mm["amount"]   += gross
         mm["users"].add(user)
@@ -649,16 +656,19 @@ def _build_ai_usage_section(records: list[dict]) -> dict:
             "quota": info["quota"],
             "usage_pct": round(info["requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
             "models": models,
+            **{field: info.get(field) for field in AI_USAGE_METRIC_FIELDS},
         })
 
     daily_trend = [
         {"day": d, "requests": round(v["requests"], 2),
-         "amount": round(v["amount"], 4), "active_users": len(v["users"])}
+         "amount": round(v["amount"], 4), "active_users": len(v["users"]),
+         **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}}
         for d, v in sorted(day_map.items())
     ]
     model_breakdown = [
         {"model": m, "requests": round(v["requests"], 2),
-         "amount": round(v["amount"], 4), "user_count": len(v["users"])}
+         "amount": round(v["amount"], 4), "user_count": len(v["users"]),
+         **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}}
         for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])
     ]
 
@@ -672,6 +682,7 @@ def _build_ai_usage_section(records: list[dict]) -> dict:
             "total_requests": round(total_req, 2),
             "total_cost": round(total_cost, 4),
             "unique_users": len(users),
+            **metric_totals,
         },
         "daily_trend": daily_trend,
         "model_breakdown": model_breakdown,

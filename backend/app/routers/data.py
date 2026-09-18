@@ -27,8 +27,10 @@ from ..services.csv_report_fetcher import (
     validate_date_range,
 )
 from ..services.csv_store import (
+    AI_USAGE_METRIC_FIELDS,
     CSV_TYPE_AI,
     CSV_TYPE_USAGE,
+    add_ai_usage_metrics,
     ingest_csv_text,
     load_all_csv_records,
     scan_csv_type,
@@ -943,6 +945,7 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
         "models": defaultdict(float), "days_active": set(), "org": "",
         "quota": 0, "cost_center": "",
     })
+    metric_totals: dict = {}
     for r in filtered:
         user = r.get("username", "")
         qty = float(r.get("quantity", 0))
@@ -950,6 +953,8 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
         net = float(r.get("net_amount", 0))
         model = r.get("model", "unknown")
         u = user_map[user]
+        add_ai_usage_metrics(u, r)
+        add_ai_usage_metrics(metric_totals, r)
         u["requests"] += qty
         u["gross_amount"] += gross
         u["net_amount"] += net
@@ -972,48 +977,57 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
             "quota": info["quota"],
             "usage_pct": round(info["requests"] / info["quota"] * 100, 1) if info["quota"] > 0 else 0,
             "models": models,
+            **{field: info.get(field) for field in AI_USAGE_METRIC_FIELDS},
         })
 
     # Daily trend
     day_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
     for r in filtered:
         dm = day_map[r.get("date", "")]
+        add_ai_usage_metrics(dm, r)
         dm["requests"] += float(r.get("quantity", 0))
         dm["amount"] += float(r.get("gross_amount", 0))
         dm["users"].add(r.get("username", ""))
     daily_trend = [{"day": d, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
-                    "active_users": len(v["users"])} for d, v in sorted(day_map.items())]
+                    "active_users": len(v["users"]),
+                    **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}} for d, v in sorted(day_map.items())]
 
     # Model breakdown
     model_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
     for r in filtered:
         mm = model_map[r.get("model", "unknown")]
+        add_ai_usage_metrics(mm, r)
         mm["requests"] += float(r.get("quantity", 0))
         mm["amount"] += float(r.get("gross_amount", 0))
         mm["users"].add(r.get("username", ""))
     model_breakdown = [{"model": m, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
-                        "user_count": len(v["users"])} for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])]
+                        "user_count": len(v["users"]),
+                        **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}} for m, v in sorted(model_map.items(), key=lambda x: -x[1]["requests"])]
 
     # Org breakdown
     org_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
     for r in filtered:
         om = org_map[r.get("organization", "")]
+        add_ai_usage_metrics(om, r)
         om["requests"] += float(r.get("quantity", 0))
         om["amount"] += float(r.get("gross_amount", 0))
         om["users"].add(r.get("username", ""))
     org_breakdown = [{"org": o, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
-                      "user_count": len(v["users"])} for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])]
+                      "user_count": len(v["users"]),
+                      **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}} for o, v in sorted(org_map.items(), key=lambda x: -x[1]["requests"])]
 
     # Cost center breakdown
     cc_map: dict[str, dict] = defaultdict(lambda: {"requests": 0, "amount": 0.0, "users": set()})
     for r in filtered:
         cc = r.get("cost_center_name", "") or "Unknown"
         cm = cc_map[cc]
+        add_ai_usage_metrics(cm, r)
         cm["requests"] += float(r.get("quantity", 0))
         cm["amount"] += float(r.get("gross_amount", 0))
         cm["users"].add(r.get("username", ""))
     cost_center_breakdown = [{"cost_center": cc, "requests": round(v["requests"], 2), "amount": round(v["amount"], 4),
-                               "user_count": len(v["users"])} for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["requests"])]
+                               "user_count": len(v["users"]),
+                               **{field: v.get(field) for field in AI_USAGE_METRIC_FIELDS}} for cc, v in sorted(cc_map.items(), key=lambda x: -x[1]["requests"])]
 
     total_requests = sum(u["requests"] for u in users)
     total_cost = sum(u["gross_amount"] for u in users)
@@ -1026,6 +1040,7 @@ def _build_ai_usage_section(selected_orgs: list[str], selected_ccs: list[str],
             "total_cost": round(total_cost, 4),
             "unique_users": len(users),
             "unique_orgs": len(org_breakdown),
+            **metric_totals,
         },
         "daily_trend": daily_trend,
         "model_breakdown": model_breakdown,
