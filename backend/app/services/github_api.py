@@ -9,6 +9,7 @@ import logging
 import httpx
 
 from ..config import COPILOT_PRICING
+from .github_host import host_from_api_base, web_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,16 @@ class GitHubAPI:
         self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
         self._last_failure: dict | None = None
+
+    @property
+    def host(self) -> str:
+        """Normalized GitHub host this client talks to (github.com or <sub>.ghe.com)."""
+        return host_from_api_base(self._base_url)
+
+    @property
+    def web_base(self) -> str:
+        """Web UI base URL for building profile links, e.g. https://acme.ghe.com."""
+        return web_base_url(self.host)
 
     @property
     def client(self) -> httpx.AsyncClient:

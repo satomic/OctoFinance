@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ..config import config
 from .github_api import GitHubAPI
+from .github_host import DEFAULT_HOST, api_base_url, web_base_url
 from .pat_manager import pat_manager
 
 
@@ -42,7 +42,8 @@ class APIManager:
         for pat in pats:
             pat_id = pat["id"]
             token = pat["token"]
-            api = GitHubAPI(token=token, base_url=config.github_api_base)
+            host = pat.get("host") or DEFAULT_HOST
+            api = GitHubAPI(token=token, base_url=api_base_url(host))
             self._instances[pat_id] = api
 
             try:
@@ -94,6 +95,7 @@ class APIManager:
                             "pat_id": pat_id,
                             "pat_label": pat["label"],
                             "pat_user": user.get("login", ""),
+                            "host": host,
                         }
                         # Avoid duplicates (first PAT wins)
                         if not any(o["login"] == org_login for o in self._all_orgs):
@@ -107,6 +109,7 @@ class APIManager:
                                 "pat_id": pat_id,
                                 "pat_label": pat["label"],
                                 "pat_user": user.get("login", ""),
+                                "host": host,
                             })
 
                 # Discover enterprises: manual slugs take priority, then auto-discovery
@@ -129,6 +132,7 @@ class APIManager:
                             "pat_id": pat_id,
                             "pat_label": pat["label"],
                             "pat_user": user.get("login", ""),
+                            "host": host,
                         })
 
                 # Update last_synced_at
@@ -146,14 +150,15 @@ class APIManager:
         if not pat:
             raise ValueError(f"PAT {pat_id} not found")
 
-        api = GitHubAPI(token=pat["token"], base_url=config.github_api_base)
+        host = pat.get("host") or DEFAULT_HOST
+        api = GitHubAPI(token=pat["token"], base_url=api_base_url(host))
 
         # Validate token
         try:
             user = await api.discover_user()
         except Exception:
             await api.close()
-            raise ValueError("Invalid token: could not authenticate with GitHub")
+            raise ValueError(f"Invalid token: could not authenticate with {host}")
 
         self._instances[pat_id] = api
         self._discovered_users[pat_id] = user
@@ -195,6 +200,7 @@ class APIManager:
                 "pat_id": pat_id,
                 "pat_label": pat["label"],
                 "pat_user": user.get("login", ""),
+                "host": host,
             }
             if not any(o["login"] == org_login for o in self._all_orgs):
                 self._all_orgs.append(org_entry)
@@ -217,6 +223,7 @@ class APIManager:
                     "pat_id": pat_id,
                     "pat_label": pat["label"],
                     "pat_user": user.get("login", ""),
+                    "host": host,
                 })
 
         pat_manager.update(
@@ -292,6 +299,34 @@ class APIManager:
         if self._instances:
             return next(iter(self._instances.values()))
         return None
+
+    def host_for_org(self, org: str) -> str:
+        """GitHub host (github.com or <sub>.ghe.com) the org was discovered on."""
+        for o in self._all_orgs:
+            if o["login"] == org:
+                return o.get("host") or DEFAULT_HOST
+        # Enterprise-level data is stored under a "<slug>-enterprise" pseudo org
+        if org.endswith("-enterprise"):
+            return self.host_for_enterprise(org[: -len("-enterprise")])
+        return self._default_host()
+
+    def host_for_enterprise(self, enterprise_slug: str) -> str:
+        """GitHub host (github.com or <sub>.ghe.com) the enterprise belongs to."""
+        for ent in self._all_enterprises:
+            if ent["slug"] == enterprise_slug:
+                return ent.get("host") or DEFAULT_HOST
+        return self._default_host()
+
+    def web_base_for_org(self, org: str) -> str:
+        return web_base_url(self.host_for_org(org))
+
+    def web_base_for_enterprise(self, enterprise_slug: str) -> str:
+        return web_base_url(self.host_for_enterprise(enterprise_slug))
+
+    def _default_host(self) -> str:
+        """Host of the first PAT, mirroring the first-instance fallback of get_api_for_*."""
+        pats = pat_manager.get_all()
+        return (pats[0].get("host") or DEFAULT_HOST) if pats else DEFAULT_HOST
 
     def get_discovered_users(self) -> dict[str, dict]:
         """Return all discovered users keyed by pat_id."""

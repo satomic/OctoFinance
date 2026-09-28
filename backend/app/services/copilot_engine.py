@@ -21,6 +21,7 @@ from ..tools.budget_tools import create_budget_tools
 from ..tools.cost_center_tools import create_cost_center_tools
 from ..tools.enterprise_team_tools import create_enterprise_team_tools
 from ..tools.seat_tools import create_seat_tools
+from ..tools.sync_tools import create_sync_tools
 from ..tools.usage_tools import create_usage_tools
 
 if TYPE_CHECKING:
@@ -47,6 +48,9 @@ Key behaviors:
 - Respond in the same language as the user's message
 - Be proactive: if asked about usage, also mention cost implications
 - For destructive operations (seat removal), always explain the impact first and ask for confirmation
+- Cached tools read the data from the last Sync Data. When cached data is missing or stale, or right after a
+  live write (e.g. create_cost_center) that a cache-based tool depends on, call sync_data with the narrowest
+  dataset (e.g. 'cost_centers') and then retry, instead of asking the admin to click Sync Data
 
 Available data dimensions:
 - Seats: who has Copilot, when they last used it, which team they belong to
@@ -165,8 +169,14 @@ class CopilotAIEngine:
         PATs are configured via the web UI only). Resolution order:
         1. COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN env vars (see
            https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-environment-variables)
-        2. Fallback: the first PAT configured in the app (Settings UI)
+        2. Fallback: the first non-classic PAT configured in the app (Settings UI).
+           The CLI rejects classic PATs (``ghp_``) outright, so they are skipped.
         3. Fallback: the CLI's own logged-in user (interactive `copilot` login)
+
+        The CLI reads its host from ``COPILOT_GH_HOST`` / ``GH_HOST`` (default
+        github.com). With an env token those variables are the operator's to set;
+        with a configured PAT on a GHE.com host, ``COPILOT_GH_HOST`` is set for
+        the spawned CLI unless the environment already pins a host.
         """
         import os
 
@@ -177,16 +187,21 @@ class CopilotAIEngine:
                 return {"github_token": token, "use_logged_in_user": False}
 
         try:
+            from .github_host import is_ghe_host
             from .pat_manager import pat_manager
 
             configured_pats = pat_manager.get_all() or pat_manager.load()
             for pat in configured_pats:
                 token = pat.get("token")
-                if token:
-                    return {
-                        "github_token": token,
-                        "use_logged_in_user": False,
-                    }
+                if not token or token.startswith("ghp_"):
+                    continue
+                options: dict = {"github_token": token, "use_logged_in_user": False}
+                host = pat.get("host", "")
+                pinned = os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST")
+                if is_ghe_host(host) and not pinned:
+                    logger.info("Using configured PAT '%s' on %s for Copilot CLI", pat.get("label"), host)
+                    options["env"] = {**os.environ, "COPILOT_GH_HOST": host}
+                return options
         except Exception:
             logger.exception("Failed to load configured PAT for Copilot SDK client")
         return {}
@@ -210,6 +225,7 @@ class CopilotAIEngine:
             + create_cost_center_tools(api_manager=self._api_manager, collector=collector)
             + create_budget_tools(api_manager=self._api_manager, collector=collector)
             + create_enterprise_team_tools(api_manager=self._api_manager, collector=collector)
+            + create_sync_tools()
         )
         return tools
 

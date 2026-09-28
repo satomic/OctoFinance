@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import DATA_DIR
+from .github_host import DEFAULT_HOST
 
 
 PATS_FILE = DATA_DIR / "pats.json"
@@ -110,6 +111,7 @@ class PATManager:
             else:
                 masked["token_masked"] = "***"
             del masked["token"]
+            masked["host"] = p.get("host") or DEFAULT_HOST
             result.append(masked)
         return result
 
@@ -126,8 +128,12 @@ class PATManager:
         token: str,
         enterprise_slugs: list[str] | None = None,
         include_organizations: bool = True,
+        host: str = DEFAULT_HOST,
     ) -> dict:
-        """Add a new PAT entry. Returns the new PAT dict (with token)."""
+        """Add a new PAT entry. Returns the new PAT dict (with token).
+
+        ``host`` must already be normalized (see ``github_host.normalize_host``).
+        """
         # Check for duplicate tokens
         for p in self._pats:
             if p["token"] == token:
@@ -137,6 +143,7 @@ class PATManager:
             "id": f"pat_{uuid.uuid4().hex[:8]}",
             "label": label or "Untitled",
             "token": token,
+            "host": host or DEFAULT_HOST,
             "user_login": "",
             "user_avatar": "",
             "orgs": [],

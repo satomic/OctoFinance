@@ -1,6 +1,6 @@
 # OctoFinance 完整使用指南
 
-适用版本：**v1.4.0**。[English](USER_GUIDE_EN.md)
+适用版本：**v1.5.0**。[English](USER_GUIDE_EN.md)
 
 OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits、账单与预算，并通过 AI 对话辅助成本治理。本指南按三个角色介绍功能；英文界面标签保留在操作步骤中，方便对照截图。
 
@@ -54,12 +54,15 @@ OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits
 |------|------|
 | Label | 便于识别的令牌名称。保存后使用标签展示，GitHub 所有者另行显示 |
 | Token | 数据同步 PAT，不要放入截图、对话或共享文件 |
-| Ent Slug | 企业 URL 中的标识，例如 `github.com/enterprises/example-enterprise` 中的 `example-enterprise`；自动发现不完整时显式填写 |
+| Host | github.com 留空；GHE.com（带数据驻留的 GitHub Enterprise Cloud）填写租户主机，例如 `acme.ghe.com`，该令牌随后调用 `api.acme.ghe.com` |
+| Ent Slug | 企业 URL 中的标识，例如 `github.com/enterprises/example-enterprise` 中的 `example-enterprise`；自动发现不完整时显式填写。也可以直接粘贴完整 URL（如 `https://acme.ghe.com/enterprises/acme`），系统会提取 slug，Host 留空时同时从 URL 取得主机 |
 | Include Organizations | 是否扫描组织；只使用 Enterprise Teams 且无需组织扫描时可关闭 |
 
 点击 **Add PAT** 后进行验证与发现，数据同步在后台运行。可配置多个 PAT 覆盖不同管理范围；发现某组织不等于拥有其全部账单和管理权限。
 
 **组织扫描与企业 seats 获取相互独立。**勾选 Include Organizations 不应阻止企业席位同步；企业补充席位在读取统计时排除已由组织覆盖的席位，避免重复计数。无组织企业的 Organizations 列表可以为空，不代表没有 Copilot 席位。
+
+**GHE.com（数据驻留）。**每个 PAT 只属于一个主机，非 github.com 的主机会以标签形式显示在 PAT 旁。该 PAT 的数据同步、CSV 获取、成本中心、预算与 Enterprise Teams 操作都发往其主机，仪表板和成本中心报告里的用户链接也指向同一主机。github.com 与 GHE.com 的 PAT 可以同时配置，但两边同名的组织或企业 slug 会共用一份数据文件，请保持 slug 不重名。有防火墙的部署需放行到 `api.<租户>.ghe.com`、`copilot-reports.<租户>.ghe.com`、`<租户>.ghe.com` 和 `*.blob.core.windows.net` 的 HTTPS 出站。详见 [GHE.com 兼容性报告](GHE_COMPATIBILITY.md)。
 
 修改组织扫描开关会重新发现范围并触发同步。移除 PAT 会影响后续数据访问，但不会取消 GitHub 席位，也不会自动撤销 GitHub 上的令牌。
 
@@ -73,11 +76,11 @@ OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits
 | Classic PAT 的 `admin:enterprise` | Enterprise Teams 创建和修改 |
 | Copilot CLI 独立认证 | AI 对话；不是数据同步 PAT 自动提供的能力 |
 
-Enterprise Teams 接口不接受 fine-grained PAT 或 GitHub App token。AI 对话使用 Copilot CLI/SDK 的认证流程；使用令牌时遵循 CLI 对个人账号、有效 Copilot 订阅及 Copilot Requests 权限的要求，见 [CLI 认证说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)。
+Enterprise Teams 接口不接受 fine-grained PAT 或 GitHub App token。GHE.com 租户需通过 `COPILOT_GH_HOST=<租户>.ghe.com`（或 `GH_HOST`）让 CLI 指向该主机；当对话回退使用已配置的 GHE.com fine-grained PAT 时，OctoFinance 会自动设置 `COPILOT_GH_HOST`。Classic PAT 不会用于对话，因为 CLI 拒绝此类令牌。AI 对话使用 Copilot CLI/SDK 的认证流程；使用令牌时遵循 CLI 对个人账号、有效 Copilot 订阅及 Copilot Requests 权限的要求，见 [CLI 认证说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)。
 
 ### 1.3 GitHub SSO
 
-1. 在 GitHub 的 **Settings > Developer settings > OAuth Apps** 创建 OAuth App。
+1. 在 GitHub 的 **Settings > Developer settings > OAuth Apps** 创建 OAuth App。GHE.com 需在租户（`https://<租户>.ghe.com`）上创建，并在 **GitHub host** 字段填写该主机；github.com 上的 OAuth App 无法登录 GHE.com 用户。
 2. Homepage URL 填 OctoFinance 实际访问地址。
 3. Callback URL 填 `https://你的域名/api/auth/github/callback`。
 4. 在 OctoFinance 的 **GitHub SSO** 设置填写 Client ID、Client Secret，核对回调 URL。

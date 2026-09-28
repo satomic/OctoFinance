@@ -12,6 +12,7 @@ export function GithubSSOSettings() {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [callbackUrl, setCallbackUrl] = useState("");
+  const [host, setHost] = useState("");
   const [admins, setAdmins] = useState("");
   const [allowAll, setAllowAll] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,6 +27,7 @@ export function GithubSSOSettings() {
       setConfig(data);
       setClientId(data.client_id || "");
       setCallbackUrl(data.callback_url || "");
+      setHost(data.host && data.host !== "github.com" ? data.host : "");
       setAdmins((data.admins || []).join(", "));
       setAllowAll(data.allow_all_users !== false);
     } catch {
@@ -45,6 +47,7 @@ export function GithubSSOSettings() {
       const body: Record<string, unknown> = {
         client_id: clientId.trim(),
         callback_url: callbackUrl.trim(),
+        host: host.trim(),
         admins: admins.split(",").map((a) => a.trim()).filter(Boolean),
         allow_all_users: allowAll,
       };
@@ -59,6 +62,7 @@ export function GithubSSOSettings() {
         setError(data.error);
       } else {
         setConfig(data);
+        setHost(data.host && data.host !== "github.com" ? data.host : "");
         setClientSecret("");
         setMessage(t("settings.ssoSaved"));
         setTimeout(() => setMessage(""), 5000);
@@ -85,6 +89,17 @@ export function GithubSSOSettings() {
           </span>
         </div>
       )}
+
+      <div className="pat-form-row">
+        <label>{t("settings.ssoHost")}</label>
+        <input
+          type="text"
+          value={host}
+          onChange={(e) => setHost(e.target.value)}
+          placeholder="github.com"
+        />
+      </div>
+      <p className="pat-form-hint">{t("settings.ssoHostHint")}</p>
 
       <div className="pat-form-row">
         <label>{t("settings.ssoClientId")}</label>

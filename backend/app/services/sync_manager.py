@@ -166,7 +166,24 @@ class SyncManager:
                 self.log("error", f"Sync failed: {e}")
                 self._end(success=False, error=str(e))
 
+        # Mark busy now, not when the task first runs, so a second caller in the
+        # same event-loop tick sees the sync and cannot start another one.
+        self._syncing = True
         self._current_task = asyncio.create_task(_run())
+        return True
+
+    async def wait_until_idle(self, timeout: float) -> bool:
+        """Wait for the running sync (if any) to finish. Returns False on timeout.
+
+        The sync keeps running after a timeout; only the wait is abandoned.
+        """
+        task = self._current_task
+        if task is None or task.done():
+            return not self._syncing
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+        except asyncio.TimeoutError:
+            return False
         return True
 
     # ------------------------------------------------------------------

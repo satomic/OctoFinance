@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
+from ..services.github_host import normalize_host, parse_enterprise_url
 from ..services.pat_manager import pat_manager
 from ..services.sync_jobs import run_full_sync
 from ..services.sync_manager import sync_manager
@@ -19,6 +20,8 @@ class AddPATRequest(BaseModel):
     token: str
     enterprise_slugs: list[str] = []
     include_organizations: bool = True
+    # github.com (default) or <subdomain>.ghe.com; a full URL on the host is accepted
+    host: str = ""
 
 
 class UpdatePATRequest(BaseModel):
@@ -31,6 +34,32 @@ class UpdateSettingsRequest(BaseModel):
     sync_cron: str | None = None
     csv_fetch_poll_seconds: int | None = Field(default=None, ge=10, le=600)
     csv_fetch_timeout_minutes: int | None = Field(default=None, ge=5, le=1440)
+
+
+def _resolve_host_and_slugs(host_input: str, raw_slugs: list[str]) -> tuple[str, list[str]]:
+    """Normalize the PAT host and enterprise slugs.
+
+    Slugs may be pasted as enterprise URLs (``https://acme.ghe.com/enterprises/acme``);
+    the slug is extracted and, when no host was given explicitly, the URL's host
+    is used. A URL whose host contradicts the explicit host is rejected.
+    """
+    host = normalize_host(host_input) if host_input.strip() else ""
+    slugs: list[str] = []
+    for raw in raw_slugs:
+        raw = raw.strip()
+        if not raw:
+            continue
+        parsed = parse_enterprise_url(raw)
+        if parsed:
+            url_host, slug = parsed
+            if host and url_host != host:
+                raise ValueError(
+                    f"Enterprise URL host '{url_host}' does not match the PAT host '{host}'."
+                )
+            host = url_host
+            raw = slug
+        slugs.append(raw)
+    return host or normalize_host(""), slugs
 
 
 @router.get("/pats")
@@ -48,8 +77,10 @@ async def add_pat(request: AddPATRequest):
     if not token:
         raise HTTPException(status_code=400, detail="Token is required")
 
-    # Normalize enterprise slugs (strip whitespace, remove empties)
-    enterprise_slugs = [s.strip() for s in request.enterprise_slugs if s.strip()]
+    try:
+        host, enterprise_slugs = _resolve_host_and_slugs(request.host, request.enterprise_slugs)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Add to persistent storage
     try:
@@ -58,6 +89,7 @@ async def add_pat(request: AddPATRequest):
             token,
             enterprise_slugs=enterprise_slugs,
             include_organizations=request.include_organizations,
+            host=host,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

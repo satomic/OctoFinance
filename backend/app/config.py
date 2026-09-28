@@ -7,7 +7,7 @@ All org/enterprise info is auto-discovered via GitHub API.
 from pathlib import Path
 
 # Application version (single source of truth, exposed via /api/health and the UI)
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -22,7 +22,6 @@ COPILOT_PRICING = {
 
 class AppConfig:
     def __init__(self):
-        self.github_api_base: str = "https://api.github.com"
         self.data_dir: Path = DATA_DIR
         # Ensure data directories exist
         self.data_dir.mkdir(parents=True, exist_ok=True)

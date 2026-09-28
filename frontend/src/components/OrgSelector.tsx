@@ -90,7 +90,7 @@ export function OrgSelector() {
             {enterpriseOrgs.map((org) => (
               <div key={org.login} className={`org-item ${org.has_copilot ? "" : "disabled"}`}>
                 <img
-                  src={org.avatar_url || `https://github.com/${org.login}.png?size=32`}
+                  src={org.avatar_url || `https://${org.host || "github.com"}/${org.login}.png?size=32`}
                   alt={org.login}
                   className="org-avatar"
                 />

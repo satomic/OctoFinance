@@ -549,7 +549,7 @@ class DataCollector:
             members.append({
                 "login": login,
                 "avatar_url": raw.get("avatar_url", ""),
-                "html_url": raw.get("html_url", f"https://github.com/{login}"),
+                "html_url": raw.get("html_url") or f"{api.web_base}/{login}",
                 "source_type": source_type,
                 "source_name": source_name,
             })
@@ -949,7 +949,7 @@ class DataCollector:
                         {
                             "login": m.get("login", ""),
                             "avatar_url": m.get("avatar_url", ""),
-                            "html_url": m.get("html_url", f"https://github.com/{m.get('login', '')}"),
+                            "html_url": m.get("html_url") or f"{api.web_base}/{m.get('login', '')}",
                         }
                         for m in raw_members
                         if m.get("login")

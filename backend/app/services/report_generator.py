@@ -14,6 +14,10 @@ from datetime import datetime, timezone
 from html import escape
 
 from .csv_store import AI_USAGE_METRIC_FIELDS, add_ai_usage_metrics
+from .github_host import DEFAULT_HOST, web_base_url
+
+# Profile links point at the enterprise's own host (github.com or <sub>.ghe.com)
+DEFAULT_WEB_BASE = web_base_url(DEFAULT_HOST)
 
 # ── colour palette ────────────────────────────────────────────────────────────
 
@@ -199,7 +203,7 @@ def _section_resources(cc: dict) -> str:
     )
 
 
-def _section_members(cc: dict) -> str:
+def _section_members(cc: dict, web_base: str) -> str:
     members = cc.get("members", [])
     rows = ""
     for m in members:
@@ -209,7 +213,7 @@ def _section_members(cc: dict) -> str:
             if m.get("avatar_url")
             else '<div class="avatar-placeholder"></div>'
         )
-        gh_url = m.get("html_url") or f'https://github.com/{_e(m["login"])}'
+        gh_url = m.get("html_url") or f'{web_base}/{m["login"]}'
         rows += (
             f"<tr>"
             f"<td class='td'><div class='user-cell'>{avatar}"
@@ -228,7 +232,7 @@ def _section_members(cc: dict) -> str:
     )
 
 
-def _section_ai_usage(ai_usage: dict, chart_id: str) -> str:
+def _section_ai_usage(ai_usage: dict, chart_id: str, web_base: str) -> str:
     if not ai_usage.get("has_data"):
         return (
             "<details open class='section'>"
@@ -287,7 +291,7 @@ def _section_ai_usage(ai_usage: dict, chart_id: str) -> str:
         uname = u["user"]
         user_rows += (
             f"<tr>"
-            f"<td class='td'><a href='https://github.com/{_e(uname)}'"
+            f"<td class='td'><a href='{_e(web_base)}/{_e(uname)}'"
             f" target='_blank' class='user-link'>{_e(uname)}</a></td>"
             f"<td class='td muted small'>{_e(u.get('org',''))}</td>"
             f"<td class='td num'>{_num(u['requests'])}</td>"
@@ -317,7 +321,7 @@ def _section_ai_usage(ai_usage: dict, chart_id: str) -> str:
     )
 
 
-def _section_usage(usage: dict, chart_id: str) -> str:
+def _section_usage(usage: dict, chart_id: str, web_base: str) -> str:
     if not usage.get("has_data"):
         return (
             "<details open class='section'>"
@@ -377,7 +381,7 @@ def _section_usage(usage: dict, chart_id: str) -> str:
         uname = u["user"]
         user_rows += (
             f"<tr>"
-            f"<td class='td'><a href='https://github.com/{_e(uname)}'"
+            f"<td class='td'><a href='{_e(web_base)}/{_e(uname)}'"
             f" target='_blank' class='user-link'>{_e(uname)}</a></td>"
             f"<td class='td muted small'>{_e(u.get('org',''))}</td>"
             f"<td class='td num'>{_money(u['gross_amount'])}</td>"
@@ -404,7 +408,7 @@ def _section_usage(usage: dict, chart_id: str) -> str:
     )
 
 
-def _section_insights(cc: dict, ai_usage: dict, usage: dict) -> str:
+def _section_insights(cc: dict, ai_usage: dict, usage: dict, web_base: str) -> str:
     member_logins  = {m["login"] for m in cc.get("members", [])}
     ai_users       = {u["user"] for u in ai_usage.get("users", [])} if ai_usage.get("has_data") else set()
 
@@ -422,7 +426,7 @@ def _section_insights(cc: dict, ai_usage: dict, usage: dict) -> str:
             return (
                 f"<tr>"
                 f"<td class='td num muted'>{i}</td>"
-                f"<td class='td'><a href='https://github.com/{_e(uname)}'"
+                f"<td class='td'><a href='{_e(web_base)}/{_e(uname)}'"
                 f" target='_blank' class='user-link'>{_e(uname)}</a></td>"
                 f"<td class='td num'>{_money(u['gross_amount'])}</td>"
                 f"<td class='td num'>{_num(u['requests'])}</td>"
@@ -442,7 +446,7 @@ def _section_insights(cc: dict, ai_usage: dict, usage: dict) -> str:
 
     if zero_ai:
         tags = " ".join(
-            f"<a href='https://github.com/{_e(u)}' target='_blank' class='user-tag'>{_e(u)}</a>"
+            f"<a href='{_e(web_base)}/{_e(u)}' target='_blank' class='user-tag'>{_e(u)}</a>"
             for u in zero_ai
         )
         parts.append(
@@ -786,6 +790,7 @@ def _render_html(
     generated_at: str,
     chart_id: str,
     download_url: str | None = None,
+    web_base: str = DEFAULT_WEB_BASE,
 ) -> str:
     name         = cc.get("name", "Unknown")
     state        = cc.get("state", "active")
@@ -851,10 +856,10 @@ def _render_html(
 
 <main class="main-content">
   {_section_resources(cc)}
-  {_section_members(cc)}
-  {_section_ai_usage(ai_usage, chart_id)}
-  {_section_usage(usage, chart_id)}
-  {_section_insights(cc, ai_usage, usage)}
+  {_section_members(cc, web_base)}
+  {_section_ai_usage(ai_usage, chart_id, web_base)}
+  {_section_usage(usage, chart_id, web_base)}
+  {_section_insights(cc, ai_usage, usage, web_base)}
 </main>
 
 <footer class="report-footer">
@@ -887,6 +892,7 @@ def generate_single_report_html(
     all_ai_usage_records: list[dict],
     all_usage_records: list[dict],
     download_url: str | None = None,
+    web_base: str = DEFAULT_WEB_BASE,
 ) -> str:
     """Render a single self-contained HTML report for one cost center.
 
@@ -908,6 +914,7 @@ def generate_single_report_html(
         generated_at=generated_at,
         chart_id="0",
         download_url=download_url,
+        web_base=web_base,
     )
 
 
@@ -917,6 +924,7 @@ def generate_report_zip(
     cost_centers: list[dict],
     all_ai_usage_records: list[dict],
     all_usage_records: list[dict],
+    web_base: str = DEFAULT_WEB_BASE,
 ) -> bytes:
     """Return ZIP bytes with one self-contained HTML file per cost center."""
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -940,6 +948,7 @@ def generate_report_zip(
                 usage=usage,
                 generated_at=generated_at,
                 chart_id=str(idx),
+                web_base=web_base,
             )
 
             safe_name = (
