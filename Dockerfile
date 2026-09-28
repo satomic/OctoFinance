@@ -12,11 +12,15 @@
 #     is baked into the image and pointed to via COPILOT_CLI_PATH so the SDK
 #     never needs to auto-download it at runtime.
 #   * The CLI binary is a self-contained executable — no Node.js is needed at runtime.
+#   * The frontend and cli stages run on the build host's platform ($BUILDPLATFORM):
+#     their output (static files / a downloaded binary picked by TARGETARCH) does
+#     not depend on the CPU they run on. Running them under QEMU for arm64 is
+#     slow, and `npm ci` can hang there indefinitely.
 
 ############################
 # Stage 1: frontend build
 ############################
-FROM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -26,13 +30,16 @@ RUN npm run build
 ############################
 # Stage 2: Copilot CLI download (checksum-verified)
 ############################
-FROM debian:bookworm-slim AS cli
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS cli
 ARG TARGETARCH
+ARG BUILDARCH
 # Must speak the same SDK protocol as github-copilot-sdk (1.0.5 → protocol v3)
 ARG COPILOT_CLI_VERSION=1.0.68
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# The --version smoke test only runs when the binary can execute on the build
+# host; the checksum verifies the download for every architecture.
 RUN set -eux; \
     case "${TARGETARCH}" in \
         amd64) asset="copilot-linux-x64.tar.gz" ;; \
@@ -46,7 +53,7 @@ RUN set -eux; \
     mkdir -p /opt/copilot; \
     tar -xzf "/tmp/${asset}" -C /opt/copilot; \
     chmod +x /opt/copilot/copilot; \
-    /opt/copilot/copilot --version
+    if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then /opt/copilot/copilot --version; fi
 
 ############################
 # Stage 3: runtime
