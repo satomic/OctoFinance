@@ -1,8 +1,12 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, patch
 
 from backend.app.routers import auth, pats
+from backend.app.services import chat_auth_store as chat_auth_store_module
 from backend.app.services import copilot_engine
+from backend.app.services.chat_auth_store import chat_auth_store
 from backend.app.services.api_manager import APIManager
 from backend.app.services.github_api import GitHubAPI
 from backend.app.services.github_host import (
@@ -120,39 +124,12 @@ class OAuthHostTests(unittest.TestCase):
         ))
 
 
-class CopilotClientHostTests(unittest.TestCase):
-    def _options(self, configured, env=None):
-        with patch.dict("os.environ", env or {}, clear=True), \
-                patch("backend.app.services.pat_manager.pat_manager") as pm:
-            pm.get_all.return_value = configured
-            return copilot_engine.CopilotAIEngine._client_options()
-
-    def test_skips_classic_pats_and_sets_ghe_host(self):
-        options = self._options([
-            {"label": "classic", "token": "ghp_x", "host": "github.com"},
-            {"label": "fine", "token": "github_pat_y", "host": "acme.ghe.com"},
-        ])
-        self.assertEqual(options["github_token"], "github_pat_y")
-        self.assertEqual(options["env"]["COPILOT_GH_HOST"], "acme.ghe.com")
-
-    def test_github_com_pat_has_no_env_override(self):
-        options = self._options([{"label": "fine", "token": "github_pat_y"}])
-        self.assertNotIn("env", options)
-
-    def test_pinned_host_env_wins(self):
-        options = self._options(
-            [{"label": "fine", "token": "github_pat_y", "host": "acme.ghe.com"}],
-            env={"GH_HOST": "other.ghe.com"},
-        )
-        self.assertNotIn("env", options)
-
-    def test_only_classic_pats_falls_back_to_cli_login(self):
-        self.assertEqual(self._options([{"label": "classic", "token": "ghp_x"}]), {})
-
-
 class _FakeResponse:
     def __init__(self, status_code):
         self.status_code = status_code
+
+    def json(self):
+        return {"login": "token-owner"}
 
 
 class _FakeHTTP:
@@ -176,64 +153,241 @@ class _FakeHTTP:
         return _FakeResponse(200 if ok else 401)
 
 
-class CopilotTokenHostDetectionTests(unittest.IsolatedAsyncioTestCase):
-    def _patch(self, pats, valid_hosts, env=None, sso_host=""):
-        calls: list[str] = []
-        self.enterContext(patch.dict("os.environ", env or {}, clear=True))
-        pm = self.enterContext(patch("backend.app.services.pat_manager.pat_manager"))
-        pm.get_all.return_value = pats
+class _FakeCopilotClient:
+    """Stands in for CopilotClient. ``accepts`` decides whether a token authenticates."""
+
+    created: list[dict] = []
+    accepts = staticmethod(lambda kwargs: True)
+    models_error: str | None = None
+    reports_login = True
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        _FakeCopilotClient.created.append(kwargs)
+
+    async def start(self):
+        pass
+
+    async def stop(self):
+        pass
+
+    async def get_auth_status(self):
+        ok = _FakeCopilotClient.accepts(self.kwargs)
+        host = (self.kwargs.get("env") or {}).get("COPILOT_GH_HOST", "github.com")
+        return type("S", (), {
+            "isAuthenticated": ok,
+            "login": "mona" if ok and _FakeCopilotClient.reports_login else None,
+            "host": f"https://{host}" if ok else None,
+            "statusMessage": None if ok else "Bad credentials",
+        })()
+
+    async def list_models(self):
+        if _FakeCopilotClient.models_error:
+            raise RuntimeError(_FakeCopilotClient.models_error)
+        return [object(), object()]
+
+
+class CopilotChatAuthTests(unittest.IsolatedAsyncioTestCase):
+    """Credential and host resolution for the AI chat engine."""
+
+    def setUp(self):
+        directory = self.enterContext(TemporaryDirectory())
+        self.enterContext(patch.object(chat_auth_store_module, "CHAT_AUTH_FILE", Path(directory) / "copilot_chat.json"))
+        self.pm = self.enterContext(patch("backend.app.services.pat_manager.pat_manager"))
+        self.pm.get_all.return_value = []
         store = self.enterContext(patch("backend.app.services.auth_store.auth_store"))
-        store.get_oauth_config.return_value = {"host": sso_host}
-        self.enterContext(patch.object(copilot_engine.httpx, "AsyncClient", _FakeHTTP(valid_hosts, calls)))
-        return calls
+        store.get_oauth_config.return_value = {"host": ""}
+        self.calls: list[str] = []
+        self.valid_hosts: list[str] = []
+        self.enterContext(patch.object(copilot_engine.httpx, "AsyncClient", _FakeHTTP(self.valid_hosts, self.calls)))
+        _FakeCopilotClient.created = []
+        _FakeCopilotClient.accepts = staticmethod(lambda kwargs: True)
+        _FakeCopilotClient.models_error = None
+        _FakeCopilotClient.reports_login = True
+        self.enterContext(patch.object(copilot_engine, "CopilotClient", _FakeCopilotClient))
 
-    async def test_env_token_is_matched_to_its_ghe_host(self):
-        calls = self._patch(
-            [{"token": "ghp_a", "host": "other.ghe.com"}, {"token": "ghp_b", "host": "acme.ghe.com"}],
-            valid_hosts=["acme.ghe.com"],
-        )
-        host = await copilot_engine.CopilotAIEngine._detect_token_host("github_pat_env")
-        self.assertEqual(host, "acme.ghe.com")
-        # The token is never sent to github.com
-        self.assertTrue(all("api.github.com" not in url for url in calls))
+    def _env(self, **env):
+        self.enterContext(patch.dict("os.environ", env, clear=True))
 
-    async def test_sso_host_is_a_candidate(self):
-        self._patch([], valid_hosts=["sso.ghe.com"], sso_host="sso.ghe.com")
-        self.assertEqual(await copilot_engine.CopilotAIEngine._detect_token_host("t"), "sso.ghe.com")
+    async def _start(self):
+        engine = copilot_engine.CopilotAIEngine()
+        await engine._start_client()
+        return engine, _FakeCopilotClient.created[0]
 
-    async def test_no_match_means_github_com_without_probing_it(self):
-        calls = self._patch([{"token": "ghp_a", "host": "acme.ghe.com"}], valid_hosts=[])
-        self.assertIsNone(await copilot_engine.CopilotAIEngine._detect_token_host("t"))
-        self.assertEqual(calls, ["https://api.acme.ghe.com/user"])
+    # --- token source ---------------------------------------------------
 
-    async def test_pinned_host_skips_detection(self):
-        calls = self._patch([{"token": "ghp_a", "host": "acme.ghe.com"}], ["acme.ghe.com"],
-                            env={"COPILOT_GH_HOST": "acme.ghe.com"})
-        self.assertIsNone(await copilot_engine.CopilotAIEngine._detect_token_host("t"))
-        self.assertEqual(calls, [])
+    async def test_settings_token_wins_over_env(self):
+        self._env(COPILOT_GITHUB_TOKEN="github_pat_env")
+        chat_auth_store.save(token="github_pat_settings")
+        engine, kwargs = await self._start()
+        self.assertEqual(kwargs["github_token"], "github_pat_settings")
+        self.assertEqual(engine._auth_status["source"]["kind"], "settings")
+        self.assertEqual(engine._auth_status["source"]["token_masked"], "gith***ings")
 
-    async def test_start_client_passes_detected_host_to_cli(self):
-        self._patch([{"token": "ghp_a", "host": "acme.ghe.com"}], valid_hosts=["acme.ghe.com"],
-                    env={"COPILOT_GITHUB_TOKEN": "github_pat_env"})
-        created: list[dict] = []
+    async def test_env_then_fine_grained_pat_then_cli_login(self):
+        self._env(COPILOT_GITHUB_TOKEN="github_pat_env")
+        self.assertEqual(copilot_engine.CopilotAIEngine._resolve_credentials()[1]["kind"], "env")
+        self._env()
+        self.pm.get_all.return_value = [
+            {"label": "classic", "token": "ghp_x"},
+            {"label": "fine", "token": "github_pat_y", "host": "acme.ghe.com"},
+        ]
+        options, source = copilot_engine.CopilotAIEngine._resolve_credentials()
+        self.assertEqual((options["github_token"], source["kind"], source["pat_host"]),
+                         ("github_pat_y", "pat", "acme.ghe.com"))
+        self.pm.get_all.return_value = [{"label": "classic", "token": "ghp_x"}]
+        self.assertEqual(copilot_engine.CopilotAIEngine._resolve_credentials(),
+                         ({}, {"kind": "cli_login", "detail": "", "token_masked": ""}))
 
-        class FakeClient:
-            def __init__(self, **kwargs):
-                created.append(kwargs)
+    # --- host -----------------------------------------------------------
 
-            async def start(self):
-                pass
+    async def test_settings_host_pins_cli_host_over_env(self):
+        self._env(COPILOT_GITHUB_TOKEN="t", COPILOT_GH_HOST="other.ghe.com")
+        chat_auth_store.save(host="https://acme.ghe.com/")
+        engine, kwargs = await self._start()
+        self.assertEqual(kwargs["env"]["COPILOT_GH_HOST"], "acme.ghe.com")
+        self.assertEqual(self.calls, [])  # pinned: no detection
 
-            async def get_auth_status(self):
-                return type("S", (), {"isAuthenticated": True})()
+    async def test_settings_host_github_com_overrides_gh_host(self):
+        self._env(COPILOT_GITHUB_TOKEN="t", GH_HOST="acme.ghe.com")
+        chat_auth_store.save(host="github.com")
+        _, kwargs = await self._start()
+        self.assertEqual(kwargs["env"]["COPILOT_GH_HOST"], "github.com")
 
-        with patch.object(copilot_engine, "CopilotClient", FakeClient):
-            engine = copilot_engine.CopilotAIEngine()
-            await engine._start_client()
+    async def test_env_pinned_host_is_left_to_the_cli(self):
+        self._env(COPILOT_GITHUB_TOKEN="t", GH_HOST="acme.ghe.com")
+        self.pm.get_all.return_value = [{"token": "ghp_a", "host": "acme.ghe.com"}]
+        engine, kwargs = await self._start()
+        self.assertNotIn("env", kwargs)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(engine._auth_status["requested_host"], "acme.ghe.com")
 
-        self.assertEqual(created[0]["github_token"], "github_pat_env")
-        self.assertEqual(created[0]["env"]["COPILOT_GH_HOST"], "acme.ghe.com")
+    async def test_fallback_pat_uses_its_own_host(self):
+        self._env()
+        self.pm.get_all.return_value = [{"label": "fine", "token": "github_pat_y", "host": "acme.ghe.com"}]
+        _, kwargs = await self._start()
+        self.assertEqual(kwargs["env"]["COPILOT_GH_HOST"], "acme.ghe.com")
+
+    async def test_env_token_is_matched_to_its_ghe_host_without_probing_github_com(self):
+        self._env(COPILOT_GITHUB_TOKEN="github_pat_env")
+        self.pm.get_all.return_value = [{"token": "ghp_a", "host": "other.ghe.com"},
+                                        {"token": "ghp_b", "host": "acme.ghe.com"}]
+        self.valid_hosts.append("acme.ghe.com")
+        engine, kwargs = await self._start()
+        self.assertEqual(kwargs["env"]["COPILOT_GH_HOST"], "acme.ghe.com")
         self.assertEqual(engine._cli_host, "acme.ghe.com")
+        self.assertTrue(all("api.github.com" not in url for url in self.calls))
+
+    async def test_sso_host_is_a_detection_candidate(self):
+        self._env(COPILOT_GITHUB_TOKEN="t")
+        from backend.app.services import auth_store
+        auth_store.auth_store.get_oauth_config.return_value = {"host": "sso.ghe.com"}
+        self.valid_hosts.append("sso.ghe.com")
+        _, kwargs = await self._start()
+        self.assertEqual(kwargs["env"]["COPILOT_GH_HOST"], "sso.ghe.com")
+
+    async def test_no_match_means_github_com(self):
+        self._env(COPILOT_GITHUB_TOKEN="t")
+        self.pm.get_all.return_value = [{"token": "ghp_a", "host": "acme.ghe.com"}]
+        _, kwargs = await self._start()
+        self.assertNotIn("env", kwargs)
+        self.assertEqual(self.calls, ["https://api.acme.ghe.com/user"])
+
+    # --- status ----------------------------------------------------------
+
+    async def test_status_reports_login_host_and_models(self):
+        self._env()
+        chat_auth_store.save(token="github_pat_s", host="acme.ghe.com")
+        engine, _ = await self._start()
+        status = engine._auth_status
+        self.assertTrue(status["authenticated"])
+        self.assertEqual((status["login"], status["host"], status["models_available"]),
+                         ("mona", "acme.ghe.com", 2))
+        self.assertFalse(status["fallback_used"])
+
+    async def test_login_is_looked_up_on_the_cli_host_when_the_cli_omits_it(self):
+        self._env()
+        chat_auth_store.save(token="github_pat_s", host="acme.ghe.com")
+        _FakeCopilotClient.reports_login = False
+        self.valid_hosts.append("acme.ghe.com")
+        engine, _ = await self._start()
+        self.assertEqual(engine._auth_status["login"], "token-owner")
+        self.assertEqual(self.calls, ["https://api.acme.ghe.com/user"])
+
+    async def test_policy_denial_is_reported(self):
+        self._env()
+        chat_auth_store.save(token="github_pat_s")
+        _FakeCopilotClient.models_error = "403 unauthorized: not authorized to use this Copilot feature"
+        engine, _ = await self._start()
+        self.assertTrue(engine._auth_status["authenticated"])
+        self.assertEqual(engine._auth_status["models_available"], 0)
+        self.assertIn("403", engine._auth_status["models_error"])
+
+    async def test_rejected_token_falls_back_and_says_so(self):
+        self._env()
+        chat_auth_store.save(token="github_pat_bad")
+        _FakeCopilotClient.accepts = staticmethod(lambda kwargs: "github_token" not in kwargs)
+        engine = copilot_engine.CopilotAIEngine()
+        await engine._start_client()
+        self.assertTrue(_FakeCopilotClient.created[1]["use_logged_in_user"])
+        self.assertTrue(engine._auth_status["fallback_used"])
+        self.assertIn("Bad credentials", engine._auth_status["error"])
+        self.assertEqual(engine._auth_status["source"]["kind"], "settings")
+
+
+class ChatAuthStoreTests(unittest.TestCase):
+    def setUp(self):
+        directory = self.enterContext(TemporaryDirectory())
+        self.enterContext(patch.object(chat_auth_store_module, "CHAT_AUTH_FILE", Path(directory) / "c.json"))
+
+    def test_save_keep_and_clear(self):
+        self.assertEqual(chat_auth_store.get(), {"token": "", "host": ""})
+        chat_auth_store.save(token=" github_pat_x ", host="API.acme.ghe.com")
+        self.assertEqual(chat_auth_store.get(), {"token": "github_pat_x", "host": "acme.ghe.com"})
+        chat_auth_store.save(token="", host=None)  # blank token keeps the stored one
+        self.assertEqual(chat_auth_store.get()["token"], "github_pat_x")
+        chat_auth_store.save(clear_token=True, host="")
+        self.assertEqual(chat_auth_store.get(), {"token": "", "host": ""})
+
+    def test_invalid_host_is_rejected_and_nothing_saved(self):
+        chat_auth_store.save(token="github_pat_x")
+        with self.assertRaises(ValueError):
+            chat_auth_store.save(token="github_pat_y", host="github.example.com")
+        self.assertEqual(chat_auth_store.get()["token"], "github_pat_x")
+
+
+class ChatAuthApiTests(unittest.TestCase):
+    def setUp(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from backend.app.routers import chat
+
+        directory = self.enterContext(TemporaryDirectory())
+        self.enterContext(patch.object(chat_auth_store_module, "CHAT_AUTH_FILE", Path(directory) / "c.json"))
+        self.engine = self.enterContext(patch.object(chat, "copilot_engine"))
+        self.engine.get_auth_status = AsyncMock(return_value={"authenticated": True, "login": "mona"})
+        self.engine.apply_auth_settings = AsyncMock(return_value={"authenticated": True, "login": "mona"})
+        app = FastAPI()
+        app.include_router(chat.router, prefix="/api")
+        self.client = TestClient(app)
+
+    def test_put_saves_masks_and_reconnects(self):
+        res = self.client.put("/api/chat/auth", json={"token": "github_pat_abcdefgh1234", "host": "acme.ghe.com"})
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["config"], {"token_set": True, "token_masked": "gith***1234", "host": "acme.ghe.com"})
+        self.assertNotIn("github_pat_abcdefgh1234", res.text)
+        self.engine.apply_auth_settings.assert_awaited_once()
+        self.assertEqual(self.client.get("/api/chat/auth").json()["config"]["token_masked"], "gith***1234")
+
+    def test_put_rejects_bad_host(self):
+        res = self.client.put("/api/chat/auth", json={"host": "evil.example.com"})
+        self.assertEqual(res.status_code, 400)
+        self.engine.apply_auth_settings.assert_not_awaited()
+
+    def test_get_refresh_is_passed_through(self):
+        self.client.get("/api/chat/auth?refresh=true")
+        self.engine.get_auth_status.assert_awaited_with(refresh=True)
 
 
 class ReportLinkTests(unittest.TestCase):

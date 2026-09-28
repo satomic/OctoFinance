@@ -3678,6 +3678,26 @@ th.th-sorted .th-sort-arrow {
   margin-bottom: 10px;
 }
 
+/* AI chat (Copilot) settings section */
+.chat-auth-status {
+  margin-bottom: 12px;
+}
+
+.chat-auth-status .sso-status-row {
+  margin-bottom: 4px;
+}
+
+.chat-auth-status .settings-error {
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.chat-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* ==========================================================================
    Period switch, real GitHub budget meters, approval audit
    ========================================================================== */

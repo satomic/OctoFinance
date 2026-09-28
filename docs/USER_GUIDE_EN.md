@@ -1,10 +1,10 @@
 # OctoFinance Complete User Guide
 
-Applies to **v1.5.0**. [简体中文](USER_GUIDE_CN.md)
+Applies to **v1.5.1**. [简体中文](USER_GUIDE_CN.md)
 
 OctoFinance brings GitHub Copilot seats, adoption, AI credits, billing and budgets into one workspace, with an AI assistant for analysis and operational tasks. This guide is organized around the three user roles.
 
-All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v1.5.0. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
+All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v1.5.1. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
 
 **Contents**
 
@@ -151,6 +151,8 @@ This existing screenshot illustrates the conversation and sidebar layout; availa
 3. Check tool calls, source dates and numerical evidence.
 4. Before writes, verify targets, impact and required approval.
 5. Review recorded recommendations in Pending Actions and approve execution or reject them.
+
+**Chat credentials.** Configure the account chat signs in with under **Settings > AI Chat (Copilot)**: a fine-grained PAT of a user with an active Copilot seat and the Copilot Requests permission, plus an optional host (blank detects github.com or your GHE.com host automatically). A token saved here takes precedence over the `COPILOT_GITHUB_TOKEN` environment variable, and saving reconnects chat without a restart. The status line shows the source of the token and the account and host chat is signed in as. It also explains failures: a rejected token (chat then falls back to the local Copilot CLI login), or a seat or policy problem reported by Copilot (for example `403 not authorized to use this Copilot feature`).
 
 ```text
 Compare Copilot utilization across organizations using the latest synced data.

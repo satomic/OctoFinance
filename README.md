@@ -25,7 +25,7 @@ The fastest path is Docker. The image is fully self-contained (FastAPI backend +
 ### Option A: Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.5.0)
+# Pull the latest release (or pin a version, e.g. :v1.5.1)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -46,7 +46,7 @@ They serve different purposes and are **not** interchangeable.
 | | 1 · Copilot CLI token | 2 · Data-sync PAT |
 |---|---|---|
 | **What it does** | Authenticates the Copilot CLI / SDK that powers the AI chat | Reads seats, billing, usage and budgets from the GitHub API |
-| **How you supply it** | `-e COPILOT_GITHUB_TOKEN=...` at container start | In the web UI: **Settings → PAT Manager** |
+| **How you supply it** | In the web UI: **Settings → AI Chat (Copilot)**, or `-e COPILOT_GITHUB_TOKEN=...` at container start | In the web UI: **Settings → PAT Manager** |
 | **Token type** | **Fine-grained PAT** (`github_pat_…`). Classic PATs (`ghp_…`) are **not supported** by Copilot CLI | Classic PAT or fine-grained PAT |
 | **Owner** | Must be owned by a **personal account** (not an organization) **with an active Copilot subscription** | An organization / enterprise admin |
 | **Permissions** | Account permission **Copilot Requests: Read** | `read:org` + `admin:org` + `copilot` + `manage_billing:copilot` |
@@ -109,7 +109,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v1.5.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v1.5.1`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -322,14 +322,14 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 |------|-------------|
 | Port `8000` | HTTP port serving both the web UI and the API |
 | Volume `/app/data` | **Required for persistence.** Holds all runtime state: admin credentials (`auth.json`), PATs (`pats.json`), OAuth config (`oauth.json`), sessions, budget requests, synced GitHub data (one `_latest.json` per category/org, with no per-sync snapshots, so the directory does not grow over time), and logs. See [Where your data actually lives](#where-your-data-actually-lives) for named-volume vs. host-directory mounts |
-| Env `COPILOT_GITHUB_TOKEN` | Token used to authenticate the **Copilot CLI / SDK** ([docs](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)). Must be a **fine-grained PAT** (`github_pat_…`) owned by a **personal account** with an active Copilot subscription and the **Copilot Requests: Read** account permission. **Classic PATs (`ghp_…`) are not supported.** OAuth (`gho_…`) and GitHub App user tokens (`ghu_…`) also work |
+| Env `COPILOT_GITHUB_TOKEN` | Optional when a token is saved in **Settings → AI Chat (Copilot)**, which takes precedence. Token used to authenticate the **Copilot CLI / SDK** ([docs](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)). Must be a **fine-grained PAT** (`github_pat_…`) owned by a **personal account** with an active Copilot subscription and the **Copilot Requests: Read** account permission. **Classic PATs (`ghp_…`) are not supported.** OAuth (`gho_…`) and GitHub App user tokens (`ghu_…`) also work |
 | Env `GH_TOKEN` / `GITHUB_TOKEN` | Standard GitHub CLI token env vars, same purpose as `COPILOT_GITHUB_TOKEN`, lower precedence |
 | Env `COPILOT_CLI_PATH` | Pre-set to `/usr/local/bin/copilot` inside the image; do not override |
 | Env `GITHUB_OAUTH_CLIENT_ID` | Optional. GitHub OAuth App client ID for SSO login (can also be set in Settings → GitHub SSO) |
 | Env `GITHUB_OAUTH_CLIENT_SECRET` | Optional. GitHub OAuth App client secret for SSO login |
 | Env `GITHUB_OAUTH_CALLBACK_URL` | Optional. Overrides the auto-detected OAuth callback URL (`<origin>/api/auth/github/callback`) |
 | Env `GITHUB_OAUTH_HOST` | Optional. Host of the OAuth App for SSO: `github.com` (default) or `<tenant>.ghe.com` (can also be set in Settings → GitHub SSO) |
-| Env `COPILOT_GH_HOST` | Optional. Host the Copilot CLI authenticates against, e.g. `<tenant>.ghe.com` for GHE.com. Usually not needed: when `COPILOT_GITHUB_TOKEN` was issued on a GHE.com host that OctoFinance knows (a PAT host or the SSO host), the host is detected automatically. Setting it overrides detection |
+| Env `COPILOT_GH_HOST` | Optional. Host the Copilot CLI authenticates against, e.g. `<tenant>.ghe.com` for GHE.com. Usually not needed: when `COPILOT_GITHUB_TOKEN` was issued on a GHE.com host that OctoFinance knows (a PAT host or the SSO host), the host is detected automatically. Setting it overrides detection; the **Host** field in Settings → AI Chat (Copilot) overrides both |
 
 ### Outbound network access
 
@@ -344,9 +344,12 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 **Separation of concerns**:
 
 - **Data-sync PATs** (org-admin PATs used to pull seats/usage/billing from the GitHub API) are configured **via the web UI only** (Settings → PAT Manager) and persisted in `/app/data/pats.json`. They are *not* configurable through Docker environment variables.
-- **Docker env vars are only for Copilot CLI / SDK authentication.** The container is headless, so interactive `copilot` login is not possible; pass a fine-grained PAT from a Copilot-subscribed personal account instead. Resolution order:
-  1. `COPILOT_GITHUB_TOKEN` > `GH_TOKEN` > `GITHUB_TOKEN` environment variables
-  2. Fallback: the first PAT configured in the web UI (only works if that PAT is a fine-grained token whose owner has a Copilot subscription and the `Copilot Requests` permission)
+- **The Copilot CLI / SDK token (AI chat)** can be set in the web UI under **Settings → AI Chat (Copilot)** or through Docker env vars. The container is headless, so interactive `copilot` login is not possible; use a fine-grained PAT from a Copilot-subscribed personal account. Resolution order:
+  1. Token saved in **Settings → AI Chat (Copilot)** (stored in `/app/data/copilot_chat.json`)
+  2. `COPILOT_GITHUB_TOKEN` > `GH_TOKEN` > `GITHUB_TOKEN` environment variables
+  3. Fallback: the first fine-grained PAT configured in the PAT Manager (only works if its owner has a Copilot subscription and the `Copilot Requests` permission)
+
+  The host (github.com or `<tenant>.ghe.com`) comes from the **Host** field in the same Settings section, then `COPILOT_GH_HOST` / `GH_HOST`, then automatic detection. The section also shows which account and host chat is signed in as, and why it fails (for example a rejected token or a Copilot policy 403).
 
 
 
@@ -363,7 +366,7 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.5.0
+./scripts/docker-build.sh v1.5.1
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -374,9 +377,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.5.0
-git push origin v1.5.0
-# → publishes ghcr.io/<owner>/<repo>:v1.5.0, :1.5.0, :1.5, :1 and :latest
+git tag v1.5.1
+git push origin v1.5.1
+# → publishes ghcr.io/<owner>/<repo>:v1.5.1, :1.5.1, :1.5, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.

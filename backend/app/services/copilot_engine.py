@@ -92,6 +92,40 @@ Use batch_create_user_budgets for bulk operations (onboarding teams, applying un
 """
 
 
+def _clean_error(exc: BaseException | str) -> str:
+    """Drop the JSON-RPC wrapper around CLI errors, keeping GitHub's own reason."""
+    import re
+    text = str(exc)
+    text = re.sub(r"^JSON-RPC Error -?\d+:\s*", "", text)
+    text = re.sub(r"^Request [\w.]+ failed with message:\s*", "", text)
+    text = re.sub(r"(\\n|\s)+", " ", text)  # literal "\n" escapes and real newlines
+    return re.sub(r'\s+"$', '"', text).strip()
+
+
+def _bare_host(value: str | None) -> str:
+    """``https://acme.ghe.com/`` -> ``acme.ghe.com``."""
+    if not value:
+        return ""
+    from urllib.parse import urlparse
+    return (urlparse(value if "://" in value else f"https://{value}").hostname or "").lower()
+
+
+async def _lookup_login(token: str, host: str) -> str:
+    """Login of the token's owner on ``host`` (the host the CLI already sends it to)."""
+    from .github_host import api_base_url, host_from_api_base
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{api_base_url(host_from_api_base(host))}/user",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            )
+        if resp.status_code == 200:
+            return resp.json().get("login", "")
+    except Exception:
+        logger.debug("Could not look up the Copilot token owner on %s", host, exc_info=True)
+    return ""
+
+
 class CopilotAIEngine:
     """Manages Copilot SDK client and sessions for AI-powered FinOps."""
 
@@ -103,6 +137,9 @@ class CopilotAIEngine:
         self._api_manager: APIManager | None = None
         # GHE.com host the Copilot CLI was pointed at (None = its default, github.com)
         self._cli_host: str | None = None
+        # What the last client start resolved to and how authentication went,
+        # shown in Settings -> AI Chat so a 401/403 is diagnosable from the UI.
+        self._auth_status: dict = {}
 
     def set_api_manager(self, api_manager: APIManager):
         """Set the API manager for tool creation."""
@@ -118,33 +155,42 @@ class CopilotAIEngine:
 
         A stale COPILOT_GITHUB_TOKEN/GH_TOKEN would otherwise leave every request
         failing with "Not authenticated" even when `copilot` itself is logged in.
+        The fallback is recorded in the auth status so it is visible in Settings.
         """
-        options = self._client_options()
-        self._cli_host = None
-        token = options.get("github_token")
-        if token and "env" not in options:
-            host = await self._detect_token_host(token)
-            if host:
-                logger.info("Copilot token belongs to %s; pointing the Copilot CLI at it", host)
-                options["env"] = {**os.environ, "COPILOT_GH_HOST": host}
-        if "env" in options:
-            self._cli_host = options["env"].get("COPILOT_GH_HOST")
+        options, source = self._resolve_credentials()
+        host = await self._resolve_cli_host(options, source)
+        if host:
+            options["env"] = {**os.environ, "COPILOT_GH_HOST": host}
+        self._cli_host = host
+        status: dict = {
+            "source": source,
+            "requested_host": host or os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST") or "",
+            "fallback_used": False,
+            "error": "",
+        }
         client = CopilotClient(**options)
         try:
             await client.start()
-        except BaseException:
+        except BaseException as exc:
             self._client_started = False
+            self._auth_status = {**status, "authenticated": False, "error": _clean_error(exc)}
             raise
 
         if not options.get("github_token"):
+            self._auth_status = await self._probe_status(client, status)
             return client
+        status["_token"] = options["github_token"]
 
+        rejection = ""
         try:
-            status = await client.get_auth_status()
-            if status.isAuthenticated:
+            auth = await client.get_auth_status()
+            if auth.isAuthenticated:
+                self._auth_status = await self._probe_status(client, status)
                 return client
-        except Exception:
+            rejection = auth.statusMessage or "Not authenticated"
+        except Exception as exc:
             logger.exception("Failed to read Copilot auth status")
+            rejection = _clean_error(exc)
 
         logger.warning(
             "Configured Copilot token was rejected; falling back to the Copilot CLI's logged-in user"
@@ -155,7 +201,69 @@ class CopilotAIEngine:
             pass
         fallback = CopilotClient(use_logged_in_user=True)
         await fallback.start()
+        status.pop("_token", None)
+        status.update(fallback_used=True, error=f"Token rejected: {rejection}")
+        self._auth_status = await self._probe_status(fallback, status)
         return fallback
+
+    @staticmethod
+    async def _probe_status(client: CopilotClient, base: dict) -> dict:
+        """Who the CLI is signed in as, and whether Copilot actually serves models.
+
+        auth.getStatus only covers authentication; a seat or policy problem
+        (e.g. HTTP 403 "requires an enterprise or organization policy") only
+        shows up when models are listed.
+        """
+        base = dict(base)
+        token = base.pop("_token", None)
+        status = {**base, "authenticated": False, "login": "", "host": "", "models_available": None}
+        try:
+            auth = await client.get_auth_status()
+            status.update(
+                authenticated=bool(auth.isAuthenticated),
+                login=auth.login or "",
+                host=_bare_host(auth.host) or base.get("requested_host") or "github.com",
+            )
+            if status["authenticated"] and not status["login"] and token:
+                # The CLI omits the login for token auth; ask the host it already uses.
+                status["login"] = await _lookup_login(token, status["host"])
+            if not auth.isAuthenticated and not status["error"]:
+                status["error"] = auth.statusMessage or "Not authenticated"
+        except Exception as exc:
+            status["error"] = status["error"] or _clean_error(exc)
+            return status
+        if status["authenticated"]:
+            try:
+                models = await client.list_models()
+                status["models_available"] = len(models)
+            except Exception as exc:
+                status["models_available"] = 0
+                status["models_error"] = _clean_error(exc)
+        return status
+
+    async def get_auth_status(self, refresh: bool = False) -> dict:
+        """Current chat authentication status; ``refresh`` re-checks with the CLI."""
+        if not self.is_ready():
+            try:
+                await self._restart_client()
+            except Exception as exc:
+                return {**self._auth_status, "authenticated": False, "error": _clean_error(exc)}
+        elif refresh and self._client:
+            base = {k: self._auth_status.get(k, d) for k, d in
+                    (("source", ""), ("requested_host", ""), ("fallback_used", False), ("error", ""))}
+            if not base["fallback_used"]:
+                base["_token"] = self._resolve_credentials()[0].get("github_token")
+            self._auth_status = await self._probe_status(self._client, base)
+        return dict(self._auth_status)
+
+    async def apply_auth_settings(self) -> dict:
+        """Reconnect with the credentials from Settings and return the new status."""
+        try:
+            await self._restart_client()
+        except Exception as exc:
+            logger.exception("Failed to restart the Copilot client with new chat settings")
+            return {**self._auth_status, "authenticated": False, "error": _clean_error(exc)}
+        return dict(self._auth_status)
 
     async def stop(self):
         """Stop all sessions and the client."""
@@ -178,11 +286,10 @@ class CopilotAIEngine:
         be the one the env token belongs to, so chat starts working without a
         container restart.
         """
-        options = self._client_options()
-        token = options.get("github_token")
-        if not token:
+        options, source = self._resolve_credentials()
+        if not options.get("github_token"):
             return
-        host = (options.get("env") or {}).get("COPILOT_GH_HOST") or await self._detect_token_host(token)
+        host = await self._resolve_cli_host(options, source)
         if host != self._cli_host:
             logger.info("Copilot CLI host changed (%s -> %s); restarting the client", self._cli_host, host)
             await self._restart_client()
@@ -200,18 +307,41 @@ class CopilotAIEngine:
 
         asyncio.create_task(_run())
 
+    async def _resolve_cli_host(self, options: dict, source: dict) -> str | None:
+        """Host to pass to the CLI as COPILOT_GH_HOST, or None to leave its default.
+
+        1. Host set in Settings -> AI Chat (github.com or <sub>.ghe.com)
+        2. COPILOT_GH_HOST / GH_HOST in the environment: the CLI reads them itself
+        3. The GHE.com host of the fallback data-sync PAT
+        4. The configured GHE.com host that accepts the token (see _detect_token_host)
+        """
+        from .chat_auth_store import chat_auth_store
+        from .github_host import is_ghe_host
+
+        pinned = chat_auth_store.get()["host"]
+        if pinned:
+            return pinned
+        if os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST"):
+            return None
+        if is_ghe_host(source.get("pat_host")):
+            return source["pat_host"]
+        token = options.get("github_token")
+        if token:
+            host = await self._detect_token_host(token)
+            if host:
+                logger.info("Copilot token belongs to %s; pointing the Copilot CLI at it", host)
+            return host
+        return None
+
     @staticmethod
     async def _detect_token_host(token: str) -> str | None:
         """Return the GHE.com host a token belongs to, or None for github.com.
 
-        The Copilot CLI authenticates against github.com unless COPILOT_GH_HOST /
-        GH_HOST says otherwise, so a GHE.com token supplied via
-        COPILOT_GITHUB_TOKEN fails with 401. The token is only ever sent to hosts
-        already configured in OctoFinance (PAT hosts and the SSO host), never
-        probed against github.com. An operator-pinned host always wins.
+        The Copilot CLI authenticates against github.com unless told otherwise,
+        so a GHE.com token would fail with 401. The token is only ever sent to
+        hosts already configured in OctoFinance (PAT hosts and the SSO host),
+        never probed against github.com.
         """
-        if os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST"):
-            return None
         from .auth_store import auth_store
         from .github_host import api_base_url, is_ghe_host, normalize_host
         from .pat_manager import pat_manager
@@ -246,48 +376,57 @@ class CopilotAIEngine:
         return self._client is not None and self._client_started
 
     @staticmethod
-    def _client_options() -> dict:
-        """Build Copilot SDK client options for authenticating the Copilot CLI.
+    def _resolve_credentials() -> tuple[dict, dict]:
+        """Pick the token for the Copilot CLI. Returns (client options, source info).
 
-        Token env vars are dedicated to Copilot CLI/SDK authentication (data-sync
-        PATs are configured via the web UI only). Resolution order:
-        1. COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN env vars (see
+        Resolution order:
+        1. Token saved in Settings -> AI Chat
+        2. COPILOT_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN env vars (see
            https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli#authenticating-with-environment-variables)
-        2. Fallback: the first non-classic PAT configured in the app (Settings UI).
+        3. Fallback: the first non-classic data-sync PAT configured in Settings.
            The CLI rejects classic PATs (``ghp_``) outright, so they are skipped.
-        3. Fallback: the CLI's own logged-in user (interactive `copilot` login)
-
-        The CLI reads its host from ``COPILOT_GH_HOST`` / ``GH_HOST`` (default
-        github.com). With a configured PAT on a GHE.com host, ``COPILOT_GH_HOST``
-        is set here; for an env token the host is detected in ``_start_client``.
-        Either way a host pinned in the environment wins.
+        4. Fallback: the CLI's own logged-in user (interactive `copilot` login)
         """
+        from .chat_auth_store import chat_auth_store, mask_token
+
+        token = chat_auth_store.get()["token"]
+        if token:
+            logger.info("Using the token from Settings -> AI Chat for Copilot CLI authentication")
+            return (
+                {"github_token": token, "use_logged_in_user": False},
+                {"kind": "settings", "detail": "", "token_masked": mask_token(token)},
+            )
 
         for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
             token = os.environ.get(env_var, "").strip()
             if token:
                 logger.info("Using %s environment variable for Copilot CLI authentication", env_var)
-                return {"github_token": token, "use_logged_in_user": False}
+                return (
+                    {"github_token": token, "use_logged_in_user": False},
+                    {"kind": "env", "detail": env_var, "token_masked": mask_token(token)},
+                )
 
         try:
-            from .github_host import is_ghe_host
             from .pat_manager import pat_manager
 
-            configured_pats = pat_manager.get_all() or pat_manager.load()
-            for pat in configured_pats:
+            for pat in pat_manager.get_all() or pat_manager.load():
                 token = pat.get("token")
                 if not token or token.startswith("ghp_"):
                     continue
-                options: dict = {"github_token": token, "use_logged_in_user": False}
-                host = pat.get("host", "")
-                pinned = os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST")
-                if is_ghe_host(host) and not pinned:
-                    logger.info("Using configured PAT '%s' on %s for Copilot CLI", pat.get("label"), host)
-                    options["env"] = {**os.environ, "COPILOT_GH_HOST": host}
-                return options
+                logger.info("Using configured PAT '%s' for Copilot CLI", pat.get("label"))
+                return (
+                    {"github_token": token, "use_logged_in_user": False},
+                    {"kind": "pat", "detail": pat.get("label", ""), "token_masked": mask_token(token),
+                     "pat_host": pat.get("host", "")},
+                )
         except Exception:
             logger.exception("Failed to load configured PAT for Copilot SDK client")
-        return {}
+        return {}, {"kind": "cli_login", "detail": "", "token_masked": ""}
+
+    @classmethod
+    def _client_options(cls) -> dict:
+        """Client options for the resolved credentials (host is resolved separately)."""
+        return cls._resolve_credentials()[0]
 
     def _build_tools_for_session(self, working_directory: str | None) -> list:
         """Build a set of tools scoped to a session's data directory."""

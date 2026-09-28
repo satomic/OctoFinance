@@ -1,6 +1,6 @@
 # OctoFinance — Responsible AI & Security
 
-> Applies to **v1.5.0**.
+> Applies to **v1.5.1**.
 
 ## Responsible AI (RAI) Notes
 
@@ -21,7 +21,7 @@ OctoFinance implements a strict human-in-the-loop pattern for all destructive or
 - **No PII collection** — the platform accesses GitHub profile information (username, avatar) and Copilot usage metrics available through the GitHub API. GitHub SSO requests only the `read:user user:email` scopes and stores just the login, display name, avatar URL and numeric ID in the session.
 - **Local data storage** — all data is stored locally as JSON under `data/`. Nothing is sent to third parties beyond the GitHub API and the Copilot SDK.
 - **Least-privilege visibility**: regular users see their own data. Administrators may additionally grant cost center ownership. Owner endpoints check the requested enterprise and cost center against the current authorization file on every request; ownership does not grant administrator access.
-- **PAT security** — PATs live in `data/pats.json` and are masked in the UI (last 4 characters only). The OAuth client secret in `data/oauth.json` is likewise never returned in full by the API.
+- **PAT security** — PATs live in `data/pats.json` and are masked in the UI (last 4 characters only). The OAuth client secret in `data/oauth.json` is likewise never returned in full by the API. The AI chat (Copilot CLI) token saved in Settings lives in `data/copilot_chat.json`; the admin-only `/api/chat/auth` endpoint only ever returns it masked.
 - **Session security** — httpOnly cookies with `SameSite=Lax`, automatically marked `Secure` when the request is served over HTTPS. Local passwords are hashed with PBKDF2-SHA256 (100,000 iterations) and verified in constant time.
 
 ### Transparency

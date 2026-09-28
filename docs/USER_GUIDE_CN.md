@@ -1,6 +1,6 @@
 # OctoFinance 完整使用指南
 
-适用版本：**v1.5.0**。[English](USER_GUIDE_EN.md)
+适用版本：**v1.5.1**。[English](USER_GUIDE_EN.md)
 
 OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits、账单与预算，并通过 AI 对话辅助成本治理。本指南按三个角色介绍功能；英文界面标签保留在操作步骤中，方便对照截图。
 
@@ -151,6 +151,8 @@ Sync Settings 和 CSV Fetch 位于 1.2 截图中的同一个设置面板。
 3. 核对工具调用、数据来源、日期及具体数值。
 4. 对写操作先核对目标、影响与审批要求。
 5. 在 Pending Actions 中审阅已记录的建议，批准执行或拒绝。
+
+**对话凭据。**在 **Settings > AI Chat (Copilot)** 中配置对话所用的账号：填写拥有有效 Copilot 席位和 Copilot Requests 权限的用户的 fine-grained PAT，主机可选（留空会自动识别 github.com 或 GHE.com 主机）。在此保存的令牌优先于环境变量 `COPILOT_GITHUB_TOKEN`，保存后对话会重新连接，无需重启。状态行显示令牌来源，以及对话实际登录的账号和主机，并说明失败原因：令牌被拒绝（此时对话会回退到本机 Copilot CLI 登录），或 Copilot 报告的席位、策略问题（例如 `403 not authorized to use this Copilot feature`）。
 
 ```text
 Compare Copilot utilization across organizations using the latest synced data.

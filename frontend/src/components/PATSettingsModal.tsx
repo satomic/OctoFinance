@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "../contexts/I18nContext";
 import { usePATs } from "../hooks/usePATs";
+import { CopilotChatSettings } from "./CopilotChatSettings";
 import { GithubSSOSettings } from "./GithubSSOSettings";
 import type { PATInfo } from "../types";
 
@@ -248,6 +249,8 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
             </button>
             <p className="pat-form-hint">{t("settings.patHint")}</p>
           </div>
+
+          <CopilotChatSettings />
 
           {/* Sync Settings */}
           <div className="sync-settings">

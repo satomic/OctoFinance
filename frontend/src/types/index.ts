@@ -568,6 +568,23 @@ export interface AuthStatus {
   update?: UpdateInfo;
 }
 
+export interface ChatAuthStatus {
+  source?: { kind: "settings" | "env" | "pat" | "cli_login"; detail: string; token_masked: string };
+  requested_host?: string;
+  authenticated: boolean;
+  login?: string;
+  host?: string;
+  fallback_used?: boolean;
+  error?: string;
+  models_available?: number | null;
+  models_error?: string;
+}
+
+export interface ChatAuthResponse {
+  config: { token_set: boolean; token_masked: string; host: string };
+  status: ChatAuthStatus;
+}
+
 export interface GithubOAuthConfig {
   client_id: string;
   client_secret_set: boolean;

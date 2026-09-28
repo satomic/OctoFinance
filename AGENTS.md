@@ -278,5 +278,6 @@ def _build_tools_for_session(self, working_directory):
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
 | `backend/app/services/github_api.py` | GitHub REST API client |
 | `backend/app/services/api_manager.py` | Multi-PAT API management |
+| `backend/app/services/chat_auth_store.py` | AI chat (Copilot CLI) token and host set in Settings (`data/copilot_chat.json`) |
 | `backend/app/services/github_host.py` | Host model: github.com vs `<subdomain>.ghe.com` (data residency), API/web base URLs |
 | `backend/app/config.py` | Pricing, paths, directories |

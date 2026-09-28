@@ -6,9 +6,11 @@ import json
 import time
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from ..services.chat_auth_store import chat_auth_store, mask_token
 from ..services.copilot_engine import copilot_engine
 from ..services.session_manager import session_manager, SESSIONS_DIR
 
@@ -19,6 +21,38 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
     model: str = ""
+
+
+class ChatAuthUpdate(BaseModel):
+    token: str | None = None  # blank/None keeps the stored token
+    host: str | None = None  # "" = detect automatically; github.com or <sub>.ghe.com pins it
+    clear_token: bool = False
+
+
+def _chat_auth_config() -> dict:
+    cfg = chat_auth_store.get()
+    return {
+        "token_set": bool(cfg["token"]),
+        "token_masked": mask_token(cfg["token"]) if cfg["token"] else "",
+        "host": cfg["host"],
+    }
+
+
+@router.get("/chat/auth")
+async def get_chat_auth(refresh: bool = False):
+    """AI chat credentials from Settings (masked) and the live connection status."""
+    return {"config": _chat_auth_config(), "status": await copilot_engine.get_auth_status(refresh=refresh)}
+
+
+@router.put("/chat/auth")
+async def update_chat_auth(update: ChatAuthUpdate):
+    """Save the AI chat token/host and reconnect the chat engine with them."""
+    try:
+        chat_auth_store.save(token=update.token, host=update.host, clear_token=update.clear_token)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    status = await copilot_engine.apply_auth_settings()
+    return {"config": _chat_auth_config(), "status": status}
 
 
 @router.get("/chat/models")
