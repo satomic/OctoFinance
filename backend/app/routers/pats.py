@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ..services.api_manager import api_manager
+from ..services.copilot_engine import copilot_engine
 from ..services.data_collector import data_collector
 from ..services.github_host import normalize_host, parse_enterprise_url
 from ..services.pat_manager import pat_manager
@@ -102,6 +103,9 @@ async def add_pat(request: AddPATRequest):
         pat_manager.remove(pat["id"])
         raise HTTPException(status_code=400, detail=str(e))
 
+    # A GHE.com PAT can be the host the Copilot chat token belongs to
+    copilot_engine.schedule_cli_host_refresh()
+
     # Kick off background sync for newly discovered orgs and enterprises
     updated_pat = pat_manager.find_by_id(pat["id"])
     has_orgs = bool(updated_pat and updated_pat.get("orgs"))
@@ -183,6 +187,7 @@ async def delete_pat(pat_id: str):
 
     # Remove from persistent storage
     pat_manager.remove(pat_id)
+    copilot_engine.schedule_cli_host_refresh()
 
     return {"deleted": True, "pat_id": pat_id}
 

@@ -76,7 +76,7 @@ OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits
 | Classic PAT 的 `admin:enterprise` | Enterprise Teams 创建和修改 |
 | Copilot CLI 独立认证 | AI 对话；不是数据同步 PAT 自动提供的能力 |
 
-Enterprise Teams 接口不接受 fine-grained PAT 或 GitHub App token。GHE.com 租户需通过 `COPILOT_GH_HOST=<租户>.ghe.com`（或 `GH_HOST`）让 CLI 指向该主机；当对话回退使用已配置的 GHE.com fine-grained PAT 时，OctoFinance 会自动设置 `COPILOT_GH_HOST`。Classic PAT 不会用于对话，因为 CLI 拒绝此类令牌。AI 对话使用 Copilot CLI/SDK 的认证流程；使用令牌时遵循 CLI 对个人账号、有效 Copilot 订阅及 Copilot Requests 权限的要求，见 [CLI 认证说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)。
+Enterprise Teams 接口不接受 fine-grained PAT 或 GitHub App token。GHE.com 租户的对话令牌必须在该租户上创建。OctoFinance 会判断令牌属于哪个已配置的 GHE.com 主机（来自 PAT 或 SSO 主机），并自动让 CLI 指向该主机；启动后才添加 GHE.com PAT 时也会自动切换。令牌只会发往这些已配置的主机校验。如需手动指定，设置 `COPILOT_GH_HOST=<租户>.ghe.com`（或 `GH_HOST`），手动设置始终优先。Classic PAT 不会用于对话，因为 CLI 拒绝此类令牌。AI 对话使用 Copilot CLI/SDK 的认证流程；使用令牌时遵循 CLI 对个人账号、有效 Copilot 订阅及 Copilot Requests 权限的要求，见 [CLI 认证说明](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli)。
 
 ### 1.3 GitHub SSO
 

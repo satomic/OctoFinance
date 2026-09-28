@@ -392,4 +392,7 @@ async def update_github_config(params: OAuthConfigParams):
         auth_store.save_oauth_config(**updates)
     except ValueError as exc:
         return {"error": str(exc)}
+    if "host" in updates:
+        from ..services.copilot_engine import copilot_engine
+        copilot_engine.schedule_cli_host_refresh()
     return await get_github_config()

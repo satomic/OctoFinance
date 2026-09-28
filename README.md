@@ -329,7 +329,7 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 | Env `GITHUB_OAUTH_CLIENT_SECRET` | Optional. GitHub OAuth App client secret for SSO login |
 | Env `GITHUB_OAUTH_CALLBACK_URL` | Optional. Overrides the auto-detected OAuth callback URL (`<origin>/api/auth/github/callback`) |
 | Env `GITHUB_OAUTH_HOST` | Optional. Host of the OAuth App for SSO: `github.com` (default) or `<tenant>.ghe.com` (can also be set in Settings → GitHub SSO) |
-| Env `COPILOT_GH_HOST` | Optional. Host the Copilot CLI authenticates against, e.g. `<tenant>.ghe.com` for GHE.com. Set it together with a `COPILOT_GITHUB_TOKEN` issued on that host |
+| Env `COPILOT_GH_HOST` | Optional. Host the Copilot CLI authenticates against, e.g. `<tenant>.ghe.com` for GHE.com. Usually not needed: when `COPILOT_GITHUB_TOKEN` was issued on a GHE.com host that OctoFinance knows (a PAT host or the SSO host), the host is detected automatically. Setting it overrides detection |
 
 ### Outbound network access
 

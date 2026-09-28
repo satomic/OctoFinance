@@ -166,7 +166,7 @@ ghe.com support is implemented as follows. The API client code is unchanged; onl
 | API routing | `api_manager.py` builds each `GitHubAPI` with its PAT's API base and tags discovered orgs and enterprises with their host. `GitHubAPI.host` / `GitHubAPI.web_base` and `api_manager.web_base_for_org()` / `web_base_for_enterprise()` expose it. The global `config.github_api_base` is gone. |
 | Profile links | Fallback `html_url` values in `routers/data.py` and `services/data_collector.py`, and all links in the cost center report (`report_generator.py`, used by the ZIP export and the share page), use the owning host |
 | OAuth SSO | `oauth.json` / Settings → GitHub SSO has a **GitHub host** field (env fallback `GITHUB_OAUTH_HOST`). Authorize, token and user URLs are derived from it. |
-| Copilot CLI | When chat falls back to a configured PAT on a ghe.com host, the CLI is spawned with `COPILOT_GH_HOST=<host>` unless `COPILOT_GH_HOST` / `GH_HOST` is already set. Classic PATs are skipped for chat because the CLI rejects them. With `COPILOT_GITHUB_TOKEN`, set `COPILOT_GH_HOST` yourself. |
+| Copilot CLI | When chat falls back to a configured PAT on a ghe.com host, the CLI is spawned with `COPILOT_GH_HOST=<host>` unless `COPILOT_GH_HOST` / `GH_HOST` is already set. Classic PATs are skipped for chat because the CLI rejects them. With `COPILOT_GITHUB_TOKEN`, the token's host is detected by checking it only against configured ghe.com hosts (PAT hosts, SSO host); detection re-runs when PATs or the SSO host change. Without this, a ghe.com token was sent to github.com and failed with 401 (fixed after v1.5.0). |
 | UI | Host badge on non-github.com PATs, host-aware org avatar fallback, and new strings in all 8 locales |
 | Tests | `backend/tests/test_github_host.py` covers host normalization, per-PAT routing, pseudo-org host lookup, OAuth URLs, Copilot CLI options and report links |
 
@@ -197,7 +197,7 @@ Run on 2026-09-28 against the ghe.com test tenant. The app ran from an isolated 
 **Not covered end to end**
 
 - **Full SSO sign-in.** It needs an OAuth App registered on the tenant.
-- **Chat with the Copilot CLI authenticated to the ghe.com host.** It needs a fine-grained PAT or a CLI `/login` on the tenant, because the test tenant only provided a classic PAT. The `COPILOT_GH_HOST` wiring is covered by unit tests.
+- **A successful chat reply from a ghe.com-authenticated CLI.** With a fine-grained ghe.com token in `COPILOT_GITHUB_TOKEN`, the Docker image detected the host and the CLI authenticated against the tenant (instead of the previous 401), but the test account's seat was refused by tenant policy (403 "requires an enterprise or organization policy to be enabled").
 - **Seat add/remove**, which incurs cost.
 
 ## Unchanged (Verified Compatible)

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import AsyncIterator, TYPE_CHECKING
 
+import httpx
 from copilot import CopilotClient, CopilotSession, PermissionHandler
 from copilot.generated.session_events import SessionEvent, SessionEventType
 
@@ -99,6 +101,8 @@ class CopilotAIEngine:
         self._sessions: dict[str, CopilotSession] = {}
         self._session_models: dict[str, str] = {}
         self._api_manager: APIManager | None = None
+        # GHE.com host the Copilot CLI was pointed at (None = its default, github.com)
+        self._cli_host: str | None = None
 
     def set_api_manager(self, api_manager: APIManager):
         """Set the API manager for tool creation."""
@@ -116,6 +120,15 @@ class CopilotAIEngine:
         failing with "Not authenticated" even when `copilot` itself is logged in.
         """
         options = self._client_options()
+        self._cli_host = None
+        token = options.get("github_token")
+        if token and "env" not in options:
+            host = await self._detect_token_host(token)
+            if host:
+                logger.info("Copilot token belongs to %s; pointing the Copilot CLI at it", host)
+                options["env"] = {**os.environ, "COPILOT_GH_HOST": host}
+        if "env" in options:
+            self._cli_host = options["env"].get("COPILOT_GH_HOST")
         client = CopilotClient(**options)
         try:
             await client.start()
@@ -158,6 +171,77 @@ class CopilotAIEngine:
             self._client = None
         self._client_started = False
 
+    async def refresh_cli_host(self) -> None:
+        """Restart the client when the Copilot token now resolves to a different host.
+
+        Called after PATs or the SSO host change: a GHE.com host added later can
+        be the one the env token belongs to, so chat starts working without a
+        container restart.
+        """
+        options = self._client_options()
+        token = options.get("github_token")
+        if not token:
+            return
+        host = (options.get("env") or {}).get("COPILOT_GH_HOST") or await self._detect_token_host(token)
+        if host != self._cli_host:
+            logger.info("Copilot CLI host changed (%s -> %s); restarting the client", self._cli_host, host)
+            await self._restart_client()
+
+    def schedule_cli_host_refresh(self) -> None:
+        """Fire-and-forget refresh_cli_host() so config endpoints stay fast."""
+        if not self.is_ready():
+            return  # the next chat request starts the client with fresh settings
+
+        async def _run():
+            try:
+                await self.refresh_cli_host()
+            except Exception:
+                logger.exception("Failed to refresh the Copilot CLI host")
+
+        asyncio.create_task(_run())
+
+    @staticmethod
+    async def _detect_token_host(token: str) -> str | None:
+        """Return the GHE.com host a token belongs to, or None for github.com.
+
+        The Copilot CLI authenticates against github.com unless COPILOT_GH_HOST /
+        GH_HOST says otherwise, so a GHE.com token supplied via
+        COPILOT_GITHUB_TOKEN fails with 401. The token is only ever sent to hosts
+        already configured in OctoFinance (PAT hosts and the SSO host), never
+        probed against github.com. An operator-pinned host always wins.
+        """
+        if os.environ.get("COPILOT_GH_HOST") or os.environ.get("GH_HOST"):
+            return None
+        from .auth_store import auth_store
+        from .github_host import api_base_url, is_ghe_host, normalize_host
+        from .pat_manager import pat_manager
+
+        candidates: list[str] = []
+        for pat in pat_manager.get_all() or pat_manager.load():
+            host = pat.get("host") or ""
+            if is_ghe_host(host) and host not in candidates:
+                candidates.append(host)
+        try:
+            sso_host = normalize_host(auth_store.get_oauth_config().get("host", ""))
+            if is_ghe_host(sso_host) and sso_host not in candidates:
+                candidates.append(sso_host)
+        except ValueError:
+            pass
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            for host in candidates:
+                try:
+                    resp = await client.get(
+                        f"{api_base_url(host)}/user",
+                        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                    )
+                except httpx.HTTPError as exc:
+                    logger.warning("Could not check the Copilot token against %s: %s", host, exc)
+                    continue
+                if resp.status_code == 200:
+                    return host
+        return None
+
     def is_ready(self) -> bool:
         return self._client is not None and self._client_started
 
@@ -174,11 +258,10 @@ class CopilotAIEngine:
         3. Fallback: the CLI's own logged-in user (interactive `copilot` login)
 
         The CLI reads its host from ``COPILOT_GH_HOST`` / ``GH_HOST`` (default
-        github.com). With an env token those variables are the operator's to set;
-        with a configured PAT on a GHE.com host, ``COPILOT_GH_HOST`` is set for
-        the spawned CLI unless the environment already pins a host.
+        github.com). With a configured PAT on a GHE.com host, ``COPILOT_GH_HOST``
+        is set here; for an env token the host is detected in ``_start_client``.
+        Either way a host pinned in the environment wins.
         """
-        import os
 
         for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
             token = os.environ.get(env_var, "").strip()
