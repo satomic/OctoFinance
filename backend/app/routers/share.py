@@ -25,6 +25,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from ..config import DATA_DIR
+from ..services.api_manager import api_manager
 from ..services.data_collector import data_collector
 from ..services.report_generator import generate_single_report_html
 
@@ -267,6 +268,7 @@ def _render_shared_report(share: dict, for_download: bool) -> str | None:
         all_ai_usage_records=load_all_csv_records(CSV_TYPE_AI),
         all_usage_records=load_all_csv_records(CSV_TYPE_USAGE),
         download_url=None if for_download else f"/share/cc/{share['token']}/download",
+        web_base=api_manager.web_base_for_enterprise(enterprise),
     )
 
 

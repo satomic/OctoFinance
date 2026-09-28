@@ -1391,7 +1391,7 @@ async def get_cost_center_unassigned_users(
             entry = seat_users.setdefault(key, {
                 "login": login,
                 "avatar_url": assignee.get("avatar_url", ""),
-                "html_url": assignee.get("html_url", f"https://github.com/{login}"),
+                "html_url": assignee.get("html_url") or f"{api_manager.web_base_for_org(org)}/{login}",
                 "orgs": [],
                 "teams": [],
                 "plan_types": [],
@@ -1613,6 +1613,7 @@ async def get_cost_center_report(enterprise: str = Query(default="")):
         cost_centers=cost_centers,
         all_ai_usage_records=all_ai_usage,
         all_usage_records=all_usage,
+        web_base=api_manager.web_base_for_enterprise(selected_slug),
     )
 
     filename = f"cc-report-{selected_slug}.zip"
@@ -1743,7 +1744,7 @@ def _aggregate_seats_by_login(org_logins: list[str]) -> dict[str, dict]:
             entry = seat_users.setdefault(login.lower(), {
                 "login": login,
                 "avatar_url": assignee.get("avatar_url", ""),
-                "html_url": assignee.get("html_url", f"https://github.com/{login}"),
+                "html_url": assignee.get("html_url") or f"{api_manager.web_base_for_org(org)}/{login}",
                 "orgs": [],
                 "assigning_teams": [],
                 "plan_types": [],
@@ -1901,7 +1902,7 @@ async def get_enterprise_teams_dashboard(
         return {
             "login": login,
             "avatar_url": avatar_url or (seat or {}).get("avatar_url", ""),
-            "html_url": html_url or f"https://github.com/{login}",
+            "html_url": html_url or f"{api_manager.web_base_for_enterprise(selected_slug)}/{login}",
             "has_seat": seat is not None,
             "orgs": (seat or {}).get("orgs", []),
             "plan_types": (seat or {}).get("plan_types", []),

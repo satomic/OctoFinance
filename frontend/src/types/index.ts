@@ -23,6 +23,7 @@ export interface OrgInfo {
   active_seats?: number;
   enterprise?: string;
   pat_user?: string;
+  host?: string;
 }
 
 export interface PATInfo {
@@ -34,6 +35,8 @@ export interface PATInfo {
   orgs: string[];
   enterprise_slugs: string[];
   include_organizations: boolean;
+  /** "github.com" or "<subdomain>.ghe.com" */
+  host?: string;
   created_at: string;
   last_synced_at: string;
 }
@@ -572,6 +575,7 @@ export interface GithubOAuthConfig {
   callback_url: string;
   admins: string[];
   allow_all_users: boolean;
+  host: string;
   enabled: boolean;
 }
 

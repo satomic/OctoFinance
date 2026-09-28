@@ -1,10 +1,10 @@
 # OctoFinance — Feature Details & API Reference
 
-> Applies to **v1.4.0**.
+> Applies to **v1.5.0**.
 
 ## Copilot SDK Agentic AI (Core)
 
-- **43 custom tools** registered via `define_tool()` from `github-copilot-sdk`
+- **44 custom tools** registered via `define_tool()` from `github-copilot-sdk`
 - **Session management** with resume capability across backend restarts
 - **Streaming responses** via SSE (Server-Sent Events)
 - **Tool transparency**: real-time tool execution indicators in the chat UI

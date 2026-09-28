@@ -26,6 +26,7 @@ import time
 from typing import Any
 
 from ..config import DATA_DIR
+from .github_host import normalize_host
 
 AUTH_FILE = DATA_DIR / "auth.json"
 OAUTH_FILE = DATA_DIR / "oauth.json"
@@ -45,6 +46,9 @@ DEFAULT_OAUTH: dict[str, Any] = {
     # When True, any GitHub user may log in. When False only admins + users
     # that already hold a Copilot seat / appear in usage data may log in.
     "allow_all_users": True,
+    # github.com (default) or <subdomain>.ghe.com — the OAuth App must be
+    # registered on this host.
+    "host": "",
 }
 
 
@@ -112,6 +116,8 @@ class AuthStore:
             cfg["client_secret"] = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
         if not cfg.get("callback_url"):
             cfg["callback_url"] = os.getenv("GITHUB_OAUTH_CALLBACK_URL", "")
+        if not cfg.get("host"):
+            cfg["host"] = os.getenv("GITHUB_OAUTH_HOST", "")
         cfg["admins"] = [str(a).strip() for a in cfg.get("admins") or [] if str(a).strip()]
         return cfg
 
@@ -124,6 +130,9 @@ class AuthStore:
                 cfg[key] = [str(v).strip() for v in value if str(v).strip()]
             elif key == "allow_all_users":
                 cfg[key] = bool(value)
+            elif key == "host":
+                # Raises ValueError for anything but github.com / <sub>.ghe.com
+                cfg[key] = normalize_host(str(value)) if str(value).strip() else ""
             else:
                 cfg[key] = str(value).strip()
         _write_json(OAUTH_FILE, cfg)

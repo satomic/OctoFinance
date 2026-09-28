@@ -522,7 +522,7 @@ def create_budget_tools(
             "or 'multi_user_cost_center' to give every member of the cost center the same personal budget "
             "(that scope requires the cost center to already have at least one user member). "
             "The cost center can be given by name or ID; it is resolved against the synced cost center data, "
-            "so run Sync Data first if the cost center was just created. "
+            "so call sync_data(dataset='cost_centers') first if the cost center was just created. "
             "Requires a PAT with the manage_billing:copilot scope."
         )
     )
@@ -543,7 +543,8 @@ def create_budget_tools(
             return json.dumps({
                 "error": (
                     f"Cost center '{params.cost_center}' not found in enterprise '{enterprise}'. "
-                    "Run Sync Data or use list_cost_centers to see the available cost centers."
+                    "If it was just created, call sync_data(dataset='cost_centers') and retry; "
+                    "otherwise use list_cost_centers to see the available cost centers."
                 )
             })
 

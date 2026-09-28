@@ -20,6 +20,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..services.auth_store import auth_store
+from ..services.github_host import DEFAULT_HOST, api_base_url, normalize_host, web_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 SESSION_COOKIE = "octofinance_session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
-GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
-GITHUB_USER_URL = "https://api.github.com/user"
+
+def _oauth_urls(cfg: dict) -> tuple[str, str, str]:
+    """(authorize, token, user) URLs for the OAuth App's host (github.com or <sub>.ghe.com)."""
+    try:
+        host = normalize_host(cfg.get("host", ""))
+    except ValueError:
+        host = DEFAULT_HOST
+    web = web_base_url(host)
+    return (
+        f"{web}/login/oauth/authorize",
+        f"{web}/login/oauth/access_token",
+        f"{api_base_url(host)}/user",
+    )
+
 
 # Paths that do NOT require authentication
 AUTH_PUBLIC_PATHS = {
@@ -156,6 +168,7 @@ class OAuthConfigParams(BaseModel):
     callback_url: str | None = None
     admins: list[str] | None = None
     allow_all_users: bool | None = None
+    host: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +283,8 @@ async def github_login(request: Request):
         "state": state,
         "allow_signup": "false",
     }
-    return RedirectResponse(url=f"{GITHUB_AUTHORIZE_URL}?{urlencode(params)}", status_code=302)
+    authorize_url, _, _ = _oauth_urls(cfg)
+    return RedirectResponse(url=f"{authorize_url}?{urlencode(params)}", status_code=302)
 
 
 @router.get("/github/callback")
@@ -287,10 +301,11 @@ async def github_callback(request: Request, code: str = "", state: str = "", err
     if not cfg.get("client_id") or not cfg.get("client_secret"):
         return RedirectResponse(url="/?auth_error=github_not_configured", status_code=302)
 
+    _, token_url, user_url = _oauth_urls(cfg)
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             token_resp = await client.post(
-                GITHUB_TOKEN_URL,
+                token_url,
                 headers={"Accept": "application/json"},
                 data={
                     "client_id": cfg["client_id"],
@@ -307,7 +322,7 @@ async def github_callback(request: Request, code: str = "", state: str = "", err
                 return RedirectResponse(url="/?auth_error=token_exchange_failed", status_code=302)
 
             user_resp = await client.get(
-                GITHUB_USER_URL,
+                user_url,
                 headers={
                     "Accept": "application/vnd.github+json",
                     "Authorization": f"Bearer {access_token}",
@@ -362,6 +377,7 @@ async def get_github_config():
         "callback_url": cfg.get("callback_url", ""),
         "admins": cfg.get("admins", []),
         "allow_all_users": cfg.get("allow_all_users", True),
+        "host": cfg.get("host", "") or DEFAULT_HOST,
         "enabled": auth_store.is_github_enabled(),
     }
 
@@ -372,5 +388,8 @@ async def update_github_config(params: OAuthConfigParams):
     updates = params.model_dump(exclude_none=True)
     if not updates.get("client_secret"):
         updates.pop("client_secret", None)
-    auth_store.save_oauth_config(**updates)
+    try:
+        auth_store.save_oauth_config(**updates)
+    except ValueError as exc:
+        return {"error": str(exc)}
     return await get_github_config()

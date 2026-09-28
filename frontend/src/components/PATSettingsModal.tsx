@@ -45,6 +45,7 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const { pats, loading, error, addPAT, removePAT, updatePAT, clearError, settings, updateSettings } = usePATs();
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
+  const [host, setHost] = useState("");
   const [enterpriseSlug, setEnterpriseSlug] = useState("");
   const [includeOrganizations, setIncludeOrganizations] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -76,10 +77,11 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
     const slugs = enterpriseSlug.trim()
       ? enterpriseSlug.split(",").map((s) => s.trim()).filter(Boolean)
       : [];
-    const result = await addPAT(label.trim() || "Untitled", token.trim(), slugs, includeOrganizations);
+    const result = await addPAT(label.trim() || "Untitled", token.trim(), slugs, includeOrganizations, host.trim());
     if (result) {
       setLabel("");
       setToken("");
+      setHost("");
       setEnterpriseSlug("");
       setIncludeOrganizations(true);
       onPATChange?.();
@@ -147,6 +149,9 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                     <div className="pat-item-user">
                       <strong>{pat.label || pat.user_login || "Untitled"}</strong>
                       <span className="pat-item-orgs">{pat.orgs?.length || 0} orgs</span>
+                      {pat.host && pat.host !== "github.com" && (
+                        <span className="pat-item-enterprise">{pat.host}</span>
+                      )}
                       {pat.enterprise_slugs?.length > 0 && (
                         <span className="pat-item-enterprise">
                           {pat.enterprise_slugs.join(", ")}
@@ -201,6 +206,17 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                 onKeyDown={handleKeyDown}
               />
             </div>
+            <div className="pat-form-row">
+              <label>{t("settings.patHost")}</label>
+              <input
+                type="text"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="github.com"
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            <p className="pat-form-hint">{t("settings.patHostHint")}</p>
             <div className="pat-form-row">
               <label>{t("settings.patEnterprise")}</label>
               <input

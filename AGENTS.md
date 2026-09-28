@@ -33,6 +33,11 @@ Key behaviors:
 - Be proactive: if asked about usage, also mention cost implications
 - For destructive operations (seat removal), always explain the impact first
   and ask for confirmation
+- Cached tools read the data from the last Sync Data. When cached data is missing
+  or stale, or right after a live write (e.g. create_cost_center) that a
+  cache-based tool depends on, call sync_data with the narrowest dataset
+  (e.g. 'cost_centers') and then retry, instead of asking the admin to click
+  Sync Data
 
 Available data dimensions:
 - Seats: who has Copilot, when they last used it, which team they belong to
@@ -56,7 +61,7 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 
 ---
 
-## Tool Catalog (43 Tools)
+## Tool Catalog (44 Tools)
 
 ### Seat Management Tools (`backend/app/tools/seat_tools.py`)
 
@@ -141,6 +146,12 @@ live data directly from GitHub API for a specific day or the latest 28-day perio
 > Enterprise team endpoints only accept **classic** PATs: `read:enterprise` for reads, `admin:enterprise` for writes. Fine-grained and GitHub App tokens are rejected.
 >
 > No Copilot dataset carries an enterprise-team field. Team attribution is resolved by joining the synced roster (`data/enterprise_teams/{slug}_latest.json`) against seats/usage/AI-credit data on the user login. Teams may contain unaffiliated users who belong to no organization and therefore never appear in org seat data.
+
+### Sync Tool (`backend/app/tools/sync_tools.py`)
+
+| # | Tool | Type | Description |
+|---|------|------|-------------|
+| 44 | `sync_data` | Sync | Refresh the cached data exactly like the **Sync Data** button and wait for it to finish. `dataset` is `all` (optionally one `org`), `cost_centers`, `budgets` or `enterprise_teams`. Runs through the shared SyncManager, so it never overlaps another sync and its progress shows in the Console. Does not fetch billing CSVs. |
 
 ---
 
@@ -258,7 +269,7 @@ def _build_tools_for_session(self, working_directory):
 | File | Purpose |
 |------|---------|
 | `backend/app/services/copilot_engine.py` | SDK client, session management, system prompt |
-| `backend/app/tools/*.py` | All 43 custom tools |
+| `backend/app/tools/*.py` | All 44 custom tools |
 | `backend/app/routers/auth.py` | Local login + GitHub OAuth SSO, role helpers |
 | `backend/app/routers/me.py` | Per-user ("me") data — a regular user's own usage/budget |
 | `backend/app/routers/budget_requests.py` | Budget request → approval → real GitHub budget |
@@ -267,4 +278,5 @@ def _build_tools_for_session(self, working_directory):
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
 | `backend/app/services/github_api.py` | GitHub REST API client |
 | `backend/app/services/api_manager.py` | Multi-PAT API management |
+| `backend/app/services/github_host.py` | Host model: github.com vs `<subdomain>.ghe.com` (data residency), API/web base URLs |
 | `backend/app/config.py` | Pricing, paths, directories |

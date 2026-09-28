@@ -1,10 +1,10 @@
 # OctoFinance Complete User Guide
 
-Applies to **v1.4.0**. [简体中文](USER_GUIDE_CN.md)
+Applies to **v1.5.0**. [简体中文](USER_GUIDE_CN.md)
 
 OctoFinance brings GitHub Copilot seats, adoption, AI credits, billing and budgets into one workspace, with an AI assistant for analysis and operational tasks. This guide is organized around the three user roles.
 
-All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v1.4.0. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
+All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v1.5.0. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
 
 **Contents**
 
@@ -54,12 +54,15 @@ A saved token is shown masked (`ghp_***lOsO`), with its GitHub owner and the num
 |-------|---------|
 | Label | A recognizable token name. The saved label is displayed separately from the GitHub account owner |
 | Token | The data-sync PAT. Never include it in screenshots, chat or shared documents |
-| Ent Slug | The enterprise identifier from a URL such as `github.com/enterprises/example-enterprise`; specify it when automatic discovery is incomplete |
+| Host | Leave blank for github.com. For GHE.com (GitHub Enterprise Cloud with data residency) enter the tenant host, such as `acme.ghe.com`; the token is then used against `api.acme.ghe.com` |
+| Ent Slug | The enterprise identifier from a URL such as `github.com/enterprises/example-enterprise`; specify it when automatic discovery is incomplete. You can paste the whole URL (for example `https://acme.ghe.com/enterprises/acme`): the slug is extracted and, when Host is blank, the host is taken from the URL |
 | Include Organizations | Whether to scan organizations. Disable when the enterprise uses Enterprise Teams and organization scanning is not needed |
 
 **Add PAT** validates and discovers the account scope; data sync runs in the background. Multiple PATs can cover different scopes. Discovering an organization does not prove that the token can read all its billing data or perform every operation.
 
 **Organization scanning and enterprise seat collection are independent.** Enabling Include Organizations must not suppress enterprise seat sync. Enterprise seats already represented in organization data are excluded from the supplementary enterprise view on read, preventing double counting. An orgless enterprise can legitimately have an empty Organizations list and still have Copilot seats.
+
+**GHE.com (data residency).** Each PAT belongs to one host, shown as a badge next to the PAT when it is not github.com. All data sync, CSV fetches, cost center, budget and Enterprise Teams operations for that PAT go to its host, and profile links in dashboards and cost center reports point to the same host. github.com and GHE.com PATs can be configured side by side, but an organization or enterprise slug that exists on both hosts would share one data file, so keep slugs distinct. Firewalled deployments must allow outbound HTTPS to `api.<tenant>.ghe.com`, `copilot-reports.<tenant>.ghe.com`, `<tenant>.ghe.com` and `*.blob.core.windows.net`. See [GHE.com compatibility](GHE_COMPATIBILITY.md).
 
 Changing the organization toggle reruns discovery and sync. Removing a PAT affects future access but does not cancel GitHub seats or revoke the token on GitHub.
 
@@ -73,11 +76,11 @@ Changing the organization toggle reruns discovery and sync. Removing a PAT affec
 | Classic PAT with `admin:enterprise` | Enterprise Teams creation and changes |
 | Separate Copilot CLI authentication | AI chat; configuring a data-sync PAT alone does not guarantee chat authentication |
 
-Enterprise Teams endpoints reject fine-grained PATs and GitHub App tokens. AI chat follows the Copilot CLI/SDK authentication requirements. When using a token, check the personal account, active Copilot subscription and Copilot Requests permission requirements in the [CLI authentication guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
+Enterprise Teams endpoints reject fine-grained PATs and GitHub App tokens. AI chat follows the Copilot CLI/SDK authentication requirements. For a GHE.com tenant, point the CLI at it with `COPILOT_GH_HOST=<tenant>.ghe.com` (or `GH_HOST`); when chat falls back to a configured fine-grained PAT on a GHE.com host, OctoFinance sets `COPILOT_GH_HOST` automatically. Classic PATs are never used for chat because the CLI rejects them. When using a token, check the personal account, active Copilot subscription and Copilot Requests permission requirements in the [CLI authentication guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
 
 ### 1.3 GitHub SSO
 
-1. Create an OAuth App in GitHub under **Settings > Developer settings > OAuth Apps**.
+1. Create an OAuth App in GitHub under **Settings > Developer settings > OAuth Apps**. For GHE.com, create it on your tenant (`https://<tenant>.ghe.com`) and enter that host in the **GitHub host** field; github.com OAuth Apps cannot sign in GHE.com users.
 2. Set Homepage URL to the actual OctoFinance browsing URL.
 3. Set Callback URL to `https://your-domain/api/auth/github/callback`.
 4. Enter Client ID and Client Secret in OctoFinance **GitHub SSO** settings and verify the callback URL.

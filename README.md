@@ -14,7 +14,7 @@ Put together, **OctoFinance = the finance department for your Octocat**: everyth
 
 ## Project Summary
 
-OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language ("Which users haven't used Copilot in 30 days? How much are we wasting?") and the AI agent autonomously calls 43 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, Enterprise Teams analytics and filtering, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
+OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot SDK that transforms how enterprises manage Copilot seat costs at scale. Instead of manually analyzing usage spreadsheets across multiple organizations, administrators simply ask questions in natural language ("Which users haven't used Copilot in 30 days? How much are we wasting?") and the AI agent autonomously calls 44 custom tools to analyze real-time data from GitHub APIs, identify waste, calculate ROI, manage UBB budgets, and recommend optimizations. A human-in-the-loop approval workflow ensures destructive operations like seat removal require explicit admin confirmation. The platform features a rich analytics dashboard with 9 visualization sections, multi-org/multi-enterprise support with automatic discovery, Enterprise Teams analytics and filtering, real-time data synchronization, per-user AI credit usage tracking, and comprehensive audit logging. Built with Python FastAPI, React, and the GitHub Copilot Python SDK, OctoFinance delivers enterprise-grade FinOps automation that turns Copilot cost management from a manual burden into an intelligent, conversational experience.
 
 ---
 
@@ -25,7 +25,7 @@ The fastest path is Docker. The image is fully self-contained (FastAPI backend +
 ### Option A: Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.4.0)
+# Pull the latest release (or pin a version, e.g. :v1.5.0)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -109,7 +109,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v1.4.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v1.5.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -252,7 +252,7 @@ See the [owner usage and budget guide](docs/USAGE.md#cost-center-owner-portal) f
 
 **Solution**: An AI-first FinOps platform built on the GitHub Copilot SDK with:
 - **Conversational interface**: Ask questions in natural language, get data-driven answers, and pick the model per message (default Auto)
-- **43 custom tools**: Autonomous data analysis via `define_tool()` API including budget and Enterprise Team management
+- **44 custom tools**: Autonomous data analysis via `define_tool()` API including budget and Enterprise Team management
 - **Human-in-the-loop**: AI recommends, admin approves before destructive operations
 - **Multi-dashboard analytics**: Rich usage, AI credits, budgets, Cost Center and Enterprise Team views
 - **Multi-org management**: Multiple PATs, auto-discovery, cross-org analysis
@@ -271,7 +271,7 @@ AI Usage also displays the CSV fields `input`, `output`, `cache_read` and `cache
                 SSE / REST │
 ┌──────────────────────────┴─────────────────────────────────────────┐
 │              FastAPI Backend (Python 3.13+)                         │
-│   Copilot SDK AI Engine (43 tools) · Auth · Sync · PAT Manager     │
+│   Copilot SDK AI Engine (44 tools) · Auth · Sync · PAT Manager     │
 │   Data Collector · Audit Log · Budget Management                   │
 └──────────────────────────┬─────────────────────────────────────────┘
                            │
@@ -286,7 +286,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 
 ## Key Features
 
-- **Copilot SDK Agentic AI**: 43 custom tools including budget and Enterprise Team management, SSE streaming, session management, and **per-message model selection** (dropdown next to the chat box, dynamically populated from the Copilot SDK; defaults to Auto)
+- **Copilot SDK Agentic AI**: 44 custom tools including budget and Enterprise Team management, SSE streaming, session management, and **per-message model selection** (dropdown next to the chat box, dynamically populated from the Copilot SDK; defaults to Auto)
 - **Budget Management**: UBB (Usage-Based Billing) AI credits budget controls (Universal/Individual user-level, Enterprise, and Cost center: both a shared `cost_center` budget and a per-member `multi_user_cost_center` budget)
 - **Analytics Dashboard**: Usage, AI credits, budgets, Cost Center and Enterprise Team dashboards
 - **Enterprise Teams**: Full support for [Enterprise Teams](https://docs.github.com/en/rest/enterprise-teams): a dedicated dashboard tab showing per-team seats, adoption, AI spend and estimated seat cost with expandable member rosters, plus an **Enterprise Team filter on Usage Metrics / AI Usage / Usage Report** (including a *No enterprise team* option). Because **no Copilot dataset carries a team field**, OctoFinance syncs the team rosters and joins them onto seats/usage/AI-credit data on the user login, and when a team filter is active the usage aggregates are recomputed from user-level records so the charts stay accurate. Also surfaces seat holders that no team covers, and team members with no seat (unaffiliated enterprise users). Requires a **classic** PAT (`read:enterprise`, or `admin:enterprise` for writes)
@@ -294,6 +294,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 - **AI credit included usage cap**: Per-cost-center switch for GitHub's `ai_credit_pool_enabled` setting, so a cost center stops at the AI credits its members' licenses already include instead of drawing from the shared enterprise pool. New cost centers created through the AI agent default to **capped**. The dashboard toggle applies optimistically, rolls back with an error if GitHub rejects it, and logs every change to the Console panel and the audit log
 - **Cost Center Report Sharing**: Share a per-cost-center HTML report page via a tokenized public link (`/share/cc/{token}`), no OctoFinance account required. Each share can be **public** or **password-protected** (PBKDF2-hashed), and can be updated (change password / switch mode) or disabled at any time from the Cost Centers dashboard. The shared page uses the same template as the Download Report export, plus a top-right Download button to save the report as a standalone HTML file. Share settings are persisted in `data/cc_shares.json`
   ![alt text](images/cc_shares.png)
+- **GHE.com (data residency)**: Each data-sync PAT can target github.com or a `<tenant>.ghe.com` host, including SSO and Copilot CLI host settings. See [GHE.com compatibility](docs/GHE_COMPATIBILITY.md)
 - **Multi-Org Management**: Multiple PATs, auto-discovery, enterprise support, including enterprises with **no organizations** (Copilot granted purely via Enterprise Teams) via a per-PAT "Include Organizations" toggle; enterprise-level seats/usage/AI-credit data is synced instead, so the dashboard stays fully populated
 - **Human-in-the-Loop**: Recommendation → Review → Approve/Reject workflow
 - **Real-Time Sync**: Auto-sync, cron scheduling, SSE progress streaming, with **incremental historical merge** so usage data accumulates beyond GitHub's rolling 28-day reporting window instead of being overwritten on every sync. Startup and cron runs also pull the billing report CSVs, so per-user AI credit data stays current unattended
@@ -327,6 +328,8 @@ OctoFinance ships as a single self-contained image: FastAPI backend + pre-built 
 | Env `GITHUB_OAUTH_CLIENT_ID` | Optional. GitHub OAuth App client ID for SSO login (can also be set in Settings → GitHub SSO) |
 | Env `GITHUB_OAUTH_CLIENT_SECRET` | Optional. GitHub OAuth App client secret for SSO login |
 | Env `GITHUB_OAUTH_CALLBACK_URL` | Optional. Overrides the auto-detected OAuth callback URL (`<origin>/api/auth/github/callback`) |
+| Env `GITHUB_OAUTH_HOST` | Optional. Host of the OAuth App for SSO: `github.com` (default) or `<tenant>.ghe.com` (can also be set in Settings → GitHub SSO) |
+| Env `COPILOT_GH_HOST` | Optional. Host the Copilot CLI authenticates against, e.g. `<tenant>.ghe.com` for GHE.com. Set it together with a `COPILOT_GITHUB_TOKEN` issued on that host |
 
 ### Outbound network access
 
@@ -360,7 +363,7 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.4.0
+./scripts/docker-build.sh v1.5.0
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -371,9 +374,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
 
 ```bash
-git tag v1.4.0
-git push origin v1.4.0
-# → publishes ghcr.io/<owner>/<repo>:v1.4.0, :1.4.0, :1.4, :1 and :latest
+git tag v1.5.0
+git push origin v1.5.0
+# → publishes ghcr.io/<owner>/<repo>:v1.5.0, :1.5.0, :1.5, :1 and :latest
 ```
 
 Every tagged build also updates the `latest` tag.
