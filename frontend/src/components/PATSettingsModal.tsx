@@ -50,6 +50,10 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
   const [enterpriseSlug, setEnterpriseSlug] = useState("");
   const [includeOrganizations, setIncludeOrganizations] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // PAT whose token is being replaced, and the new token typed for it
+  const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [newToken, setNewToken] = useState("");
+  const [replaceSaving, setReplaceSaving] = useState(false);
 
   // Numeric settings are edited as a draft and committed on blur, so a partially
   // typed value is never PUT (and rejected) mid-keystroke. A null draft means
@@ -94,6 +98,35 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
     if (ok) {
       onPATChange?.();
     }
+  };
+
+  const handleReplaceToken = async (pat: PATInfo) => {
+    if (!newToken.trim()) return;
+    clearError();
+    setReplaceSaving(true);
+    const ok = await updatePAT(pat.id, { token: newToken.trim() });
+    setReplaceSaving(false);
+    if (ok) {
+      setReplacingId(null);
+      setNewToken("");
+      onPATChange?.();
+    }
+  };
+
+  const credentialBadge = (pat: PATInfo) => {
+    const c = pat.credential;
+    if (!c || c.state === "ok") return null;
+    const label = c.state === "invalid" ? t("settings.patCredInvalid")
+      : c.state === "forbidden" ? t("settings.patCredForbidden")
+      : c.state === "unreachable" ? t("settings.patCredUnreachable")
+      : `${t("settings.patCredExpiring")} ${c.expires_at ? new Date(c.expires_at).toLocaleDateString() : ""}`;
+    const title = [c.status ? `HTTP ${c.status}` : "", c.detail, `${t("settings.patCredChecked")} ${new Date(c.checked_at).toLocaleString()}`]
+      .filter(Boolean).join(" · ");
+    return (
+      <span className={`pat-cred-badge pat-cred-${c.state === "expiring" ? "warning" : "error"}`} title={title}>
+        {label}
+      </span>
+    );
   };
 
   const handleDelete = async (id: string) => {
@@ -158,9 +191,10 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                           {pat.enterprise_slugs.join(", ")}
                         </span>
                       )}
+                      {credentialBadge(pat)}
                     </div>
                     <div className="pat-item-meta">
-                      {pat.user_login || "Validating..."} &middot; {pat.token_masked}
+                      {pat.user_login || (pat.credential && pat.credential.state !== "ok" ? "—" : "Validating...")} &middot; {pat.token_masked}
                     </div>
                     <div className="pat-item-include-orgs">
                       <label className="toggle-switch toggle-switch-small">
@@ -173,14 +207,44 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                       </label>
                       <span>{t("settings.patIncludeOrganizations")}</span>
                     </div>
+                    {replacingId === pat.id && (
+                      <div className="pat-replace-row">
+                        <input
+                          type="password"
+                          value={newToken}
+                          autoFocus
+                          placeholder={t("settings.patReplacePlaceholder")}
+                          onChange={(e) => setNewToken(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleReplaceToken(pat);
+                            if (e.key === "Escape") { e.stopPropagation(); setReplacingId(null); }
+                          }}
+                          disabled={replaceSaving}
+                        />
+                        <button className="btn btn-small btn-approve" onClick={() => handleReplaceToken(pat)} disabled={replaceSaving || !newToken.trim()}>
+                          {replaceSaving ? t("settings.patReplaceSaving") : t("settings.patReplaceSave")}
+                        </button>
+                        <button className="btn btn-small" onClick={() => setReplacingId(null)} disabled={replaceSaving}>
+                          {t("settings.patReplaceCancel")}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
+                <div className="pat-item-actions">
+                <button
+                  className={`btn btn-small ${pat.credential && pat.credential.state !== "ok" ? "btn-approve" : "btn-ghost"}`}
+                  onClick={() => { clearError(); setNewToken(""); setReplacingId(replacingId === pat.id ? null : pat.id); }}
+                >
+                  {t("settings.patReplaceToken")}
+                </button>
                 <button
                   className={`btn btn-small ${confirmDelete === pat.id ? "btn-danger" : "btn-ghost"}`}
                   onClick={() => handleDelete(pat.id)}
                 >
                   {confirmDelete === pat.id ? t("settings.patDeleteConfirm") : t("settings.patDelete")}
                 </button>
+                </div>
               </div>
             ))}
           </div>

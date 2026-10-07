@@ -22,6 +22,7 @@ from .routers.auth import (
 )
 from .config import APP_VERSION
 from .services.api_manager import api_manager
+from .services import credential_health
 from .services.copilot_engine import copilot_engine
 from .services.data_collector import data_collector
 from .services.ops_executor import ops_executor
@@ -79,6 +80,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[OctoFinance] CSV migration warning: {e}")
 
+    # Every sync first checks the PATs, so an expired or revoked token is
+    # reported in the UI instead of leaving the data silently stale
+    sync_manager.set_preflight(credential_health.preflight)
+
     # Read settings
     settings = pat_manager.get_settings()
 
@@ -90,22 +95,25 @@ async def lifespan(app: FastAPI):
             all_orgs = api_manager.get_all_orgs()
             org_names = [o["login"] for o in all_orgs]
             print(f"[OctoFinance] Discovered {len(all_orgs)} organizations: {org_names}")
-
-            # Initial data collection (controlled by settings)
-            if settings.get("auto_sync_on_startup", True):
-                print("[OctoFinance] Starting initial data sync (background)...")
-                sync_manager.run_in_background(run_full_sync)
-            else:
-                print("[OctoFinance] Auto sync on startup is disabled, skipping initial sync.")
-
-            # Start cron scheduler if configured
-            cron_expr = settings.get("sync_cron", "").strip()
-            if cron_expr:
-                sync_manager.start_cron_scheduler(cron_expr, run_full_sync)
         except asyncio.TimeoutError:
             print("[OctoFinance] Startup discovery warning: timed out; continue startup and retry from Settings/Sync.")
         except Exception as e:
             print(f"[OctoFinance] Startup discovery warning: {e}")
+
+        # Initial data collection (controlled by settings). Runs even when
+        # discovery failed: its credential check reports why and retries discovery.
+        if settings.get("auto_sync_on_startup", True):
+            print("[OctoFinance] Starting initial data sync (background)...")
+            sync_manager.run_in_background(run_full_sync, trigger="startup")
+        else:
+            print("[OctoFinance] Auto sync on startup is disabled, skipping initial sync.")
+            # Still check the tokens so an expired PAT is reported right away
+            asyncio.create_task(credential_health.check_all(sync_manager.log))
+
+        # Start the cron scheduler independently of discovery, which may time out
+        cron_expr = settings.get("sync_cron", "").strip()
+        if cron_expr:
+            sync_manager.start_cron_scheduler(cron_expr, run_full_sync)
     else:
         print("[OctoFinance] No PATs configured. Add a PAT via Settings to get started.")
 
@@ -178,6 +186,8 @@ async def health():
         "pat_count": pat_count,
         "copilot_engine": copilot_engine.is_ready(),
         "is_syncing": sync_manager.is_syncing,
+        "sync": sync_manager.status,
+        "credential_problems": credential_health.problems(),
         "update": update_checker.state,
     }
 

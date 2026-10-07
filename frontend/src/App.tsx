@@ -5,6 +5,7 @@ import { UIStateProvider, useUIState } from "./contexts/UIStateContext";
 import { useChat } from "./hooks/useChat";
 import { useSessions } from "./hooks/useSessions";
 import { useSyncStream } from "./hooks/useSyncStream";
+import { SyncAlertBanner } from "./components/SyncAlertBanner";
 import { ChatInterface } from "./components/ChatInterface";
 import { UnifiedDashboard } from "./components/UnifiedDashboard";
 import { ConsolePanel } from "./components/ConsolePanel";
@@ -99,7 +100,8 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
   }, [sessions.currentSessionId, sessions.sessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Connect to sync SSE stream — push sync logs into console, track syncing state
-  const { syncing, setOnSyncComplete } = useSyncStream(chat.addConsoleLog);
+  const { syncing, syncHealth, setOnSyncComplete } = useSyncStream(chat.addConsoleLog);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // When sync completes, refresh sidebar data
   useEffect(() => {
@@ -318,6 +320,13 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
         onViewChange={setCurrentView}
         onLogout={onLogout}
         user={user}
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
+      />
+      <SyncAlertBanner
+        health={syncHealth}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenConsole={() => setConsoleOpen(true)}
       />
       <div className="app-body">
         {!sidebarHidden && (

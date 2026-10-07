@@ -334,6 +334,24 @@ These are the scopes for the **data-sync PAT** you add here — the token that r
 - **Auto Sync on Startup** — sync automatically when the backend starts
 - **Sync Cron Schedule** — presets (30min, 1h, 6h, 24h, Off) or a custom cron expression
 
+### When a sync fails
+
+Every sync first checks each PAT with GitHub. If a token was rejected (expired or revoked, HTTP 401), is blocked (HTTP 403), cannot reach GitHub, or a sync ended with errors, a red notice appears under the StatusBar. It shows which PAT failed, which run failed (scheduled, manual, startup…), and when the data was **last synced successfully**, so you know how stale the dashboards are.
+
+![Red notice: a PAT rejected by GitHub and a failed scheduled sync, with the last successful sync time](../images/sync_alert_failed_en.png)
+
+1. Click **Fix in Settings**. The affected PAT carries a badge such as **Expired or revoked** (hover it for the HTTP status and when it was checked).
+2. Click **Replace token**, paste a new token and click **Save token**. The token is checked first: if GitHub rejects it too, nothing changes and the error is shown. Label, host, enterprise slugs and settings are kept.
+3. A sync starts right away. The notice disappears once a sync finishes without errors.
+
+![Settings: the PAT flagged Expired or revoked, with the Replace token field open](../images/sync_alert_settings_en.png)
+
+**View Console** shows the full log of the failed run. **Dismiss** hides the notice until the next failed check or run.
+
+A PAT that expires within 7 days raises an amber notice so you can renew it before scheduled syncs start failing:
+
+![Amber notice: a PAT expiring in a few days](../images/sync_alert_expiring_en.png)
+
 **Unattended syncs also fetch the billing report CSVs.** Startup and scheduled runs do the JSON sync and then run the same job as the **Fetch CSV** button, so per-user AI credit and spend data stays current without anyone clicking. That adds roughly 5-7 minutes per run.
 
 | Trigger | JSON datasets | Billing report CSVs |
@@ -466,6 +484,8 @@ Earlier versions wrote one timestamped file per upload. On startup any such file
 ---
 
 ## Troubleshooting
+
+> **A red "Data sync is failing" notice** means the last sync or token check failed; see [When a sync fails](#when-a-sync-fails).
 
 | Symptom | Fix |
 |---------|-----|

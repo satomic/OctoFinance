@@ -4144,3 +4144,141 @@ th.th-sorted .th-sort-arrow {
   .prompt-library { left: 8px; width: calc(100% - 16px); }
   .prompt-library-item { flex-direction: column; align-items: stretch; }
 }
+
+/* Sync health notice (failed sync / rejected or expiring PATs) */
+.sync-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.sync-alert {
+  --alert-color: var(--danger);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alert-color) 35%, transparent);
+  border-left: 4px solid var(--alert-color);
+  background: color-mix(in srgb, var(--alert-color) 10%, var(--bg-primary));
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.sync-alert-warning { --alert-color: var(--warning); }
+
+.sync-alert-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--alert-color);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.sync-alert-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sync-alert-body strong { color: var(--alert-color); }
+
+.sync-alert-body ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-alert-detail {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.sync-alert-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.sync-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sync-alert-primary {
+  background: var(--alert-color);
+  border-color: var(--alert-color);
+  color: #fff;
+}
+
+.sync-alert-primary:hover { filter: brightness(1.1); border-color: var(--alert-color); }
+
+@media (max-width: 760px) {
+  .sync-alert { flex-wrap: wrap; padding: 10px 16px; }
+  .sync-alert-actions { width: 100%; justify-content: flex-start; padding-left: 32px; }
+}
+
+/* PAT credential state in Settings */
+.pat-cred-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.pat-cred-error {
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.pat-cred-warning {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.pat-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.pat-replace-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pat-replace-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.pat-replace-row input:focus { border-color: var(--accent); }

@@ -5,6 +5,7 @@ PAT management router - CRUD for GitHub Personal Access Tokens.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from ..services import credential_health
 from ..services.api_manager import api_manager
 from ..services.copilot_engine import copilot_engine
 from ..services.data_collector import data_collector
@@ -28,6 +29,8 @@ class AddPATRequest(BaseModel):
 class UpdatePATRequest(BaseModel):
     label: str | None = None
     include_organizations: bool | None = None
+    # Replaces the token, e.g. after the old one expired or was revoked
+    token: str | None = None
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -125,7 +128,7 @@ async def add_pat(request: AddPATRequest):
             # and the enterprise-only Copilot data stay in sync with the new PAT.
             await data_collector.sync_enterprises(log_fn=log_fn)
 
-        sync_manager.run_in_background(_sync_new_orgs)
+        sync_manager.run_in_background(_sync_new_orgs, trigger="pat_change")
 
     # Return masked PAT info immediately (sync continues in background)
     masked = pat_manager.get_all_masked()
@@ -139,14 +142,33 @@ async def add_pat(request: AddPATRequest):
 
 @router.put("/pats/{pat_id}")
 async def update_pat(pat_id: str, request: UpdatePATRequest):
-    """Update a PAT's label and/or organization-scanning preference.
+    """Update a PAT's label, organization-scanning preference and/or token.
 
-    Changing `include_organizations` re-runs discovery for all PATs and
-    triggers a background sync so the dashboard reflects the new setting.
+    Changing `include_organizations` or the token re-runs discovery for all
+    PATs and triggers a background sync so the dashboard reflects the change.
     """
     existing = pat_manager.find_by_id(pat_id)
     if not existing:
         raise HTTPException(status_code=404, detail="PAT not found")
+
+    token_changed = False
+    if request.token is not None and request.token.strip() != existing["token"]:
+        token = request.token.strip()
+        if not token:
+            raise HTTPException(status_code=400, detail="Token is required")
+        credential = await credential_health.check_token(token, existing.get("host") or "")
+        if credential["state"] in credential_health.BLOCKING_STATES:
+            raise HTTPException(status_code=400, detail=credential_health.describe(existing, credential))
+        if existing.get("user_login") and credential.get("login") and credential["login"].lower() != existing["user_login"].lower():
+            sync_manager.log("warn", f"PAT '{existing['label']}' now belongs to {credential['login']} (was {existing['user_login']})")
+        try:
+            pat_manager.set_token(pat_id, token)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        credential.pop("login", None)
+        pat_manager.update(pat_id, credential=credential)
+        sync_manager.log("info", f"PAT '{existing['label']}' token replaced")
+        token_changed = True
 
     kwargs: dict = {}
     if request.label is not None:
@@ -162,13 +184,13 @@ async def update_pat(pat_id: str, request: UpdatePATRequest):
     if not result:
         raise HTTPException(status_code=404, detail="PAT not found")
 
-    if include_orgs_changed:
+    if include_orgs_changed or token_changed:
         await api_manager.rebuild()
 
         async def _resync(log_fn):
             await data_collector.sync_all(log_fn=log_fn)
 
-        sync_manager.run_in_background(_resync)
+        sync_manager.run_in_background(_resync, trigger="pat_change")
 
     # Return masked version
     masked = pat_manager.get_all_masked()

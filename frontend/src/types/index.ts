@@ -39,6 +39,45 @@ export interface PATInfo {
   host?: string;
   created_at: string;
   last_synced_at: string;
+  /** Result of the last token check (set by every sync) */
+  credential?: CredentialCheck;
+}
+
+export type CredentialState = "ok" | "expiring" | "invalid" | "forbidden" | "unreachable";
+
+export interface CredentialCheck {
+  state: CredentialState;
+  status: number | null;
+  detail: string;
+  expires_at: string | null;
+  checked_at: string;
+}
+
+export interface CredentialProblem extends CredentialCheck {
+  pat_id: string;
+  label: string;
+  user_login: string;
+  host: string;
+}
+
+export interface SyncRun {
+  trigger: "manual" | "scheduled" | "startup" | "chat" | "pat_change";
+  started_at: string;
+  finished_at: string;
+  status: "success" | "failed";
+  error_count: number;
+  warning_count: number;
+  errors: string[];
+}
+
+export interface SyncHealth {
+  sync: {
+    last_run: SyncRun | null;
+    last_success_at: string | null;
+    cron: string;
+    cron_description: string;
+  };
+  credential_problems: CredentialProblem[];
 }
 
 export interface Overview {

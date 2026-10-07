@@ -103,7 +103,7 @@ export function usePATs() {
     }
   }, [loadPATs]);
 
-  const updatePAT = useCallback(async (id: string, updates: { label?: string; include_organizations?: boolean }) => {
+  const updatePAT = useCallback(async (id: string, updates: { label?: string; include_organizations?: boolean; token?: string }) => {
     setError(null);
     try {
       const res = await fetch(`/api/pats/${id}`, {

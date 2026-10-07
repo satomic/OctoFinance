@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from . import credential_health
 from .github_api import GitHubAPI
 from .github_host import DEFAULT_HOST, api_base_url, web_base_url
 from .pat_manager import pat_manager
@@ -142,7 +143,8 @@ class APIManager:
                 )
 
             except Exception as e:
-                print(f"[APIManager] Failed to discover for PAT '{pat['label']}': {e}")
+                print(f"[APIManager] Failed to discover for PAT '{pat['label']}': {type(e).__name__}: {e}")
+                credential_health.record_failure(pat_id, e)
 
     async def add_and_discover(self, pat_id: str) -> dict:
         """Add a single PAT's API instance and run discovery. Returns user info."""

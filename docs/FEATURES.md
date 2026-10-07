@@ -204,6 +204,27 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 - **Cross-org filtering** in dashboards with multi-select dropdowns
 - **Enterprises without organizations** — some enterprises grant Copilot access purely via Enterprise Teams with zero organizations underneath. Each PAT has an **"Include Organizations"** toggle (default on); when disabled, organization discovery/sync is skipped for that PAT and enterprise-level Copilot data is synced instead (seats via `GET /enterprises/{ent}/copilot/billing/seats`, usage/user usage reports, and AI credit usage). This data is stored under a pseudo-org key so it flows through the existing dashboard aggregation unchanged — the Organizations list stays empty (as expected) while KPIs/charts remain fully populated. Since GitHub has no enterprise-wide billing overview endpoint, seat KPIs (active/inactive, plan type) are synthesized from the seats list
 
+## Sync Health Alerts
+
+Scheduled syncs run unattended. Before this, a PAT that expired or lost a permission only produced lines in the Console, the sync still reported success, and the dashboards quietly showed old data. Now the outcome of every sync is kept and shown to admins.
+
+- **Token check before every sync**: each run (Sync Data, the cron schedule, startup, the AI chat's `sync_data` tool, PAT changes) starts by calling `GET /user` with every PAT. The result is stored on the PAT:
+
+  | State | Meaning | Notice |
+  |-------|---------|--------|
+  | `invalid` | HTTP 401: the token expired or was revoked | Red |
+  | `forbidden` | HTTP 403: SSO authorization, policy or rate limit | Red |
+  | `unreachable` | GitHub could not be reached (retried once first, so a single network blip is ignored) | Red |
+  | `expiring` | Valid, but GitHub's `github-authentication-token-expiration` header says it expires within 7 days | Amber |
+  | `ok` | Valid | None |
+
+  The tokens are also checked at startup when *Auto Sync on Startup* is off, so a bad token is reported right away. A PAT whose discovery failed at startup is discovered again once its token works, instead of leaving later syncs covering no organizations.
+- **Run outcome**: a run that logs any `[ERROR]` line is recorded as *failed* (even if other datasets synced), with its trigger, time, error count and first errors. The last run and the **last successful sync** time are persisted in `data/sync_status.json`, so they survive restarts.
+- **Notice**: admins see a banner under the status bar listing the rejected PATs, the last failed run and when data was last synced successfully, with **Fix in Settings**, **View Console** and **Dismiss**. Dismissing hides the notice until the next failed check or run.
+- **Fix in place**: in Settings each PAT shows its state as a badge, and **Replace token** swaps the token without re-adding the PAT (label, host, enterprise slugs and settings are kept). The new token is checked first; a rejected one is refused and the old token stays.
+
+![Sync health notice for a rejected PAT and a failed scheduled sync](../images/sync_alert_failed_en.png)
+
 ## Cost Center Report Sharing
 
 - Per-cost-center HTML report, shareable via a tokenized public link (`/share/cc/{token}`) with no OctoFinance account required
@@ -305,7 +326,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 
 | Endpoint | Method | Access | Description |
 |----------|--------|--------|-------------|
-| `/api/health` | GET | admin | Health check — users, orgs, AI engine status, version |
+| `/api/health` | GET | admin | Health check — users, orgs, AI engine status, version, `sync` (last run, last success, cron) and `credential_problems` |
 | `/api/data/orgs` | GET | admin | All discovered organizations, grouped by enterprise |
 | `/api/data/overview` | GET | admin | Global overview (seats, costs, waste) |
 | `/api/data/seats/{org}` | GET | admin | Seat data for an organization |
@@ -340,7 +361,7 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 | `/api/actions/execute` | POST | admin | Execute a recommendation |
 | `/api/actions/reject` | POST | admin | Reject a recommendation |
 | `/api/pats` | GET/POST | admin | List / add PATs |
-| `/api/pats/{id}` | PUT/DELETE | admin | Update / remove a PAT |
+| `/api/pats/{id}` | PUT/DELETE | admin | Update (label, `include_organizations`, or `token` to replace an expired one; the new token is validated first) / remove a PAT |
 | `/api/settings` | GET/PUT | admin | App settings (auto-sync, cron schedule) |
 
 ### Public share pages (no OctoFinance account)
@@ -373,6 +394,7 @@ PATs and settings are managed through the web UI (**Settings** modal):
 | `data/budget_requests.json` | Budget requests + approval history |
 | `data/cc_shares.json` | Cost center share links |
 | `data/audit_log.json` | Executed operations |
+| `data/sync_status.json` | Outcome of the last sync run and the last successful sync time |
 | `data/saved_prompts.json` | Saved chat prompts (owner, shared flag, usage stats) |
 | `data/{category}/{org}_latest.json` | Synced GitHub data (seats, billing, usage, usage_users, metrics, ai_credits, cost_centers, budgets, enterprise) |
 | `data/enterprise_teams/{slug}_latest.json` | Enterprise team rosters + `login → teams` index used to join teams onto every other dataset |

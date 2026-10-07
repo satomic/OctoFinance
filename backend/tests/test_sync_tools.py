@@ -1,6 +1,8 @@
 import asyncio
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from copilot.tools import ToolInvocation
@@ -17,7 +19,8 @@ async def _invoke(arguments: dict) -> dict:
 
 class SyncDataToolTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.manager = SyncManager()
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.manager = SyncManager(status_file=Path(directory) / "sync_status.json")
         self.collector = AsyncMock()
         self.collector.sync_dataset.return_value = {"synced": ["cost_centers:acme"], "errors": []}
         self.collector.sync_all.return_value = [

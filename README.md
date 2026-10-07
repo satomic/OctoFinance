@@ -290,6 +290,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 ## Key Features
 
 - **Copilot SDK Agentic AI**: 44 custom tools including budget and Enterprise Team management, SSE streaming, session management, and **per-message model selection** (dropdown next to the chat box, dynamically populated from the Copilot SDK; defaults to Auto)
+- **Sync Health Alerts**: every sync (manual, scheduled or at startup) first checks each PAT against GitHub. An expired, revoked or blocked token, a PAT that expires within 7 days, or a sync that ended with errors raises a notice at the top of the page with the last successful sync time, so an unattended cron job can never fail silently. A rejected token can be replaced in place from Settings
 - **Saved Prompts**: admins save routine analysis questions to a prompt library next to the chat box, then insert or run them in one click; a prompt can be shared read-only with the other admins
 - **Budget Management**: UBB (Usage-Based Billing) AI credits budget controls (Universal/Individual user-level, Enterprise, and Cost center: both a shared `cost_center` budget and a per-member `multi_user_cost_center` budget)
 - **Analytics Dashboard**: Usage, AI credits, budgets, Cost Center and Enterprise Team dashboards

@@ -99,7 +99,7 @@ def create_sync_tools() -> list:
                 summaries.extend(await data_collector.sync_all(log_fn=log_fn))
 
         started_at = time.monotonic()
-        if not sync_manager.run_in_background(_do_sync):
+        if not sync_manager.run_in_background(_do_sync, trigger="chat"):
             return json.dumps({"status": "already_running", "message": "Another sync just started; try again shortly."})
         finished = await sync_manager.wait_until_idle(WAIT_TIMEOUT_SECONDS)
         return _result("completed" if finished else "still_running", dataset, org, started_at, summaries)

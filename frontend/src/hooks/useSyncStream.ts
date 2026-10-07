@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { ConsoleEntry } from "../types";
+import type { ConsoleEntry, SyncHealth } from "../types";
 
 let syncEntrySeq = 0;
 function nextSyncId() {
@@ -11,6 +11,7 @@ interface SyncEvent {
   syncing?: boolean;
   success?: boolean;
   error?: string | null;
+  error_count?: number;
   level?: string;
   message?: string;
   timestamp?: string;
@@ -38,6 +39,8 @@ function echoToBrowserConsole(level: string, message: string) {
  */
 export function useSyncStream(onLog: (entry: ConsoleEntry) => void) {
   const [syncing, setSyncing] = useState(false);
+  const [syncHealth, setSyncHealth] = useState<SyncHealth | null>(null);
+  const syncHealthKeyRef = useRef("");
   const onLogRef = useRef(onLog);
   onLogRef.current = onLog;
   const onSyncCompleteRef = useRef<(() => void) | null>(null);
@@ -62,6 +65,16 @@ export function useSyncStream(onLog: (entry: ConsoleEntry) => void) {
         if (!active) return;
 
         setSyncing(isSyncing);
+
+        // Only re-render when the outcome actually changed (polled every 2s)
+        if (data.sync) {
+          const next: SyncHealth = { sync: data.sync, credential_problems: data.credential_problems ?? [] };
+          const key = JSON.stringify(next);
+          if (key !== syncHealthKeyRef.current) {
+            syncHealthKeyRef.current = key;
+            setSyncHealth(next);
+          }
+        }
 
         // Detect transition: syncing -> not syncing = sync completed
         if (prevSyncingRef.current && !isSyncing) {
@@ -159,7 +172,9 @@ export function useSyncStream(onLog: (entry: ConsoleEntry) => void) {
                   prevSyncingRef.current = false;
                   const summary = data.success
                     ? "Data sync completed successfully"
-                    : `Data sync failed: ${data.error || "unknown error"}`;
+                    : data.error_count
+                      ? `Data sync finished with ${data.error_count} error(s): ${data.error || "see the log above"}`
+                      : `Data sync failed: ${data.error || "unknown error"}`;
                   echoToBrowserConsole(data.success ? "info" : "error", summary);
                   onLogRef.current({
                     id: nextSyncId(),
@@ -206,5 +221,5 @@ export function useSyncStream(onLog: (entry: ConsoleEntry) => void) {
     };
   }, []);
 
-  return { syncing, setOnSyncComplete };
+  return { syncing, syncHealth, setOnSyncComplete };
 }

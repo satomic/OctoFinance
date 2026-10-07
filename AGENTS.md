@@ -278,6 +278,8 @@ def _build_tools_for_session(self, working_directory):
 | `backend/app/services/auth_store.py` | Credentials, OAuth config, persisted sessions |
 | `backend/app/services/budget_provisioner.py` | Creates/updates real GitHub user budgets |
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
+| `backend/app/services/credential_health.py` | PAT check before every sync; expired/revoked/expiring tokens reported via `/api/health` |
+| `backend/app/services/sync_manager.py` | Sync runs, cron scheduler, persisted run outcome (`data/sync_status.json`) |
 | `backend/app/services/github_api.py` | GitHub REST API client |
 | `backend/app/services/api_manager.py` | Multi-PAT API management |
 | `backend/app/services/chat_auth_store.py` | AI chat (Copilot CLI) token and host set in Settings (`data/copilot_chat.json`) |

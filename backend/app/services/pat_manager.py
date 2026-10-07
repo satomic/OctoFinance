@@ -167,6 +167,18 @@ class PATManager:
                 return p
         return None
 
+    def set_token(self, pat_id: str, token: str) -> dict | None:
+        """Replace a PAT's token, keeping its label, scope and settings."""
+        for p in self._pats:
+            if p["token"] == token and p["id"] != pat_id:
+                raise ValueError(f"This token is already configured as '{p['label']}'")
+        for p in self._pats:
+            if p["id"] == pat_id:
+                p["token"] = token
+                self._save()
+                return p
+        return None
+
     def remove(self, pat_id: str) -> bool:
         """Remove a PAT by ID. Returns True if found and removed."""
         before = len(self._pats)

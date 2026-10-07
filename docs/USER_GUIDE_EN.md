@@ -132,6 +132,10 @@ Sync Settings and CSV Fetch live in the same Settings panel shown in [1.2](#12-p
 
 **Scheduling:** enable startup sync or choose a preset/custom cron schedule. Scheduled ticks are skipped while a previous run remains active. CSV failures are logged separately and do not mean every API dataset is unavailable.
 
+**Failure notice:** every sync, including scheduled ones, first checks each PAT with GitHub. A rejected (expired or revoked), blocked or unreachable token, or a run that logged errors, shows a red notice under the status bar with the failed run and the time data was **last synced successfully**. **Fix in Settings** opens the PAT list, where the affected PAT is flagged and **Replace token** swaps in a new token without re-adding the PAT. A PAT that expires within 7 days shows an amber notice. Dismiss hides a notice until the next failure. The outcome is saved in `data/sync_status.json` and survives restarts.
+
+![Red notice for a PAT rejected by GitHub and a failed scheduled sync](../images/sync_alert_failed_en.png)
+
 **Automatic reports:** Fetch CSV requests the latest 31 days of `ai_credit` and `detailed` reports. GitHub generation generally takes minutes and can take longer. Polling and timeout settings control the wait; Console shows progress. Reloading the page lets you observe an active job rather than requiring another export.
 
 **Manual import:** export complete detailed reports from GitHub and choose Upload CSV. Type detection is automatic. Verify coverage dates and the matching tab afterward. Summarized exports cannot replace the per-user detail needed by these dashboards.
@@ -315,6 +319,7 @@ Each line carries a timestamp, a source tag and a level. An `[ERROR]` line names
 
 | Symptom | Check |
 |---------|-------|
+| Red "Data sync is failing" notice | The PAT named in it: replace an expired or revoked token in Settings; check SSO authorization for HTTP 403 |
 | Empty seats | PAT, enterprise slug, organization/enterprise endpoint permissions and logs |
 | Empty AI Usage | Detailed CSV availability, selected dates and username matching |
 | Metrics not reported | Missing, blank or invalid original CSV values |

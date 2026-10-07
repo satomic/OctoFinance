@@ -17,13 +17,14 @@ interface Props {
   onViewChange: (view: "chat" | "dashboard") => void;
   onLogout: () => void;
   user?: AuthUser | null;
+  settingsOpen: boolean;
+  onSettingsOpenChange: (open: boolean) => void;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user, settingsOpen, onSettingsOpenChange: setSettingsOpen }: Props) {
   const { sync } = useSync();
   const { t } = useI18n();
   const ui = useUIState();
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { info: csvInfo, uploadCsv, fetchCsvFromApi, readCsvJob, pollCsvFetch } = useCsvInfo();
   const [csvUploading, setCsvUploading] = useState(false);
