@@ -5,6 +5,7 @@ import { useCostCenterDashboard, useDatasetSync } from "../hooks/useData";
 import { SortTh } from "./SortTh";
 import { useSortableRows } from "../hooks/useSortableRows";
 import type { CostCenter, CostCenterShareInfo, UserCostCenterEntry } from "../types";
+import { isDemoMode } from "../demo/demoMode";
 
 interface Props {
   refreshKey: number;
@@ -713,8 +714,9 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
           className="btn btn-small cc-download-btn"
           style={{ marginLeft: 0 }}
           onClick={handleDownload}
-          disabled={downloading}
-          title={t("ccDash.downloadReport")}
+          // The ZIP holds HTML reports with real user names that cannot be aliased in the browser
+          disabled={downloading || isDemoMode()}
+          title={isDemoMode() ? t("ccDash.downloadDemoDisabled") : t("ccDash.downloadReport")}
         >
           {downloading ? t("ccDash.downloading") : `⬇ ${t("ccDash.downloadReport")}`}
         </button>

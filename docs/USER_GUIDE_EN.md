@@ -102,11 +102,15 @@ The browsing origin and callback origin must match. Cookies are not shared betwe
 | Settings | PATs, scheduling, CSV fetch parameters and SSO |
 | Console | Tool activity, sync progress and failures |
 | Sync Data / Fetch CSV / Upload CSV | API sync, automatic report retrieval and manual report import |
-| User menu | Identity, language, theme and sign-out |
+| User menu | Identity, language, theme, demo mode and sign-out |
 | Overview / Organizations | Seat and cost summaries and discovered organization scope |
 | Sessions / Pending Actions | Conversation management and AI recommendation review |
 
 Eight languages are supported. Theme, language, filters and some collapsed states persist in the browser. Expand sections using their headings, scroll wide tables horizontally and resize the sidebar as needed.
+
+**Demo mode** (user menu, administrators) replaces every GitHub user name with an alias such as *Humble Fox* and hides avatars on all pages, in filters, AI replies and the Console, for presenting to outsiders. It is a per-browser switch like the theme; a badge in the status bar shows it is on. Filtering by an alias or asking the AI about one still queries the real user. The cost center report ZIP download is disabled while it is on, and names typed into cost center or team names are not changed.
+
+![User menu with Demo mode turned on and the Demo mode badge](../images/demo_mode_menu_en.png)
 
 **Current Month does not make every dataset live.** CSV charts filter already imported records. Budget views and personal budgets support live reads, but check source labels and errors. Seats and memberships are snapshots from the latest sync; a date filter does not reconstruct historical access assignments.
 

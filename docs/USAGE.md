@@ -498,6 +498,22 @@ Earlier versions wrote one timestamped file per upload. On startup any such file
 
 ---
 
+## Demo Mode
+
+When presenting to people outside the company, turn on **Demo mode** in the user menu (top right). Every GitHub user name is replaced by an alias such as *Humble Fox*, and avatars are hidden, on every dashboard, in filters, in AI chat replies and in the Console. A **Demo mode** badge appears in the status bar.
+
+![User menu with Demo mode turned on](../images/demo_mode_menu_en.png)
+
+![Cost centers in demo mode: members and the user to cost center mapping show aliases](../images/demo_mode_cost_centers_en.png)
+
+You can keep working normally: pick an alias in the user filter, or ask the AI about one, and the real user is queried behind the scenes.
+
+![AI chat in demo mode: a follow-up question about an alias](../images/demo_mode_chat_en.png)
+
+- It only affects your browser; other admins and the server are unchanged. Turn it off the same way.
+- The cost center report ZIP download is disabled while it is on, because those reports contain real names.
+- Names you typed yourself (cost center or team names) are shown as written, so avoid personal names there if you present often.
+
 ## UI Tips
 
 | Feature | How |

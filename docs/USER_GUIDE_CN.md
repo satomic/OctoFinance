@@ -102,11 +102,15 @@ Enterprise Teams 接口不接受 fine-grained PAT 或 GitHub App token。GHE.com
 | Settings | PAT、同步周期、CSV 拉取参数、SSO |
 | Console | 工具与同步进度、失败详情 |
 | Sync Data / Fetch CSV / Upload CSV | API 同步、自动拉取报表、手动导入报表 |
-| 用户菜单 | 身份、语言、主题和退出 |
+| 用户菜单 | 身份、语言、主题、演示模式和退出 |
 | Overview / Organizations | 席位费用摘要与组织范围 |
 | Sessions / Pending Actions | 会话管理与 AI 建议审阅 |
 
 支持八种语言。主题、语言、筛选、折叠状态等在当前浏览器保存；可折叠区域点击标题展开，宽表格可横向滚动，侧边栏可调整宽度。
+
+**演示模式**（用户菜单，仅管理员）把所有 GitHub 用户名替换为 *Humble Fox* 这样的化名并隐藏头像，覆盖所有页面、筛选器、AI 回复和 Console，适合向外部人员介绍企业的 Copilot 使用情况。它和主题一样只保存在当前浏览器，开启后状态栏显示 Demo mode 标识。按化名筛选或向 AI 询问某个化名，查询的仍是对应的真实用户。开启期间成本中心报告 ZIP 下载不可用；成本中心名、团队名中手动填写的文字不会被替换。
+
+![英文白色主题：用户菜单中开启 Demo mode，状态栏显示 Demo mode 标识](../images/demo_mode_menu_en.png)
 
 **Current Month 不代表所有数据实时。**CSV 只过滤已导入的本月记录；预算页和个人预算支持实时读取，但应核对来源与错误提示。席位、成员等快照反映最近同步，日期筛选不能还原任意历史时点的授权。
 

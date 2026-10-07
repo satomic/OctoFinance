@@ -6,6 +6,7 @@ import { PATSettingsModal } from "./PATSettingsModal";
 import { PeriodToggle } from "./PeriodToggle";
 import { SourceCodeLink } from "./SourceCodeLink";
 import { UserMenu } from "./UserMenu";
+import { isDemoMode } from "../demo/demoMode";
 import type { AuthUser, UpdateInfo, CsvFetchJob } from "../types";
 
 interface Props {
@@ -150,6 +151,9 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
         <span className="app-title">OctoFinance</span>
         {health?.version && (
           <span className="app-version" title={`OctoFinance v${health.version}`}>v{health.version}</span>
+        )}
+        {isDemoMode() && (
+          <span className="demo-mode-badge" title={t("menu.demoHint")}>{t("status.demoMode")}</span>
         )}
         {health && (
           <>

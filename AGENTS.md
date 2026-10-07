@@ -278,6 +278,8 @@ def _build_tools_for_session(self, working_directory):
 | `backend/app/services/auth_store.py` | Credentials, OAuth config, persisted sessions |
 | `backend/app/services/budget_provisioner.py` | Creates/updates real GitHub user budgets |
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
+| `backend/app/services/user_roster.py` | Known GitHub users (`/api/data/user-roster`) for the frontend demo mode |
+| `frontend/src/demo/demoMode.ts` | Demo mode: aliases user names in every `/api` response inside the browser's `fetch` |
 | `backend/app/services/credential_health.py` | PAT check before every sync; expired/revoked/expiring tokens reported via `/api/health` |
 | `backend/app/services/sync_manager.py` | Sync runs, cron scheduler, persisted run outcome (`data/sync_status.json`) |
 | `backend/app/services/github_api.py` | GitHub REST API client |

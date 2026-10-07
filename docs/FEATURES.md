@@ -204,6 +204,18 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 - **Cross-org filtering** in dashboards with multi-select dropdowns
 - **Enterprises without organizations** — some enterprises grant Copilot access purely via Enterprise Teams with zero organizations underneath. Each PAT has an **"Include Organizations"** toggle (default on); when disabled, organization discovery/sync is skipped for that PAT and enterprise-level Copilot data is synced instead (seats via `GET /enterprises/{ent}/copilot/billing/seats`, usage/user usage reports, and AI credit usage). This data is stored under a pseudo-org key so it flows through the existing dashboard aggregation unchanged — the Organizations list stays empty (as expected) while KPIs/charts remain fully populated. Since GitHub has no enterprise-wide billing overview endpoint, seat KPIs (active/inactive, plan type) are synthesized from the seats list
 
+## Demo Mode
+
+For showing the enterprise's Copilot usage to people outside the company without revealing who uses it.
+
+- **Switch**: user menu (top right) → **Demo mode** → On / Off. Administrators only. Like the theme it is a per-browser setting kept in `localStorage`: nothing changes on the server or for other admins, and a **Demo mode** badge in the status bar shows it is on. Switching reloads the page so all data is fetched again
+- **What is replaced**: every GitHub user name becomes an alias such as *Humble Fox* or *Misty Swan*, and display names (e.g. on budget requests) map to the same alias. Avatars are hidden. This covers every dashboard tab, charts, filters, tooltips, settings, sessions, saved prompts, AI chat replies (also while they stream) and the Console
+- **Still usable**: filtering by an alias, or naming one in the chat ("How many credits did Humble Fox use?"), works because the browser maps the alias back to the real login before the request leaves it; the AI and the backend only ever see real logins
+- **How**: the browser wraps `fetch` and rewrites every `/api` response (JSON and SSE) before any component sees it, so new pages are covered automatically. Which strings are users comes from `GET /api/data/user-roster`, built from seats, usage, billing CSVs, Enterprise Teams, cost centers, budgets, requests, cost center owners, PAT owners and SSO admins, so organization names are not touched. Aliases are derived from a random per-browser salt: stable while presenting, not reversible by hashing known logins
+- **Not covered**: the cost center report ZIP download is disabled in demo mode (its HTML reports are generated on the server with real names); public share pages are unaffected; names an admin typed into free text (cost center or team names) stay as written; bot accounts (`…[bot]`) keep their names; a login that is an everyday word (e.g. `test`) is only replaced where it stands alone, not inside sentences
+
+![User menu with Demo mode turned on and the Demo mode badge in the status bar](../images/demo_mode_menu_en.png)
+
 ## Sync Health Alerts
 
 Scheduled syncs run unattended. Before this, a PAT that expired or lost a permission only produced lines in the Console, the sync still reported success, and the dashboards quietly showed old data. Now the outcome of every sync is kept and shown to admins.
@@ -327,6 +339,7 @@ Scheduled syncs run unattended. Before this, a PAT that expired or lost a permis
 | Endpoint | Method | Access | Description |
 |----------|--------|--------|-------------|
 | `/api/health` | GET | admin | Health check — users, orgs, AI engine status, version, `sync` (last run, last success, cron) and `credential_problems` |
+| `/api/data/user-roster` | GET | admin | Every known GitHub user (`login`, `name`), used by the browser's demo mode to know which strings to alias |
 | `/api/data/orgs` | GET | admin | All discovered organizations, grouped by enterprise |
 | `/api/data/overview` | GET | admin | Global overview (seats, costs, waste) |
 | `/api/data/seats/{org}` | GET | admin | Seat data for an organization |

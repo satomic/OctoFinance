@@ -150,6 +150,7 @@ OctoFinance/
 │   │   │   ├── session_manager.py      # Chat session persistence
 │   │   │   ├── prompt_library.py       # Saved prompts (per-admin, optional sharing)
 │   │   │   ├── sync_manager.py         # Sync state, run outcome & cron scheduler
+│   │   │   ├── user_roster.py          # Known GitHub users for the browser's demo mode
 │   │   │   ├── credential_health.py    # PAT checks before every sync (expired/revoked/expiring)
 │   │   │   ├── update_checker.py       # Latest-release lookup (30s cap, non-blocking)
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings

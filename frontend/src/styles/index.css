@@ -4282,3 +4282,24 @@ th.th-sorted .th-sort-arrow {
 }
 
 .pat-replace-row input:focus { border-color: var(--accent); }
+
+/* Demo mode (user names shown as aliases) */
+.demo-mode-badge {
+  margin-right: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.user-menu-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}

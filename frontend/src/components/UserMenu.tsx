@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LANGS, useI18n, type Lang } from "../contexts/I18nContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { isDemoMode, setDemoMode } from "../demo/demoMode";
 import type { AuthUser } from "../types";
 
 interface Props {
@@ -32,6 +33,7 @@ export function UserMenu({ user, onLogout }: Props) {
   }, [open]);
 
   const choose = (code: Lang) => setLang(code);
+  const demo = isDemoMode();
 
   return (
     <div className="user-menu" ref={ref}>
@@ -78,6 +80,29 @@ export function UserMenu({ user, onLogout }: Props) {
               </button>
             </div>
           </div>
+
+          {user.is_admin && (
+            <div className="user-menu-section">
+              <div className="user-menu-label">{t("menu.demoMode")}</div>
+              <div className="user-menu-choices">
+                <button
+                  type="button"
+                  className={`user-menu-choice ${!demo ? "user-menu-choice-active" : ""}`}
+                  onClick={() => { if (demo) setDemoMode(false); }}
+                >
+                  {t("menu.demoOff")}
+                </button>
+                <button
+                  type="button"
+                  className={`user-menu-choice ${demo ? "user-menu-choice-active" : ""}`}
+                  onClick={() => { if (!demo) setDemoMode(true); }}
+                >
+                  {t("menu.demoOn")}
+                </button>
+              </div>
+              <div className="user-menu-hint">{t("menu.demoHint")}</div>
+            </div>
+          )}
 
           <div className="user-menu-section">
             <div className="user-menu-label">{t("menu.language")}</div>

@@ -200,6 +200,13 @@ def _team_member_logins(team_slug: str) -> MemberFilter | None:
     return set()
 
 
+@router.get("/data/user-roster")
+async def get_user_roster():
+    """Every known GitHub user (login + display name) for the frontend demo mode."""
+    from ..services.user_roster import build_roster
+    return {"users": build_roster()}
+
+
 @router.get("/data/orgs")
 async def get_orgs():
     """Get all discovered organizations with their Copilot status, grouped by enterprise."""
