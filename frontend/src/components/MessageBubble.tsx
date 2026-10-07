@@ -5,9 +5,11 @@ import { useI18n } from "../contexts/I18nContext";
 
 interface Props {
   message: ChatMessage;
+  /** Offered on the admin's own messages to save them to the prompt library */
+  onSavePrompt?: () => void;
 }
 
-export function MessageBubble({ message }: Props) {
+export function MessageBubble({ message, onSavePrompt }: Props) {
   const { t } = useI18n();
   const isUser = message.role === "user";
 
@@ -16,6 +18,11 @@ export function MessageBubble({ message }: Props) {
       <div className="message-header">
         <span className="message-role">{isUser ? t("chat.you") : t("chat.ai")}</span>
         <span className="message-time">
+          {onSavePrompt && message.content && (
+            <button className="message-save-prompt" onClick={onSavePrompt} title={t("prompts.saveHint")}>
+              {t("prompts.saveShort")}
+            </button>
+          )}
           {new Date(message.timestamp).toLocaleTimeString()}
         </span>
       </div>

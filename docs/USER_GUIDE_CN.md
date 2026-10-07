@@ -162,6 +162,10 @@ List cost centers and budgets in example-enterprise without making changes.
 Explain shared cost center budgets versus per-member budgets before creating one.
 ```
 
+**常用提示词。**日常反复使用的分析问题可以保存下来，不必每次重新输入：点击输入框旁的 **Save**（或将鼠标悬停在自己发送过的消息上，点击 **Save** 标签），填写标题，并可选择共享给其他管理员。点击输入框左侧的 **Prompts** 打开提示词库：单击某条提示词会填入输入框，修改后再发送；点击 **Run** 则直接发送。其他管理员共享的提示词显示 *Shared by &lt;login&gt;*，只能使用，不能修改或删除。提示词保存在服务端（`data/saved_prompts.json`），换浏览器或电脑后依然可用。
+
+![英文白色主题的提示词库，提供 Run、Edit、Delete 操作](../images/saved_prompts_library_en.png)
+
 Sessions 支持新建、切换、重命名和删除。Send 发送，Stop 停止当前响应，Clear 清理对话。会话保留多轮上下文，切换模型影响后续消息，不改变业务权限。
 
 AI 工具覆盖席位、用量、账单、成本中心、预算与 Enterprise Teams。部分管理功能由 AI 工具提供，不代表每种操作都有独立表单。**确认或批准执行会调用真实 API**；并非所有写操作必然先生成相同审批面板条目。移除席位、成员、预算或中心前应明确业务授权，日志不能替代事前确认。

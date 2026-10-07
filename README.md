@@ -204,6 +204,9 @@ Both require the PAT to carry the **`manage_billing:copilot`** scope; without it
 > Who consumed the most AI Credits in the past week?
 ![AI chat ranking the top AI credit consumers for the past week](images/chat2.png)
 
+> Saved prompts: keep routine analysis questions and rerun them in one click
+![Saved Prompts library above the chat box with Run, Edit and Delete actions and shared badges](images/saved_prompts_library_en.png)
+
 ### Dashboards
 
 > Usage Metrics
@@ -287,6 +290,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture diagr
 ## Key Features
 
 - **Copilot SDK Agentic AI**: 44 custom tools including budget and Enterprise Team management, SSE streaming, session management, and **per-message model selection** (dropdown next to the chat box, dynamically populated from the Copilot SDK; defaults to Auto)
+- **Saved Prompts**: admins save routine analysis questions to a prompt library next to the chat box, then insert or run them in one click; a prompt can be shared read-only with the other admins
 - **Budget Management**: UBB (Usage-Based Billing) AI credits budget controls (Universal/Individual user-level, Enterprise, and Cost center: both a shared `cost_center` budget and a per-member `multi_user_cost_center` budget)
 - **Analytics Dashboard**: Usage, AI credits, budgets, Cost Center and Enterprise Team dashboards
 - **Enterprise Teams**: Full support for [Enterprise Teams](https://docs.github.com/en/rest/enterprise-teams): a dedicated dashboard tab showing per-team seats, adoption, AI spend and estimated seat cost with expandable member rosters, plus an **Enterprise Team filter on Usage Metrics / AI Usage / Usage Report** (including a *No enterprise team* option). Because **no Copilot dataset carries a team field**, OctoFinance syncs the team rosters and joins them onto seats/usage/AI-credit data on the user login, and when a team filter is active the usage aggregates are recomputed from user-level records so the charts stay accurate. Also surfaces seat holders that no team covers, and team members with no seat (unaffiliated enterprise users). Requires a **classic** PAT (`read:enterprise`, or `admin:enterprise` for writes)

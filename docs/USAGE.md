@@ -200,6 +200,23 @@ AI:  Recommendations created, estimated savings of $285/month
 You: Actually, skip user alice — she's on parental leave
 ```
 
+### Saved prompts
+
+Keep the questions you ask every week in the prompt library instead of retyping them.
+
+1. Type the question in the chat box and click **Save** next to it, or hover one of your sent messages and click its **Save** tag.
+2. Give it a title (optional) and tick **Share with other admins** if the whole admin team should be able to use it.
+
+![Save Prompt dialog with title, prompt text and the share option](../images/saved_prompts_save_en.png)
+
+3. Next time, click **Prompts** left of the chat box. Click a prompt to put it in the input box and adjust it before sending, or click **Run** to send it immediately. Use the search box when the list grows.
+
+![Saved Prompts library with Run, Edit and Delete actions; a prompt shared by another admin only offers Run](../images/saved_prompts_library_en.png)
+
+Saved prompts also appear as chips on the empty-chat welcome screen, ordered by most recent use. **Edit** and **Delete** (click twice to confirm) are only offered on your own prompts.
+
+![A saved prompt that was run, with the Save tag shown when hovering the sent message](../images/saved_prompts_run_en.png)
+
 ### Tool indicators
 
 Tool calls appear inline as tags — spinning while running, green check when complete. You'll commonly see `get_all_seats`, `find_inactive_users`, `get_cost_overview`, `calculate_roi`, `get_usage_report`, `list_cost_centers`, `get_all_budgets`, `record_recommendation`.
@@ -210,6 +227,8 @@ Tool calls appear inline as tags — spinning while running, green check when co
 |---------|--------|
 | **Send** (Enter) | Send message |
 | **Model** | Pick the model for the next message. The list is fetched live from the Copilot SDK, so it only shows models your account can actually use. **Auto** (the default) lets Copilot choose; switching back to Auto resets a session that had an explicit model |
+| **Prompts** | Open the saved prompt library (insert, run, edit, delete, search) |
+| **Save** | Save the text in the chat box as a reusable prompt |
 | **Clear** | Clear conversation history |
 | **Stop** | Abort the response in progress |
 

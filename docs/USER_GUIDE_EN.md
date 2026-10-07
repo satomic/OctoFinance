@@ -162,6 +162,10 @@ List cost centers and budgets in example-enterprise without making changes.
 Explain shared cost center budgets versus per-member budgets before creating one.
 ```
 
+**Saved prompts.** Save routine questions instead of retyping them: click **Save** next to the chat box (or the **Save** tag when hovering one of your sent messages), give the prompt a title and optionally share it with the other admins. **Prompts** left of the chat box opens the library: click a prompt to insert it and adjust it before sending, or **Run** to send it right away. Shared prompts from other admins show *Shared by &lt;login&gt;* and can be used but not changed. Prompts are stored on the server (`data/saved_prompts.json`), so they follow you across browsers.
+
+![Saved Prompts library above the chat box with Run, Edit and Delete actions](../images/saved_prompts_library_en.png)
+
 Sessions can be created, switched, renamed and deleted. Send submits, Stop interrupts a response, and Clear clears the conversation. Sessions retain multi-turn context. Model selection affects subsequent messages, not business permissions.
 
 Tools cover seats, usage, billing, cost centers, budgets and Enterprise Teams. Some management operations are available through AI tools rather than dedicated forms. **Confirmation or approval can invoke real APIs.** Not every write necessarily creates the same pending-action entry. Confirm business authorization before removing seats, members, budgets or centers; audit logs are not a substitute for review.

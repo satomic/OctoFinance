@@ -843,3 +843,16 @@ export interface MyDashboardData {
   budget_requests: BudgetRequest[];
   has_any_data: boolean;
 }
+
+export interface SavedPrompt {
+  id: string;
+  title: string;
+  prompt: string;
+  owner: string;
+  shared: boolean;
+  is_owner: boolean;
+  use_count: number;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+}

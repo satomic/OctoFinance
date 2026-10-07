@@ -31,7 +31,7 @@
 │  ┌────────────────────────────────┴────────────────────────────────────────┐ │
 │  │                           API Layer (routers)                            │ │
 │  │  auth · me · budget_requests · chat · sessions · sync · data · actions   │ │
-│  │  pats · share (public)                                                   │ │
+│  │  prompts · pats · share (public)                                         │ │
 │  └────────────────────────────────┬────────────────────────────────────────┘ │
 │                                   │                                           │
 │  ┌──────────────────┐  ┌──────────┴───────────────────────────────────────┐  │
@@ -133,6 +133,7 @@ OctoFinance/
 │   │   │   ├── budget_requests.py      # Request → approve → real GitHub budget → audit
 │   │   │   ├── chat.py                 # AI chat (SSE streaming)
 │   │   │   ├── sessions.py             # Chat session management
+│   │   │   ├── prompts.py              # Saved chat prompt library
 │   │   │   ├── sync.py                 # Data sync + SSE progress
 │   │   │   ├── data.py                 # Dashboard/data query endpoints
 │   │   │   ├── actions.py              # Recommendation execution
@@ -147,6 +148,7 @@ OctoFinance/
 │   │   │   ├── csv_store.py            # CSV merge + shared input/output/cache aggregation
 │   │   │   ├── api_manager.py          # Multi-PAT API management & discovery
 │   │   │   ├── session_manager.py      # Chat session persistence
+│   │   │   ├── prompt_library.py       # Saved prompts (per-admin, optional sharing)
 │   │   │   ├── sync_manager.py         # Sync state & cron scheduler
 │   │   │   ├── update_checker.py       # Latest-release lookup (30s cap, non-blocking)
 │   │   │   ├── pat_manager.py          # PAT CRUD & settings

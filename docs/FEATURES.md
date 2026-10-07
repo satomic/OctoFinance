@@ -10,6 +10,7 @@
 - **Tool transparency**: real-time tool execution indicators in the chat UI
 - **Multi-turn conversations**: context preserved across messages within a session
 - **Model selection**: a dropdown next to the chat input lists the models the Copilot account can actually use, fetched live from the SDK (`models.list`). The default is **Auto** (Copilot picks); choosing a model calls `session.set_model()` so it applies from the next message onward, and switching back to Auto resets the session to Copilot's `auto` model
+- **Saved prompts**: a prompt library for routine questions (see [Saved Prompts](#saved-prompts))
 - **Copilot Skills**: the SDK discovers markdown-defined skills from `.github/skills/` inside each session working directory
 
 > **Auth fallback** — if the configured Copilot token (`COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`, or the first UI-configured PAT) is rejected, the engine falls back to the Copilot CLI's own logged-in user instead of leaving every request failing with *Not authenticated*.
@@ -63,6 +64,19 @@
 | | `remove_enterprise_team_members` | Bulk remove users from a team |
 
 > Enterprise team endpoints accept **classic PATs only** — `read:enterprise` for reads, `admin:enterprise` for writes. Fine-grained and GitHub App tokens are rejected by GitHub.
+
+## Saved Prompts
+
+Admins who run the same multi-dimensional analyses again and again can keep those questions in a prompt library instead of retyping them.
+
+- **Save** the text in the chat box with the **Save** button next to it, or hover one of your own sent messages and click its **Save** tag. The title is optional and defaults to the start of the prompt
+- **Reuse** from the **Prompts** button left of the chat box: search the library, click a prompt to put it in the input box (edit it before sending), or click **Run** to send it straight away with the selected model. Saved prompts also appear as chips on the empty-chat welcome screen
+- **Order**: most recently used first, so routine prompts stay at the top
+- **Sharing**: tick *Share with other admins* to make a prompt visible to every admin. Others can insert and run it (shown as *Shared by &lt;login&gt;*) but only the admin who saved it can edit or delete it
+- **Storage**: server side in `data/saved_prompts.json`, keyed by the admin's login, so the library follows the admin across browsers and devices and is kept with the rest of `data/` in backups and Docker volumes
+- **Access**: admin-only, like the chat itself. Limits: 80 characters for the title, 8,000 for the prompt
+
+![Saved Prompts library above the chat box](../images/saved_prompts_library_en.png)
 
 ## Authentication & Roles
 
@@ -283,6 +297,9 @@ Every data sync — manual, startup auto-sync or cron — also kicks off a **rel
 | `/api/sessions` | GET/POST | admin | List / create chat sessions |
 | `/api/sessions/{id}` | GET/PUT/DELETE | admin | Get / rename / delete a session |
 | `/api/sessions/{id}/messages` | GET | admin | Messages for a session |
+| `/api/prompts` | GET/POST | admin | List the admin's own and shared saved prompts / save a prompt. Body: `title` (optional), `prompt`, `shared` |
+| `/api/prompts/{id}` | PUT/DELETE | admin | Edit / delete a saved prompt (owner only, otherwise 403) |
+| `/api/prompts/{id}/use` | POST | admin | Record a use (moves the prompt to the top of the library) |
 
 ### Data
 
@@ -356,6 +373,7 @@ PATs and settings are managed through the web UI (**Settings** modal):
 | `data/budget_requests.json` | Budget requests + approval history |
 | `data/cc_shares.json` | Cost center share links |
 | `data/audit_log.json` | Executed operations |
+| `data/saved_prompts.json` | Saved chat prompts (owner, shared flag, usage stats) |
 | `data/{category}/{org}_latest.json` | Synced GitHub data (seats, billing, usage, usage_users, metrics, ai_credits, cost_centers, budgets, enterprise) |
 | `data/enterprise_teams/{slug}_latest.json` | Enterprise team rosters + `login → teams` index used to join teams onto every other dataset |
 | `data/ai_usage_csv/ai_usage_latest.csv` | Per-user, per-model AI credit rows (single merged file) |

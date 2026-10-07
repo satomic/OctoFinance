@@ -273,6 +273,8 @@ def _build_tools_for_session(self, working_directory):
 | `backend/app/routers/auth.py` | Local login + GitHub OAuth SSO, role helpers |
 | `backend/app/routers/me.py` | Per-user ("me") data — a regular user's own usage/budget |
 | `backend/app/routers/budget_requests.py` | Budget request → approval → real GitHub budget |
+| `backend/app/routers/prompts.py` | Saved chat prompt library (`/api/prompts`) |
+| `backend/app/services/prompt_library.py` | Saved prompts storage (`data/saved_prompts.json`): per-admin, optional sharing |
 | `backend/app/services/auth_store.py` | Credentials, OAuth config, persisted sessions |
 | `backend/app/services/budget_provisioner.py` | Creates/updates real GitHub user budgets |
 | `backend/app/services/data_collector.py` | Data caching and retrieval |
