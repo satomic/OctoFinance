@@ -1,6 +1,6 @@
 # OctoFinance — Architecture
 
-> Applies to **v1.5.1**.
+> Applies to **v1.6.0**.
 
 ## System Architecture
 

@@ -1,6 +1,6 @@
 # OctoFinance 完整使用指南
 
-适用版本：**v1.5.1**。[English](USER_GUIDE_EN.md)
+适用版本：**v1.6.0**。[English](USER_GUIDE_EN.md)
 
 OctoFinance 用于集中查看 GitHub Copilot 席位、采用情况、AI credits、账单与预算，并通过 AI 对话辅助成本治理。本指南按三个角色介绍功能；英文界面标签保留在操作步骤中，方便对照截图。
 
