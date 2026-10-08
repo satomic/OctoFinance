@@ -213,6 +213,69 @@ function ShareModal({
   );
 }
 
+/* ---------- AI credit cap help ("?" next to the switch) ---------- */
+const AI_CAP_DOCS_URL =
+  "https://docs.github.com/en/enterprise-cloud@latest/rest/billing/cost-centers?apiVersion=2026-03-10#update-a-cost-center";
+// Verbatim from the ai_credit_pool_enabled parameter in GitHub's REST API docs
+const AI_CAP_DOCS_QUOTE =
+  "Whether the cost center draws from the AI credit pool. This can only be enabled for cost centers that contain only user or team resources.";
+
+function AiCapHelp() {
+  const { t } = useI18n();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  // Fixed position: the table wrapper scrolls horizontally and would clip an absolute popup
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  const show = () => {
+    window.clearTimeout(closeTimer.current);
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(380, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
+    setPos({ top: rect.bottom + 6, left });
+  };
+  // A short delay lets the pointer move from the icon into the popup to click the link
+  const hide = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setPos(null), 150);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  return (
+    <span className="cc-aicap-help" onMouseEnter={show} onMouseLeave={hide}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="cc-aicap-help-button"
+        aria-label={t("ccDash.aiCapHelp")}
+        aria-describedby={pos ? "cc-aicap-help-tooltip" : undefined}
+        onFocus={show}
+        onBlur={hide}
+      >
+        <span aria-hidden="true">?</span>
+      </button>
+      {pos && (
+        <span
+          id="cc-aicap-help-tooltip"
+          role="tooltip"
+          className="cc-aicap-help-tooltip"
+          style={{ top: pos.top, left: pos.left }}
+          onMouseEnter={show}
+          onMouseLeave={hide}
+        >
+          <span className="cc-aicap-help-rule">{t("ccDash.aiCapRule")}</span>
+          <span className="cc-aicap-help-label">{t("ccDash.aiCapDocsLabel")}</span>
+          <q className="cc-aicap-help-quote">{AI_CAP_DOCS_QUOTE}</q>
+          <a href={AI_CAP_DOCS_URL} target="_blank" rel="noopener noreferrer" onFocus={show} onBlur={hide}>
+            {AI_CAP_DOCS_URL}
+          </a>
+        </span>
+      )}
+    </span>
+  );
+}
+
 /* ---------- Cost Center row (expandable members) ---------- */
 function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap, owners, onToggleOwner }: {
   cc: CostCenter;
@@ -271,6 +334,7 @@ function CostCenterRow({ cc, share, aiCapOn, onOpenShare, onToggleAiCap, owners,
             />
             <span className="toggle-slider" />
           </label>
+          <AiCapHelp />
           {aiCapOn && capState?.target_amount != null && (
             <span className="cc-aicap-amounts">
               {(capState.current_amount ?? 0).toLocaleString()} / {capState.target_amount.toLocaleString()}

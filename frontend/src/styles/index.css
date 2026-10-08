@@ -1723,6 +1723,82 @@ body {
   vertical-align: middle;
 }
 
+.cc-aicap-help {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.cc-aicap-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+}
+
+.cc-aicap-help-button:hover,
+.cc-aicap-help-button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cc-aicap-help-tooltip {
+  position: fixed;
+  z-index: 1000;
+  width: min(380px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: normal;
+  text-align: left;
+  cursor: auto;
+}
+
+/* bridge the 6px gap so the pointer can move from the icon into the popup */
+.cc-aicap-help-tooltip::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 100%;
+  height: 8px;
+}
+
+.cc-aicap-help-rule {
+  color: var(--text-primary);
+}
+
+.cc-aicap-help-label {
+  font-weight: 600;
+}
+
+.cc-aicap-help-quote {
+  font-style: italic;
+}
+
+.cc-aicap-help-tooltip a {
+  color: var(--accent);
+  word-break: break-all;
+}
+
 .cc-aicap-amounts {
   margin-left: 8px;
   font-size: 11px;
