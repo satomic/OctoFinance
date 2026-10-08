@@ -168,7 +168,7 @@ export function useDatasetSync() {
 }
 
 export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user = "",
-                             dateFrom = "", dateTo = "") {
+                             dateFrom = "", dateTo = "", refreshKey = 0) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -190,7 +190,7 @@ export function useDashboard(selectedOrgs: string[], enterpriseTeam = "", user =
     } finally {
       setLoading(false);
     }
-  }, [selectedOrgs.join(","), enterpriseTeam, user, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedOrgs.join(","), enterpriseTeam, user, dateFrom, dateTo, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchDashboard();
@@ -310,6 +310,8 @@ export function useCostCenterDashboard(params: {
   costCenters: string[];
   state: string;
   search: string;
+  /** bump to re-fetch, e.g. after a sync completes */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<CostCenterDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -330,7 +332,7 @@ export function useCostCenterDashboard(params: {
     } finally {
       setLoading(false);
     }
-  }, [params.enterprise, params.costCenters.join(","), params.state, params.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.enterprise, params.costCenters.join(","), params.state, params.search, params.refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -363,6 +365,8 @@ export function useEnterpriseTeamsDashboard(params: {
   enterprise: string;
   teams: string[];
   search: string;
+  /** bump to re-fetch, e.g. after a sync completes */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<EnterpriseTeamsDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -382,7 +386,7 @@ export function useEnterpriseTeamsDashboard(params: {
     } finally {
       setLoading(false);
     }
-  }, [params.enterprise, params.teams.join(","), params.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.enterprise, params.teams.join(","), params.search, params.refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -394,6 +398,8 @@ export function useEnterpriseTeamsDashboard(params: {
 export function useUnassignedCostCenterUsers(params: {
   enterprise: string;
   search: string;
+  /** bump to re-fetch, e.g. after a sync completes */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<UnassignedCostCenterUsersData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -412,7 +418,7 @@ export function useUnassignedCostCenterUsers(params: {
     } finally {
       setLoading(false);
     }
-  }, [params.enterprise, params.search]);
+  }, [params.enterprise, params.search, params.refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -451,6 +457,8 @@ export function useBudgetsDashboard(params: {
   scope: string;
   search: string;
   period?: "all" | "current_month";
+  /** bump to re-fetch, e.g. after a sync completes */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<BudgetsDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -474,7 +482,7 @@ export function useBudgetsDashboard(params: {
     } finally {
       setLoading(false);
     }
-  }, [params.enterprise, params.scope, params.search, params.period]);
+  }, [params.enterprise, params.scope, params.search, params.period, params.refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchData();
@@ -492,6 +500,8 @@ export function useCsvDashboard(params: {
   dateTo: string;
   enterpriseTeam?: string;
   user?: string;
+  /** bump to re-fetch, e.g. after a sync completes */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<CsvDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -517,7 +527,7 @@ export function useCsvDashboard(params: {
       setLoading(false);
     }
   }, [params.orgs.join(","), params.costCenters.join(","), params.products.join(","), // eslint-disable-line react-hooks/exhaustive-deps
-      params.skus.join(","), params.dateFrom, params.dateTo, params.enterpriseTeam, params.user]);
+      params.skus.join(","), params.dateFrom, params.dateTo, params.enterpriseTeam, params.user, params.refreshKey]);
 
   useEffect(() => {
     fetchData();

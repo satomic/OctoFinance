@@ -20,9 +20,11 @@ interface Props {
   user?: AuthUser | null;
   settingsOpen: boolean;
   onSettingsOpenChange: (open: boolean) => void;
+  /** bumped when a sync completes, so the connection / org count is re-read */
+  refreshKey?: number;
 }
 
-export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user, settingsOpen, onSettingsOpenChange: setSettingsOpen }: Props) {
+export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing = false, currentView, onViewChange, onLogout, user, settingsOpen, onSettingsOpenChange: setSettingsOpen, refreshKey = 0 }: Props) {
   const { sync } = useSync();
   const { t } = useI18n();
   const ui = useUIState();
@@ -52,7 +54,7 @@ export function StatusBar({ consoleOpen, onToggleConsole, onPATChange, syncing =
 
   useEffect(() => {
     fetchHealth();
-  }, [fetchHealth]);
+  }, [fetchHealth, refreshKey]);
 
   const handlePATChange = () => {
     fetchHealth();

@@ -41,7 +41,7 @@ export function BudgetsDashboard({ refreshKey }: Props) {
 
   const period = ui.periodMode ?? "all";
   const { data, loading, refetch } = useBudgetsDashboard({
-    enterprise, scope, search: ui.budgetsDashSearch, period,
+    enterprise, scope, search: ui.budgetsDashSearch, period, refreshKey,
   });
   const { syncing, runSync } = useDatasetSync();
   const handleSync = useCallback(() => runSync("budgets", refetch), [runSync, refetch]);

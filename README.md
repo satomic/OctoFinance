@@ -37,7 +37,7 @@ OctoFinance has **two interchangeable backends** that serve the same API and the
 ### Option A: Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v2.0.0)
+# Pull the latest release (or pin a version, e.g. :v2.0.1)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -125,7 +125,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v2.0.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v2.0.1`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -392,14 +392,14 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ```bash
 # Go backend image (Dockerfile-go) -> octofinance-go:dev
 ./scripts/docker-build-go.sh
-./scripts/docker-build-go.sh v2.0.0
+./scripts/docker-build-go.sh v2.0.1
 PLATFORM=linux/amd64 ./scripts/docker-build-go.sh
 
 # Python backend image (Dockerfile) -> octofinance:dev
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v2.0.0
+./scripts/docker-build.sh v2.0.1
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -410,9 +410,9 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds the **Go backend** image from [Dockerfile-go](Dockerfile-go) for `linux/amd64` + `linux/arm64` and pushes it to GHCR:
 
 ```bash
-git tag v2.0.0
-git push origin v2.0.0
-# → publishes ghcr.io/<owner>/<repo>:v2.0.0, :2.0.0, :2.0, :2 and :latest (Go backend)
+git tag v2.0.1
+git push origin v2.0.1
+# → publishes ghcr.io/<owner>/<repo>:v2.0.1, :2.0.1, :2.0, :2 and :latest (Go backend)
 ```
 
 Every tagged build also updates the `latest` tag. To publish the Python backend image, run the workflow manually (**Actions → Build and Publish Docker Image → Run workflow**), pick the release tag and `backend: python`; it is pushed as `ghcr.io/<owner>/<repo>-python` with the same tags, so it never overwrites the default image.

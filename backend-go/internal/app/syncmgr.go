@@ -241,6 +241,21 @@ func (s *SyncManager) end(success bool, errMsg string) {
 	})
 }
 
+// NotifyDataChanged tells open pages to reload their data (the frontend
+// refreshes every panel on sync_complete). Skipped while a sync runs, because
+// that sync's own completion refreshes the pages.
+func (s *SyncManager) NotifyDataChanged(message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.syncing {
+		return
+	}
+	now := jx.NowISO()
+	s.emitLocked(jx.M{"type": "sync_log", "level": "info", "message": message, "timestamp": now})
+	s.emitLocked(jx.M{"type": "sync_complete", "success": true, "error": nil, "error_count": 0,
+		"trigger": "discovery", "timestamp": now})
+}
+
 // RunInBackground starts a sync unless one is running. Returns false when busy.
 func (s *SyncManager) RunInBackground(fn SyncFunc, trigger string) bool {
 	if trigger == "" {

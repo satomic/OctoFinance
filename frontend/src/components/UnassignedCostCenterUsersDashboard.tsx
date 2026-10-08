@@ -174,7 +174,7 @@ function CostCenterSearchSelect({
   );
 }
 
-export function UnassignedCostCenterUsersDashboard(_props: Props) {
+export function UnassignedCostCenterUsersDashboard({ refreshKey }: Props) {
   const { t } = useI18n();
   const ui = useUIState();
   const enterprise = ui.ccDashEnterprise;
@@ -188,7 +188,7 @@ export function UnassignedCostCenterUsersDashboard(_props: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  const { data, loading, refetch, assignUsers } = useUnassignedCostCenterUsers({ enterprise, search });
+  const { data, loading, refetch, assignUsers } = useUnassignedCostCenterUsers({ enterprise, search, refreshKey });
   const { syncing, runSync } = useDatasetSync();
 
   const commitSearch = useCallback((value: string) => {

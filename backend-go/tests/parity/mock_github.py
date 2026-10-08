@@ -6,6 +6,8 @@ centers, budgets, enterprise teams and billing report exports from a data/
 snapshot, and applies writes (budgets, cost center resources, seats, teams)
 to in-memory state. Every request is recorded; GET /__calls returns them and
 POST /__reset clears the log.
+MOCK_DROP_FIRST=N closes the first N connections without a response, like a
+flaky network (connection reset / EOF), to test retry and recovery.
 
 usage: mock_github.py <port> <data-dir>
 """
@@ -25,6 +27,7 @@ DATA = sys.argv[2]
 BASE = f"http://127.0.0.1:{PORT}"
 LOCK = threading.RLock()
 CALLS = []
+DROPS_LEFT = [int(os.environ.get("MOCK_DROP_FIRST", "0") or 0)]
 
 
 def load(path, default=None):
@@ -114,6 +117,14 @@ class H(BaseHTTPRequestHandler):
             return raw.decode(errors="replace")
 
     def handle_any(self, method):
+        with LOCK:
+            drop = DROPS_LEFT[0] > 0
+            if drop:
+                DROPS_LEFT[0] -= 1
+        if drop:  # simulate a dropped connection: no status line, just close
+            self.close_connection = True
+            self.connection.shutdown(2)
+            return
         u = urlparse(self.path)
         path, qs = u.path, parse_qs(u.query)
         body = self.body() if method in ("POST", "PATCH", "PUT", "DELETE") else None

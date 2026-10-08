@@ -1,6 +1,6 @@
 # OctoFinance — Architecture
 
-> Applies to **v2.0.0**.
+> Applies to **v2.0.1**.
 
 ## Backends
 

@@ -322,6 +322,7 @@ function AppLayout({ user, onLogout }: { user: AuthUser | null; onLogout: () => 
         user={user}
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
+        refreshKey={refreshKey}
       />
       <SyncAlertBanner
         health={syncHealth}

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/satomic/octofinance/backend-go/internal/ghapi"
 	"github.com/satomic/octofinance/backend-go/internal/githost"
@@ -16,6 +18,7 @@ import (
 type APIManager struct {
 	mu              sync.RWMutex
 	rebuildMu       sync.Mutex
+	recovering      atomic.Bool
 	instances       map[string]*ghapi.Client // pat_id -> client
 	instanceOrder   []string
 	orgToPat        map[string]string
@@ -166,8 +169,15 @@ func (a *APIManager) mergeLocked(patID string, d *discovery) {
 	}
 }
 
-// Rebuild reloads all PATs and reruns discovery for each.
+// Rebuild reloads all PATs and reruns discovery for each. If a PAT could not
+// be discovered because GitHub was unreachable, discovery is retried in the
+// background (see scheduleRecovery).
 func (a *APIManager) Rebuild(ctx context.Context) {
+	a.rebuildLocked(ctx)
+	a.scheduleRecovery()
+}
+
+func (a *APIManager) rebuildLocked(ctx context.Context) {
 	a.rebuildMu.Lock()
 	defer a.rebuildMu.Unlock()
 
@@ -202,6 +212,71 @@ func (a *APIManager) Rebuild(ctx context.Context) {
 	a.userOrder = fresh.userOrder
 	a.allEnterprises = fresh.allEnterprises
 	a.mu.Unlock()
+}
+
+// Discovery recovery: a PAT whose discovery failed only because GitHub could
+// not be reached (a dropped connection at startup) contributes no organizations,
+// so every dashboard would show no data until the next sync. Instead, discovery
+// is retried in the background with a growing interval until it succeeds.
+
+var recoveryDelays = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second,
+	40 * time.Second, 80 * time.Second, 160 * time.Second, 5 * time.Minute}
+
+// recoverable lists PATs that are not discovered and were not rejected by GitHub.
+func (a *APIManager) recoverable() []string {
+	discovered := a.DiscoveredUsers()
+	out := []string{}
+	for _, pat := range Pats.GetAll() {
+		id := jx.Str(pat["id"])
+		if discovered[id] != nil {
+			continue
+		}
+		state := jx.Str(jx.GetMap(pat, "credential")["state"])
+		if state == "invalid" || state == "forbidden" {
+			continue // a rejected token is reported in the UI; retrying cannot fix it
+		}
+		out = append(out, jx.Str(pat["label"]))
+	}
+	return out
+}
+
+func (a *APIManager) scheduleRecovery() {
+	if len(a.recoverable()) == 0 || !a.recovering.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer a.recovering.Store(false)
+		for attempt := 0; attempt < 30; attempt++ {
+			delay := recoveryDelays[len(recoveryDelays)-1]
+			if attempt < len(recoveryDelays) {
+				delay = recoveryDelays[attempt]
+			}
+			pending := a.recoverable()
+			if len(pending) == 0 {
+				return
+			}
+			printf("[APIManager] Discovery incomplete for PAT(s) %v (GitHub unreachable); retrying in %s", pending, delay)
+			time.Sleep(delay)
+			if len(a.recoverable()) == 0 {
+				return // a sync or PAT change re-discovered in the meantime
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			a.rebuildLocked(ctx)
+			cancel()
+			if len(a.recoverable()) == 0 {
+				// The outage left these PATs marked "unreachable"; re-check so the
+				// UI's sync-failure banner reflects the real token state again.
+				checkCtx, checkCancel := context.WithTimeout(context.Background(), time.Minute)
+				CredCheckAll(checkCtx, nil)
+				checkCancel()
+				msg := fmt.Sprintf("GitHub was unreachable at startup; discovery recovered: %d organizations, %d enterprises",
+					len(a.AllOrgLogins()), len(a.AllEnterprises()))
+				printf("[APIManager] %s", msg)
+				Syncs.NotifyDataChanged(msg) // open pages reload instead of showing "no data"
+				return
+			}
+		}
+	}()
 }
 
 // AddAndDiscover adds one PAT's client and runs discovery. Returns the user.

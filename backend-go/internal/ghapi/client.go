@@ -153,8 +153,17 @@ func (c *Client) WebBase() string { return githost.WebBase(c.Host()) }
 // Close is a no-op kept for parity with the Python client.
 func (c *Client) Close() {}
 
+// TransientRetries is how many extra attempts a read request (GET/HEAD) gets
+// after a transport failure (connection reset, EOF, timeout). HTTP error
+// statuses are returned as-is and writes are never retried.
+var TransientRetries = 2
+
+// transientBackoff is the wait before each retry (index = retry number).
+var transientBackoff = []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond}
+
 // Do performs an API request. Only transport failures return an error;
-// HTTP error statuses come back as a Response.
+// HTTP error statuses come back as a Response. Read requests are retried on
+// transient transport failures, so one dropped connection does not lose data.
 func (c *Client) Do(ctx context.Context, method, path string, query url.Values, body any, headers map[string]string) (*Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -163,13 +172,40 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	var reader io.Reader
+	var payload []byte
 	if body != nil {
 		b, err := jx.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
-		reader = bytes.NewReader(b)
+		payload = b
+	}
+	retries := 0
+	if method == http.MethodGet || method == http.MethodHead {
+		retries = TransientRetries
+	}
+	for attempt := 0; ; attempt++ {
+		resp, err := c.doOnce(ctx, method, u, payload, headers)
+		if err == nil || attempt >= retries || ctx.Err() != nil {
+			return resp, err
+		}
+		wait := transientBackoff[len(transientBackoff)-1]
+		if attempt < len(transientBackoff) {
+			wait = transientBackoff[attempt]
+		}
+		Logger.Warn(fmt.Sprintf("%s %s failed (%v); retrying in %s", method, u, err, wait))
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(wait):
+		}
+	}
+}
+
+func (c *Client) doOnce(ctx context.Context, method, u string, payload []byte, headers map[string]string) (*Response, error) {
+	var reader io.Reader
+	if payload != nil {
+		reader = bytes.NewReader(payload)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u, reader)
 	if err != nil {
@@ -192,10 +228,9 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return nil, &TransportError{Err: err}
 	}
-	reason := http.StatusText(resp.StatusCode)
 	return &Response{
 		Status: resp.StatusCode,
-		Reason: reason,
+		Reason: http.StatusText(resp.StatusCode),
 		Header: resp.Header,
 		Body:   data,
 		URL:    u,

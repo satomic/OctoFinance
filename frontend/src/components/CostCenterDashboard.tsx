@@ -483,7 +483,7 @@ function UserMapTable({ users }: { users: UserCostCenterEntry[] }) {
 }
 
 /* ---------- Main component ---------- */
-export function CostCenterDashboard({ refreshKey: _ }: Props) {
+export function CostCenterDashboard({ refreshKey }: Props) {
   const { t } = useI18n();
   const ui = useUIState();
 
@@ -517,7 +517,7 @@ export function CostCenterDashboard({ refreshKey: _ }: Props) {
   }, [enterprise]);
 
   const { data, loading, refetch } = useCostCenterDashboard({
-    enterprise, costCenters, state, search: ui.ccDashSearch,
+    enterprise, costCenters, state, search: ui.ccDashSearch, refreshKey,
   });
   const { syncing: ccSyncing, runSync } = useDatasetSync();
   const handleSync = useCallback(() => {

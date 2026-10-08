@@ -65,7 +65,7 @@ export function Dashboard({ refreshKey }: Props) {
       ui.patch({ dashboardDateTo: v });
     }
   }, [ui.patch, ui.periodMode]);
-  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser, dateFrom, dateTo);
+  const { data, loading } = useDashboard(selectedOrgs ?? [], ui.dashboardEnterpriseTeam, ui.dashboardUser, dateFrom, dateTo, refreshKey);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 

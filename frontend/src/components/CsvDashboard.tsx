@@ -563,8 +563,8 @@ export function CsvDashboard({ refreshKey, tab }: Props) {
 
   const range = resolveRange(ui.periodMode, dateFrom, dateTo);
   const params = useMemo(() => ({
-    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to, enterpriseTeam, user: selectedUser,
-  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to, enterpriseTeam, selectedUser]); // eslint-disable-line react-hooks/exhaustive-deps
+    orgs, costCenters, products, skus, dateFrom: range.from, dateTo: range.to, enterpriseTeam, user: selectedUser, refreshKey,
+  }), [orgs.join(","), costCenters.join(","), products.join(","), skus.join(","), range.from, range.to, enterpriseTeam, selectedUser, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, loading } = useCsvDashboard(params);
 

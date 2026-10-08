@@ -131,7 +131,7 @@ export function EnterpriseTeamsDashboard({ refreshKey }: Props) {
   const commitSearch = useCallback((v: string) => patch({ etDashSearch: v }), [patch]);
 
   const { data, loading, refetch } = useEnterpriseTeamsDashboard({
-    enterprise, teams, search: ui.etDashSearch,
+    enterprise, teams, search: ui.etDashSearch, refreshKey,
   });
   const { syncing, runSync } = useDatasetSync();
   const handleSync = useCallback(() => runSync("enterprise_teams", refetch), [runSync, refetch]);
