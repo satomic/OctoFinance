@@ -1,6 +1,6 @@
 # OctoFinance — Feature Details & API Reference
 
-> Applies to **v2.0.1**.
+> Applies to **v2.0.2**.
 
 ## Copilot SDK Agentic AI (Core)
 

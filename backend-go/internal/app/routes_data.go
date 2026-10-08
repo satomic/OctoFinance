@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/satomic/octofinance/backend-go/internal/jx"
 )
@@ -48,16 +46,7 @@ func registerDataRoutes(r *Router) {
 // keyed on mtime+size. Loaded values are SHARED: never mutate them.
 // ---------------------------------------------------------------------------
 
-type dataFileEntry struct {
-	mtime time.Time
-	size  int64
-	val   any
-}
-
-var (
-	dataFileCacheMu sync.Mutex
-	dataFileCache   = map[string]dataFileEntry{}
-)
+var dataFileCache = newFileCache()
 
 // dataReadCached decodes a JSON file, reusing the previous decode when the file
 // is unchanged. ok is false when the file is missing or invalid.
@@ -66,20 +55,8 @@ func dataReadCached(path string) (any, bool) {
 	if err != nil || st.IsDir() {
 		return nil, false
 	}
-	dataFileCacheMu.Lock()
-	e, hit := dataFileCache[path]
-	dataFileCacheMu.Unlock()
-	if hit && e.mtime.Equal(st.ModTime()) && e.size == st.Size() {
-		return e.val, true
-	}
-	v, err := jx.ReadJSON(path)
-	if err != nil {
-		return nil, false
-	}
-	dataFileCacheMu.Lock()
-	dataFileCache[path] = dataFileEntry{mtime: st.ModTime(), size: st.Size(), val: v}
-	dataFileCacheMu.Unlock()
-	return v, true
+	v, err := dataFileCache.load(path, st, func() (any, error) { return jx.ReadJSON(path) })
+	return v, err == nil
 }
 
 type dataLoader struct {

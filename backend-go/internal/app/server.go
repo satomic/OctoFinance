@@ -228,7 +228,9 @@ func startup() {
 
 // Run starts the server on addr and blocks until SIGINT/SIGTERM.
 func Run(addr string) error {
+	tuneGC()
 	startup()
+	startCacheJanitor()
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           NewHandler(),

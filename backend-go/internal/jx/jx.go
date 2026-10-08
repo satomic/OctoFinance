@@ -479,11 +479,7 @@ func ReadJSON(path string) (any, error) {
 		return nil, err
 	}
 	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
-	var v any
-	if err := json.Unmarshal(b, &v); err != nil {
-		return nil, err
-	}
-	return v, nil
+	return Parse(b)
 }
 
 // ReadJSONOr returns the decoded file or fallback when missing/invalid.

@@ -154,10 +154,36 @@ Method: `bench.py` warms each endpoint up with 3 requests, then sends requests f
 
 ### 4.3 Interpretation
 
-- **Faster single requests**: the Go computation itself is faster, and the parsed merged billing CSVs and JSON data snapshots are cached by file modification time instead of being re-read and re-parsed on every request (Python re-reads the files each time).
+- **Faster single requests**: the Go computation itself is faster, and the parsed merged billing CSVs and JSON data snapshots are cached by file modification time while pages use them, instead of being re-read and re-parsed on every request (Python re-reads the files each time; see 4.4 for how long the caches are kept).
 - **The gap widens under concurrency**: Python's dashboard computation is CPU-bound synchronous code that runs serially in a single worker's event loop, so requests queue up as concurrency rises (main dashboard p50 goes from 49 ms to 791 ms). Go handles requests in parallel across cores, and its p50 barely changes with concurrency (1.7 ms → 4.8 ms).
 - Both effects grow as data volume and user count increase.
 - AI chat time is dominated by model inference; the two backends show no material difference there.
+
+### 4.4 Memory (Docker, large synthetic enterprise)
+
+Measured with `docker stats` and per-process RSS in the Go and Python images on the same data copy, scaled up to a large enterprise: 1,736 seats, about 68,000 user-day usage records (usage JSON files of 185 MB), a 60,000-row AI usage CSV and a 356,000-row usage report CSV (284 MB of data in total). The Copilot CLI runs in both containers and takes about 230–270 MB on its own; the table shows the backend process only.
+
+| Step | Python | Go before the fix | Go after the fix |
+|------|-------:|------------------:|-----------------:|
+| Idle after startup | 99 MB | 14 MB | 16 MB |
+| After opening all 11 dashboards once | 160 MB (peak 491 MB) | 1,468 MB | 1,148 MB (peak 1,092 MB) |
+| After 44 concurrent dashboard requests | 275 MB (peak 516 MB) | 2,155 MB | 1,258 MB |
+| After ingesting a 45 MB usage report CSV | 229 MB (peak 1,158 MB) | 2,698 MB | 1,400 MB (peak 1,438 MB) |
+| 60 s later, idle | 229 MB | 2,698 MB (never released) | **64 MB** |
+| Container total (`docker stats`) when idle again | 348 MiB | about 2.9 GiB | **252 MiB** |
+
+Time for the same steps, Python / Go after the fix: all dashboards 16.8 s / 4.1 s, 44 concurrent requests 46.6 s / 2.0 s, CSV ingest 6.7 s / 1.4 s.
+
+Cause and fix:
+
+- **Cause**: to make dashboards fast, the Go backend kept every parsed data file and CSV export in memory for good. Decoded into Go maps, they take 3–6 times their size on disk, and Go's garbage collector lets the heap grow to twice what is live before collecting. Python re-parses the files on each request and keeps nothing, so it stays small but is slower.
+- **Caches are released when idle**: large files (4 MB and up) stay cached only for 15 seconds after their last use, which is long enough to serve the requests a page makes together. Small files stay cached for 3 minutes. Freed memory is returned to the operating system immediately.
+- **One parse per file**: concurrent requests that need the same file wait for a single parse instead of each decoding a copy.
+- **Smaller decoded data**: the JSON parser and the CSV reader keep one copy of each repeated key and short value (field names, dates, logins, model names). On an 85 MB usage file this needs 40% less memory than `encoding/json`, and parsing is 25% faster. A fuzz test with 16 million inputs checks that it returns exactly what `encoding/json` returns.
+- **No double parsing**: the user roster caches only logins, not the files it reads them from. CSV ingest reuses the rows the dashboards already parsed and caches the merged result for the dashboard that follows.
+- **GC tuning**: `GOGC` defaults to 50 (the peak is about a quarter lower, at no measurable cost in response time). When the container has a memory limit (`docker run -m`), the Go GC gets a soft limit of 60% of it. `GOGC` and `GOMEMLIMIT` set in the environment take precedence.
+
+Short peaks while dashboards load or a CSV is ingested remain higher than with Python, because Go processes the work in parallel instead of one request at a time. They last a few seconds and are released within about 20 seconds.
 
 ## 5. Known differences (all harmless or intentional)
 

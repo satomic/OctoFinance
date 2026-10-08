@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/satomic/octofinance/backend-go/internal/ghapi"
@@ -294,37 +293,17 @@ func (dc *DataCollector) LoadLatestMap(category, org string) jx.M {
 	return jx.Map(dc.LoadLatest(category, org))
 }
 
-// Parsed snapshot files are cached by path and invalidated on any change of
-// modification time or size; callers get a deep copy, so they may mutate it.
-type parsedEntry struct {
-	mtime time.Time
-	size  int64
-	val   any
-}
-
-var (
-	parsedMu    sync.Mutex
-	parsedCache = map[string]parsedEntry{}
-)
-
+// Parsed snapshot files share dataFileCache with the dashboards; callers get a
+// deep copy, so they may mutate it.
 func readJSONCached(path string) (any, error) {
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
-	parsedMu.Lock()
-	e, ok := parsedCache[path]
-	parsedMu.Unlock()
-	if ok && e.mtime.Equal(st.ModTime()) && e.size == st.Size() {
-		return jx.DeepCopy(e.val), nil
-	}
-	v, err := jx.ReadJSON(path)
+	v, err := dataFileCache.load(path, st, func() (any, error) { return jx.ReadJSON(path) })
 	if err != nil {
 		return nil, err
 	}
-	parsedMu.Lock()
-	parsedCache[path] = parsedEntry{mtime: st.ModTime(), size: st.Size(), val: v}
-	parsedMu.Unlock()
 	return jx.DeepCopy(v), nil
 }
 

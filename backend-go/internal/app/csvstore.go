@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -113,6 +114,23 @@ func parseCSV(r io.Reader) ([]string, []CSVRecord, error) {
 	if len(header) > 0 {
 		header[0] = strings.TrimPrefix(header[0], "\ufeff")
 	}
+	// Exports repeat the same dates, logins, models and SKUs on every row;
+	// interning keeps one copy of each and lets the reader's line buffers go.
+	intern := map[string]string{}
+	str := func(v string) string {
+		if len(v) > 64 {
+			return strings.Clone(v)
+		}
+		if s, ok := intern[v]; ok {
+			return s
+		}
+		v = strings.Clone(v)
+		intern[v] = v
+		return v
+	}
+	for i, h := range header {
+		header[i] = str(h)
+	}
 	rows := []CSVRecord{}
 	for {
 		rec, err := reader.Read()
@@ -125,10 +143,10 @@ func parseCSV(r io.Reader) ([]string, []CSVRecord, error) {
 		if len(rec) == 0 || (len(rec) == 1 && rec[0] == "") {
 			continue // csv.DictReader skips blank lines
 		}
-		row := CSVRecord{}
+		row := make(CSVRecord, len(header))
 		for i, h := range header {
 			if i < len(rec) {
-				row[h] = rec[i]
+				row[h] = str(rec[i])
 			} else {
 				row[h] = ""
 			}
@@ -268,13 +286,7 @@ func ensureMigratedLocked(csvType string) int {
 
 // CSV records are cached per file modification time: dashboards re-read the
 // merged CSV on every request, which dominated response time on large exports.
-type csvCacheEntry struct {
-	mtime time.Time
-	size  int64
-	rows  []CSVRecord
-}
-
-var csvCache = map[string]csvCacheEntry{}
+var csvCache = newFileCache()
 
 // LoadAllCSVRecords returns every stored record for a CSV flavour. The returned
 // rows are shared — callers must not modify them.
@@ -287,15 +299,74 @@ func LoadAllCSVRecords(csvType string) []CSVRecord {
 	if err != nil {
 		return []CSVRecord{}
 	}
-	if c, ok := csvCache[path]; ok && c.mtime.Equal(st.ModTime()) && c.size == st.Size() {
-		return c.rows
+	if v, ok := csvCache.get(path, st); ok {
+		return v.([]CSVRecord)
 	}
 	_, rows := readCSVFile(path)
 	if rows == nil {
 		rows = []CSVRecord{}
 	}
-	csvCache[path] = csvCacheEntry{mtime: st.ModTime(), size: st.Size(), rows: rows}
+	csvCache.put(path, st, rows)
 	return rows
+}
+
+// csvUsernames returns the username column of a CSV flavour without keeping
+// the parsed rows.
+func csvUsernames(csvType string) []string {
+	csvMu.Lock()
+	defer csvMu.Unlock()
+	ensureMigratedLocked(csvType)
+	path := LatestCSVPath(csvType)
+	if v, ok := statCSVCached(path); ok {
+		return csvColumn(v, "username")
+	}
+	return fileLogins(path, func() []string {
+		_, rows := readCSVFile(path)
+		return csvColumn(rows, "username")
+	})
+}
+
+// statCSVCached returns the rows of path when they are already in csvCache.
+func statCSVCached(path string) ([]CSVRecord, bool) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, false
+	}
+	v, ok := csvCache.get(path, st)
+	if !ok {
+		return nil, false
+	}
+	return v.([]CSVRecord), true
+}
+
+// csvHeader reads only the header row of a CSV file.
+func csvHeader(path string) []string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	header, err := r.Read()
+	if err != nil {
+		return nil
+	}
+	if len(header) > 0 {
+		header[0] = strings.TrimPrefix(header[0], "\ufeff")
+	}
+	return header
+}
+
+func csvColumn(rows []CSVRecord, col string) []string {
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if v, ok := r[col]; ok {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func csvDedupKey(csvType string, r CSVRecord) string {
@@ -337,7 +408,14 @@ func IngestCSVText(text string) jx.M {
 	defer csvMu.Unlock()
 	ensureMigratedLocked(csvType)
 	latest := LatestCSVPath(csvType)
-	oldFields, oldRows := readCSVFile(latest)
+	// Reuse the dashboards' parsed rows instead of parsing the file again.
+	var oldFields []string
+	oldRows, cached := statCSVCached(latest)
+	if cached {
+		oldFields = csvHeader(latest)
+	} else {
+		oldFields, oldRows = readCSVFile(latest)
+	}
 	oldKeys := jx.StrSet{}
 	for _, r := range oldRows {
 		oldKeys.Add(csvDedupKey(csvType, r))
@@ -345,6 +423,11 @@ func IngestCSVText(text string) jx.M {
 	mergedFields, merged, superseded := mergeByDate(oldFields, oldRows, fields, rows)
 	if err := writeCSVFile(latest, mergedFields, merged); err != nil {
 		return jx.M{"error": "Failed to save CSV: " + err.Error()}
+	}
+	// The merged rows are what reading the new file back returns when every
+	// row has every column, so cache them for the dashboard that follows.
+	if st, err := os.Stat(latest); err == nil && slices.Equal(mergedFields, fields) && (len(oldRows) == 0 || slices.Equal(oldFields, fields)) {
+		csvCache.put(latest, st, merged)
 	}
 	newRows := 0
 	for _, r := range rows {

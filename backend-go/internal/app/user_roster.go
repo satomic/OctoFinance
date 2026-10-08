@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -45,11 +47,25 @@ func BuildUserRoster() []jx.M {
 			add(jx.GetMap(seat, "assignee")["login"], "")
 		}
 	})
-	each("usage_users", func(s jx.M) {
-		for _, rec := range jx.GetMaps(s, "records") {
-			add(rec["user_login"], "")
+	// Usage files and CSV exports are the largest synced data; only their
+	// logins are needed, so those are cached instead of the parsed files.
+	for _, f := range latestFilesByScope("usage_users") {
+		for _, login := range fileLogins(f, func() []string {
+			v, err := jx.ReadJSON(f)
+			if err != nil {
+				return nil
+			}
+			var out []string
+			for _, rec := range jx.GetMaps(jx.Map(v), "records") {
+				if s, ok := rec["user_login"].(string); ok {
+					out = append(out, s)
+				}
+			}
+			return out
+		}) {
+			add(login, "")
 		}
-	})
+	}
 	each("enterprise_teams", func(s jx.M) {
 		for _, team := range jx.GetMaps(s, "teams") {
 			for _, m := range jx.GetMaps(team, "members") {
@@ -82,10 +98,8 @@ func BuildUserRoster() []jx.M {
 		}
 	})
 	for _, t := range []string{CSVTypeAI, CSVTypeUsage} {
-		for _, r := range LoadAllCSVRecords(t) {
-			if v, ok := r["username"]; ok {
-				add(v, "")
-			}
+		for _, login := range csvUsernames(t) {
+			add(login, "")
 		}
 	}
 	for _, req := range LoadBudgetRequests() {
@@ -124,4 +138,26 @@ func BuildUserRoster() []jx.M {
 		return a < b
 	})
 	return out
+}
+
+var loginCache = newFileCache()
+
+// fileLogins returns extract()'s logins for path, cached until the file changes.
+func fileLogins(path string, extract func() []string) []string {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	v, _ := loginCache.load(path, st, func() (any, error) { return extract(), nil })
+	logins, _ := v.([]string)
+	return logins
+}
+
+// latestFilesByScope lists {category}/{scope}_latest.json ordered by scope,
+// the order dataLoader.allLatest visits them in.
+func latestFilesByScope(category string) []string {
+	matches, _ := filepath.Glob(filepath.Join(Collector.DataDir(), category, "*_latest.json"))
+	scope := func(f string) string { return strings.TrimSuffix(filepath.Base(f), "_latest.json") }
+	sort.Slice(matches, func(i, j int) bool { return scope(matches[i]) < scope(matches[j]) })
+	return matches
 }

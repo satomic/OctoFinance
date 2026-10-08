@@ -37,7 +37,7 @@ OctoFinance has **two interchangeable backends** that serve the same API and the
 ### Option A: Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v2.0.1)
+# Pull the latest release (or pin a version, e.g. :v2.0.2)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -125,7 +125,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v2.0.1`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v2.0.2`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -392,14 +392,14 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ```bash
 # Go backend image (Dockerfile-go) -> octofinance-go:dev
 ./scripts/docker-build-go.sh
-./scripts/docker-build-go.sh v2.0.1
+./scripts/docker-build-go.sh v2.0.2
 PLATFORM=linux/amd64 ./scripts/docker-build-go.sh
 
 # Python backend image (Dockerfile) -> octofinance:dev
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v2.0.1
+./scripts/docker-build.sh v2.0.2
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -410,14 +410,14 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds the **Go backend** image from [Dockerfile-go](Dockerfile-go) for `linux/amd64` + `linux/arm64` and pushes it to GHCR:
 
 ```bash
-git tag v2.0.1
-git push origin v2.0.1
-# → publishes ghcr.io/<owner>/<repo>:v2.0.1, :2.0.1, :2.0, :2 and :latest (Go backend)
+git tag v2.0.2
+git push origin v2.0.2
+# → publishes ghcr.io/<owner>/<repo>:v2.0.2, :2.0.2, :2.0, :2 and :latest (Go backend)
 ```
 
 Every tagged build also updates the `latest` tag. To publish the Python backend image, run the workflow manually (**Actions → Build and Publish Docker Image → Run workflow**), pick the release tag and `backend: python`; it is pushed as `ghcr.io/<owner>/<repo>-python` with the same tags, so it never overwrites the default image.
 
-> **Image internals**: each image bundles the standalone Copilot CLI binary and points its SDK at it via `COPILOT_CLI_PATH`, so no CLI download happens at container runtime. The **Go image** takes the **latest** Copilot CLI release and the **latest** Copilot Go SDK (`github.com/github/copilot-sdk/go`) at build time; pin them for a reproducible build or a rollback with `--build-arg COPILOT_CLI_VERSION=1.0.93 --build-arg COPILOT_SDK_VERSION=v1.0.17` (`COPILOT_SDK_VERSION=go.mod` keeps the version in `backend-go/go.mod`). The **Python image** pins the CLI via its `COPILOT_CLI_VERSION` build arg (currently `1.0.68`) and installs `github-copilot-sdk>=1.0.5`. CLI and SDK must speak the same SDK protocol version (currently v3); the SDK checks it at startup. The Go image is based on `debian:bookworm-slim` with the static Go binary at `/app/bin/octofinance-go` (about 115 MB compressed); both images run as UID 1000.
+> **Image internals**: each image bundles the standalone Copilot CLI binary and points its SDK at it via `COPILOT_CLI_PATH`, so no CLI download happens at container runtime. Both images take the **latest** Copilot CLI release and the **latest** Copilot SDK at build time (the build log prints both versions). Pin them for a reproducible build or a rollback: for the **Go image** with `--build-arg COPILOT_CLI_VERSION=1.0.93 --build-arg COPILOT_SDK_VERSION=v1.0.17` (`COPILOT_SDK_VERSION=go.mod` keeps the version in `backend-go/go.mod`), for the **Python image** with `--build-arg COPILOT_CLI_VERSION=1.0.93 --build-arg COPILOT_SDK_VERSION=1.0.17` (`github-copilot-sdk` on PyPI). CLI and SDK must speak the same SDK protocol version (currently v3); the SDK checks it at startup. The Go image is based on `debian:bookworm-slim` with the static Go binary at `/app/bin/octofinance-go` (about 115 MB compressed); both images run as UID 1000.
 
 ---
 

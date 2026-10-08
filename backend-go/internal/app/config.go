@@ -11,7 +11,7 @@ import (
 )
 
 // AppVersion is the application version exposed via /api/health and the UI.
-const AppVersion = "2.0.1"
+const AppVersion = "2.0.2"
 
 // BackendName identifies this implementation in /api/health.
 const BackendName = "go"

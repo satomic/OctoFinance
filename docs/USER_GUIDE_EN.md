@@ -1,10 +1,10 @@
 # OctoFinance Complete User Guide
 
-Applies to **v2.0.1**. [简体中文](USER_GUIDE_CN.md)
+Applies to **v2.0.2**. [简体中文](USER_GUIDE_CN.md)
 
 OctoFinance brings GitHub Copilot seats, adoption, AI credits, billing and budgets into one workspace, with an AI assistant for analysis and operational tasks. This guide is organized around the three user roles.
 
-All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v2.0.1. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
+All screenshots use the **English interface and light theme**. Both language editions reuse the same images. A few older screenshots still show an earlier release, so tab counts and control positions may differ slightly from v2.0.2. Screenshots of role views and of tables that would otherwise contain real accounts use illustrative logins such as `alex-demo`; they are not actual users, budgets or grants.
 
 **Contents**
 
