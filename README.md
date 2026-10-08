@@ -20,12 +20,24 @@ OctoFinance is an AI-powered GitHub Copilot FinOps platform built on the Copilot
 
 ## Quick Start
 
-The fastest path is Docker. The image is fully self-contained (FastAPI backend + pre-built React frontend + GitHub Copilot CLI, no Node.js runtime needed).
+The fastest path is Docker. The image is fully self-contained (backend + pre-built React frontend + GitHub Copilot CLI, no Node.js runtime needed).
+
+<p align="center">
+  <img src="images/v2.0.0_go_knockout_python.jpg" alt="Cartoon: the Go gopher knocks out the Python snake in a boxing ring, scoreboard 2,801 vs 20 req/s, OctoFinance v2.0.0" width="720">
+</p>
+<p align="center"><sub>v2.0.0: the new Go backend serves the main dashboard at 2,801 req/s vs 20 req/s on Python (16 concurrent requests, <a href="backend-go/TEST_REPORT.md">test report</a>).</sub></p>
+
+OctoFinance has **two interchangeable backends** that serve the same API and the same frontend from the same `data/` layout: a **Go** backend built for larger data volumes and more concurrent users, and the original **Python** (FastAPI) backend. Each is packaged as its own image; both use the same `/app/data` volume, so you can switch by recreating the container with the other image.
+
+| Backend | Image | Notes |
+|---------|-------|-------|
+| Go (default) | `ghcr.io/satomic/octofinance` (built from [Dockerfile-go](Dockerfile-go)) | Copilot Go SDK, concurrent request handling, cached CSV aggregation; dashboards 16–139× higher throughput under load. See [backend-go/README.md](backend-go/README.md) and the [test report](backend-go/TEST_REPORT.md) |
+| Python | `ghcr.io/satomic/octofinance-python` (built from [Dockerfile](Dockerfile)) | FastAPI + Copilot Python SDK |
 
 ### Option A: Docker (recommended)
 
 ```bash
-# Pull the latest release (or pin a version, e.g. :v1.6.0)
+# Pull the latest release (or pin a version, e.g. :v2.0.0)
 docker pull ghcr.io/satomic/octofinance:latest
 
 # Start the container
@@ -36,6 +48,8 @@ docker run -itd --restart=always \
   -e COPILOT_GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxx \
   ghcr.io/satomic/octofinance:latest
 ```
+
+This runs the Go backend. To run the Python backend instead, use the image `ghcr.io/satomic/octofinance-python:latest`.
 
 Then open <http://localhost:8000>, create your admin credentials, and add an org-admin data-sync PAT under **Settings → PAT Manager**. Organizations and enterprises are discovered automatically and the first sync starts on its own.
 
@@ -87,6 +101,8 @@ See [Docker reference](#docker-reference) for the full environment-variable list
 
 #### Upgrading from an older version
 
+> **Backend change in v2.0.0**: starting with v2.0.0, `ghcr.io/satomic/octofinance` contains the **Go backend**, so pulling `:latest` (or `:2`) moves you from the Python backend to the Go backend; `:1` and `:1.x` tags stay on the Python backend. It reads the same `/app/data` volume as-is (same file formats, same UID 1000), so nothing needs migrating. To stay on the Python backend, switch your commands to `ghcr.io/satomic/octofinance-python`.
+
 Upgrading is just "pull the new image and re-run the same command". All state lives in the `/app/data` volume, not in the container, so keeping the **same `-v` mount** carries your admin credentials, PATs, OAuth config, synced GitHub data, budget requests and logs across the upgrade. There is no manual migration step: existing data files are read as-is (legacy formats are converted on load where needed), and any new fields are filled in on the next sync.
 
 ```bash
@@ -109,7 +125,7 @@ docker run -itd --restart=always \
 Then reload <http://localhost:8000> and confirm the version badge next to the logo shows the new release. You stay logged in and all your settings are still there.
 
 > - `docker rm -f` only removes the **container**. Named volumes and host directories survive it; only `docker volume rm <octofinance-data>` would delete your data.
-> - If you pinned a version tag (e.g. `:v1.6.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
+> - If you pinned a version tag (e.g. `:v2.0.0`), change it to the new tag in both the `pull` and the `run` command; `docker pull` on a pinned tag will not fetch a newer release.
 > - **Rolling back** works the same way: `docker rm -f octofinance` and re-run with an older tag against the same volume.
 > - Take a backup first if you want a safety net: for a host directory just copy it (`cp -a /opt/octofinance/data /opt/octofinance/data.bak`); for a named volume, `docker run --rm -v octofinance-data:/data -v "$(pwd):/backup" busybox tar czf /backup/octofinance-data.tgz -C /data .`
 
@@ -119,7 +135,8 @@ Then reload <http://localhost:8000> and confirm the version badge next to the lo
 
 | Requirement | Version / details |
 |-------------|-------------------|
-| Python | 3.13+ |
+| Python | 3.13+ (Python backend) |
+| Go | 1.24+ (Go backend only) |
 | Node.js | 22+ |
 | GitHub Copilot CLI | Latest. Authenticate interactively with `copilot`, or set `COPILOT_GITHUB_TOKEN` to a **fine-grained PAT** with the **Copilot Requests: Read** account permission (classic `ghp_…` tokens are not supported) |
 | Data-sync PAT | `read:org` + `admin:org` + `copilot` + `manage_billing:copilot`, added in the web UI, not an env var |
@@ -138,9 +155,11 @@ pip install -r backend/requirements.txt
 brew install copilot-cli        # macOS
 copilot                         # Follow prompts to authenticate
 
-# 4. Start backend
+# 4. Start backend (pick one)
 cd backend
 ../.venv/bin/uvicorn app.main:app --reload --port 8000
+#    ...or the Go backend (needs Go 1.24+), from the repository root:
+#    ./scripts/run-backend.sh go
 
 # 5. Start frontend (new terminal)
 cd frontend
@@ -154,7 +173,7 @@ Visit <http://localhost:5173>. On first visit, create your admin credentials. Da
 
 ```bash
 cd frontend && npm run build && cd ..
-cd backend && ../.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+./scripts/run-backend.sh python    # or: ./scripts/run-backend.sh go
 ```
 
 Behind a reverse proxy, add `--proxy-headers --forwarded-allow-ips="<trusted>"` so the scheme/host are detected correctly and session cookies are marked `Secure` on HTTPS.
@@ -323,7 +342,7 @@ See [docs/FEATURES.md](docs/FEATURES.md) for detailed feature descriptions and f
 
 ## Docker Reference
 
-OctoFinance ships as a single self-contained image: FastAPI backend + pre-built React frontend + GitHub Copilot CLI (standalone binary, no Node.js runtime needed). Images are published to GitHub Container Registry (GHCR) on every release tag. See [Quick Start](#option-a-docker-recommended) for the run command and [Upgrading from an older version](#upgrading-from-an-older-version) for moving to a new release.
+OctoFinance ships as self-contained images: backend + pre-built React frontend + GitHub Copilot CLI (standalone binary, no Node.js runtime needed). The default image `ghcr.io/satomic/octofinance` contains the Go backend ([Dockerfile-go](Dockerfile-go)); `ghcr.io/satomic/octofinance-python` contains the Python backend ([Dockerfile](Dockerfile)). Both use port `8000`, the same `/app/data` volume and the same environment variables below. Images are published to GitHub Container Registry (GHCR) on every release tag. See [Quick Start](#option-a-docker-recommended) for the run command and [Upgrading from an older version](#upgrading-from-an-older-version) for moving to a new release.
 
 ### Configuration
 
@@ -371,11 +390,16 @@ An air-gapped deployment with none of these reachable still starts and serves wh
 ### Build locally
 
 ```bash
-# Build octofinance:dev for your local architecture
+# Go backend image (Dockerfile-go) -> octofinance-go:dev
+./scripts/docker-build-go.sh
+./scripts/docker-build-go.sh v2.0.0
+PLATFORM=linux/amd64 ./scripts/docker-build-go.sh
+
+# Python backend image (Dockerfile) -> octofinance:dev
 ./scripts/docker-build.sh
 
 # Build with a specific tag
-./scripts/docker-build.sh v1.6.0
+./scripts/docker-build.sh v2.0.0
 
 # Cross-build for another platform
 PLATFORM=linux/amd64 ./scripts/docker-build.sh
@@ -383,17 +407,17 @@ PLATFORM=linux/amd64 ./scripts/docker-build.sh
 
 ### Release via GitHub Actions
 
-Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds multi-arch images (`linux/amd64` + `linux/arm64`) and pushes them to GHCR:
+Pushing a tag triggers [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), which builds the **Go backend** image from [Dockerfile-go](Dockerfile-go) for `linux/amd64` + `linux/arm64` and pushes it to GHCR:
 
 ```bash
-git tag v1.6.0
-git push origin v1.6.0
-# → publishes ghcr.io/<owner>/<repo>:v1.6.0, :1.6.0, :1.6, :1 and :latest
+git tag v2.0.0
+git push origin v2.0.0
+# → publishes ghcr.io/<owner>/<repo>:v2.0.0, :2.0.0, :2.0, :2 and :latest (Go backend)
 ```
 
-Every tagged build also updates the `latest` tag.
+Every tagged build also updates the `latest` tag. To publish the Python backend image, run the workflow manually (**Actions → Build and Publish Docker Image → Run workflow**), pick the release tag and `backend: python`; it is pushed as `ghcr.io/<owner>/<repo>-python` with the same tags, so it never overwrites the default image.
 
-> **Image internals**: the image bundles the standalone Copilot CLI binary (pinned via the `COPILOT_CLI_VERSION` build arg in the [Dockerfile](Dockerfile), currently `1.0.68`) and points the Copilot Python SDK (`github-copilot-sdk>=1.0.5`) at it via `COPILOT_CLI_PATH`, so no CLI download happens at container runtime. CLI and SDK must speak the same SDK protocol version (both currently v3).
+> **Image internals**: each image bundles the standalone Copilot CLI binary and points its SDK at it via `COPILOT_CLI_PATH`, so no CLI download happens at container runtime. The **Go image** takes the **latest** Copilot CLI release and the **latest** Copilot Go SDK (`github.com/github/copilot-sdk/go`) at build time; pin them for a reproducible build or a rollback with `--build-arg COPILOT_CLI_VERSION=1.0.93 --build-arg COPILOT_SDK_VERSION=v1.0.17` (`COPILOT_SDK_VERSION=go.mod` keeps the version in `backend-go/go.mod`). The **Python image** pins the CLI via its `COPILOT_CLI_VERSION` build arg (currently `1.0.68`) and installs `github-copilot-sdk>=1.0.5`. CLI and SDK must speak the same SDK protocol version (currently v3); the SDK checks it at startup. The Go image is based on `debian:bookworm-slim` with the static Go binary at `/app/bin/octofinance-go` (about 115 MB compressed); both images run as UID 1000.
 
 ---
 

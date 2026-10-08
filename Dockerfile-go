@@ -1,0 +1,132 @@
+# syntax=docker/dockerfile:1
+#
+# OctoFinance — Go backend image
+#
+# Packages only the Go backend (backend-go/). The Python backend has its own
+# image built from ./Dockerfile; both serve the same API and frontend and use
+# the same /app/data layout, so a data volume works with either image.
+#
+# Multi-stage build:
+#   1. frontend — build the React SPA with Node
+#   2. gobuild  — build the Go backend as a static binary
+#   3. cli      — download & checksum-verify the standalone GitHub Copilot CLI binary
+#   4. runtime  — debian slim with the Go binary + frontend dist + Copilot CLI
+#
+# Notes:
+#   * The Go backend drives the Copilot CLI through the Copilot Go SDK
+#     (github.com/github/copilot-sdk/go), found via COPILOT_CLI_PATH.
+#   * Both the Copilot CLI and the Copilot Go SDK default to their latest release
+#     at build time. Pin either for a reproducible build or a rollback:
+#       --build-arg COPILOT_CLI_VERSION=1.0.93 --build-arg COPILOT_SDK_VERSION=v1.0.17
+#     COPILOT_SDK_VERSION=go.mod keeps the version recorded in backend-go/go.mod.
+#     The SDK checks at startup that the CLI speaks its protocol version.
+#   * The Copilot CLI is a self-contained executable that needs glibc and
+#     libstdc++ (both in debian slim); the Go binary is static and only needs
+#     the CA certificate bundle, copied from the cli stage.
+#   * No stage installs distro packages, so no package mirror is needed.
+#   * The frontend, gobuild and cli stages run on the build host's platform
+#     ($BUILDPLATFORM): their output does not depend on the CPU they run on.
+
+############################
+# Stage 1: frontend build
+############################
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+############################
+# Stage 2: Go backend build
+############################
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS gobuild
+ARG TARGETOS
+ARG TARGETARCH
+# "latest" (default), a version such as v1.0.17, or "go.mod" to keep go.mod's version
+ARG COPILOT_SDK_VERSION=latest
+WORKDIR /src
+COPY backend-go/go.mod backend-go/go.sum ./
+RUN go mod download
+COPY backend-go/ ./
+RUN set -eux; \
+    if [ "${COPILOT_SDK_VERSION}" != "go.mod" ]; then \
+        go get "github.com/github/copilot-sdk/go@${COPILOT_SDK_VERSION}"; \
+        go mod tidy; \
+    fi; \
+    echo "Copilot Go SDK: $(go list -m github.com/github/copilot-sdk/go)"
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/octofinance-go ./cmd/octofinance
+
+############################
+# Stage 3: Copilot CLI download (checksum-verified)
+############################
+# golang:alpine (already used above) ships wget with HTTPS, sha256sum, tar and the
+# CA bundle, so this stage installs no packages and needs no distro package mirror.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS cli
+ARG TARGETARCH
+# "latest" (default) or a release such as 1.0.93. Must speak the Copilot Go SDK's
+# protocol version (protocol v3 for SDK v1.0.x). "latest" is resolved through the
+# /releases/latest redirect to /releases/tag/v<version>; the checksum is verified
+# against that release's SHA256SUMS.txt for every architecture.
+ARG COPILOT_CLI_VERSION=latest
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) asset="copilot-linux-x64.tar.gz" ;; \
+        arm64) asset="copilot-linux-arm64.tar.gz" ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    fetch() { for i in 1 2 3 4 5; do wget -q -O "$2" "$1" && return 0; sleep 3; done; return 1; }; \
+    version="${COPILOT_CLI_VERSION#v}"; \
+    if [ "${version}" = "latest" ]; then \
+        for i in 1 2 3 4 5; do \
+            version="$(wget -q -S --spider https://github.com/github/copilot-cli/releases/latest 2>&1 \
+                | sed -n 's#.*[Ll]ocation: .*/releases/tag/v\([^[:space:]]*\).*#\1#p' | tail -n 1)"; \
+            [ -n "${version}" ] && break; sleep 3; \
+        done; \
+        [ -n "${version}" ]; \
+    fi; \
+    echo "Copilot CLI: ${version}"; \
+    base="https://github.com/github/copilot-cli/releases/download/v${version}"; \
+    fetch "${base}/${asset}" "/tmp/${asset}"; \
+    fetch "${base}/SHA256SUMS.txt" /tmp/SHA256SUMS.txt; \
+    cd /tmp && grep " ${asset}\$" SHA256SUMS.txt | sha256sum -c -; \
+    mkdir -p /opt/copilot; \
+    tar -xzf "/tmp/${asset}" -C /opt/copilot; \
+    chmod +x /opt/copilot/copilot
+
+############################
+# Stage 4: runtime
+############################
+FROM debian:bookworm-slim AS runtime
+ARG TARGETARCH
+ARG BUILDARCH
+
+ENV COPILOT_CLI_PATH=/usr/local/bin/copilot \
+    OCTOFINANCE_ROOT=/app \
+    HOST=0.0.0.0 \
+    PORT=8000
+
+# Non-root user with the same UID as the Python image (1000), so an existing
+# data volume stays writable. No packages are installed in this stage.
+RUN useradd --create-home --uid 1000 octofinance \
+    && mkdir -p /app/data \
+    && chown octofinance:octofinance /app /app/data
+
+# CA certificates for HTTPS to the GitHub API, taken from the cli stage
+COPY --from=cli /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# --chown on COPY avoids a second copy of every file in a chown layer
+COPY --from=cli /opt/copilot/copilot /usr/local/bin/copilot
+# Smoke test (needs glibc, so it runs here): only for native builds, where the
+# binary can execute without emulation
+RUN if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then copilot --version; fi
+COPY --from=gobuild --chown=octofinance:octofinance /out/octofinance-go /app/bin/octofinance-go
+COPY --from=frontend --chown=octofinance:octofinance /build/dist /app/frontend/dist/
+
+USER octofinance
+WORKDIR /app
+# /app/data holds all runtime state (PATs, auth, synced data, sessions)
+VOLUME ["/app/data"]
+EXPOSE 8000
+
+ENTRYPOINT ["/app/bin/octofinance-go"]

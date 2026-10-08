@@ -63,3 +63,13 @@ $RECYCLE.BIN/
 docs_cn/
 presentations/
 samples/
+
+# Go backend: build output is ignored, sources never are (they may contain
+# "data"/"tmp" in their names, matched by the patterns above)
+backend-go/bin/
+!backend-go/**/*.go
+!backend-go/go.mod
+!backend-go/go.sum
+# test scripts only (*.py / *.sh); __pycache__ and *.pyc stay ignored
+!backend-go/tests/**/*.py
+!backend-go/tests/**/*.sh

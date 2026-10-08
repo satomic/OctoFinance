@@ -1,13 +1,28 @@
 name: Build and Publish Docker Image
 
+# Release tags build and publish the Go backend image (Dockerfile-go) as
+# ghcr.io/<owner>/<repo>. The Python backend image (Dockerfile) can still be
+# built by running this workflow manually with backend=python; it is published
+# as ghcr.io/<owner>/<repo>-python so it never overwrites the default image.
+
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: "Backend to package (run from a release tag to get version tags)"
+        type: choice
+        options:
+          - go
+          - python
+        default: go
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Tag pushes have no inputs, so they fall back to the Go backend
+  BACKEND: ${{ github.event.inputs.backend || 'go' }}
 
 jobs:
   build-and-push:
@@ -19,6 +34,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Dockerfile and image name
+        id: target
+        run: |
+          if [ "${BACKEND}" = "python" ]; then
+            echo "dockerfile=Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}-python" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerfile=Dockerfile-go" >> "$GITHUB_OUTPUT"
+            echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -37,7 +63,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ steps.target.outputs.image }}
           tags: |
             # v2.1.0 -> 2.1.0, 2.1, 2, latest
             type=semver,pattern={{version}}
@@ -52,9 +78,10 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ steps.target.outputs.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ env.BACKEND }}
+          cache-to: type=gha,mode=max,scope=${{ env.BACKEND }}

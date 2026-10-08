@@ -213,6 +213,10 @@ The SDK discovers skills from `.github/skills/` within the session working direc
 
 ### Adding a New Tool
 
+> Tools exist in both backends: Python in `backend/app/tools/*.py`, Go in
+> `backend-go/internal/app/tools_*.go` (registered with `defineTool` in an `init()`).
+> Add a new tool to both with the same name, description and parameters.
+
 1. **Define the tool** in `backend/app/tools/`:
 
 ```python

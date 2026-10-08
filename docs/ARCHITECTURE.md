@@ -1,6 +1,17 @@
 # OctoFinance — Architecture
 
-> Applies to **v1.6.0**.
+> Applies to **v2.0.0**.
+
+## Backends
+
+OctoFinance has two interchangeable backends behind the same React frontend:
+`backend/` (Python, FastAPI, Copilot Python SDK) and `backend-go/` (Go, net/http,
+Copilot Go SDK). They expose the same API, register the same 44 AI tools with the
+same system prompt, and share the same `data/` directory and file formats.
+Each is packaged as its own Docker image: `Dockerfile-go` (Go, the default
+published image) and `Dockerfile` (Python). From source, `scripts/run-backend.sh go|python`
+starts either one. The diagram below shows the Python module names; the
+Go backend mirrors them one file per module (see [backend-go/README.md](../backend-go/README.md)).
 
 ## System Architecture
 
@@ -110,8 +121,8 @@ Sessions survive restarts (JSON-persisted) and are re-read from disk on a cache 
 
 | Layer | Technology |
 |-------|-----------|
-| AI Engine | GitHub Copilot Python SDK (`github-copilot-sdk`) |
-| Backend | Python 3.13+, FastAPI, Uvicorn, httpx |
+| AI Engine | GitHub Copilot Python SDK (`github-copilot-sdk`) or Copilot Go SDK (`github.com/github/copilot-sdk/go`) |
+| Backend | Python 3.13+, FastAPI, Uvicorn, httpx — or Go 1.24+, net/http (`backend-go/`) |
 | Frontend | React 19, TypeScript 5.9, Vite 7, Recharts |
 | Data | JSON files (no database required) |
 | Streaming | Server-Sent Events (SSE) via `sse-starlette` |
