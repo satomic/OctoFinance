@@ -386,6 +386,34 @@ func (c *Client) DiscoverOrgs(ctx context.Context) ([]jx.M, error) {
 	return out, nil
 }
 
+// GetOrgMemberships returns the authenticated user's role in each organization
+// as {org_lower: "admin"|"member"} (GET /user/memberships/orgs). It returns nil
+// when the roles cannot be read, e.g. a fine-grained token without the permission.
+func (c *Client) GetOrgMemberships(ctx context.Context) map[string]string {
+	roles := map[string]string{}
+	for page := 1; ; page++ {
+		r, err := c.Get(ctx, "/user/memberships/orgs", pageQuery(page, "state", "active"), nil)
+		if err != nil {
+			c.recordFailure("org_memberships", 0, err.Error(), "")
+			return nil
+		}
+		if r.Status != 200 {
+			c.recordResponseFailure("org_memberships", r)
+			return nil
+		}
+		batch := jx.Maps(r.JSON())
+		for _, m := range batch {
+			login := jx.Str(jx.GetMap(m, "organization")["login"])
+			if role := jx.Str(m["role"]); login != "" && role != "" {
+				roles[strings.ToLower(login)] = role
+			}
+		}
+		if len(batch) < 100 {
+			return roles
+		}
+	}
+}
+
 // GetOrgDetail returns /orgs/{org} (raises on error).
 func (c *Client) GetOrgDetail(ctx context.Context, org string) (jx.M, error) {
 	v, err := c.getJSON(ctx, "/orgs/"+org, nil, nil)

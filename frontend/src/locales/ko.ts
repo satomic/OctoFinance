@@ -88,6 +88,8 @@ export const ko = {
   "settings.patHint": "PAT를 추가하면 조직이 자동으로 검색되고 데이터가 동기화됩니다.",
   "settings.patIncludeOrganizations": "조직 포함",
   "settings.patIncludeOrganizationsHint": "이 엔터프라이즈에 조직이 없고 엔터프라이즈 팀으로 Copilot을 부여하는 경우 체크 해제하세요. 데이터 동기화는 엔터프라이즈 수준 Copilot 데이터만 사용합니다(조직 목록은 비어 있게 됩니다).",
+  "settings.patOrgsNotAdmin": "관리자 아님",
+  "settings.patOrgsNotAdminHint": "PAT 소유자는 다음 조직에서 소유자가 아닌 멤버이므로 이 조직들의 Copilot 데이터를 동기화할 수 없습니다. 토큰 범위와 관계없이 GitHub는 HTTP 403을 반환합니다. PAT 소유자를 조직 소유자로 지정하거나 소유자의 PAT를 사용하세요. 조직:",
   "settings.patError": "오류",
   "settings.syncSettings": "동기화 설정",
   "settings.autoSync": "시작 시 자동 동기화",

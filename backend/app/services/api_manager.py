@@ -77,6 +77,7 @@ class APIManager:
                 pat_manager.update(pat_id, orgs=org_logins)
                 if include_organizations:
                     print(f"[APIManager] PAT '{pat['label']}' has {len(orgs)} orgs: {org_logins}")
+                roles = await self._record_org_roles(api, pat_id, org_logins)
 
                 # Map orgs to this PAT (first PAT wins if org appears in multiple)
                 for org_info in orgs:
@@ -97,6 +98,7 @@ class APIManager:
                             "pat_label": pat["label"],
                             "pat_user": user.get("login", ""),
                             "host": host,
+                            "membership_role": (roles or {}).get(org_login.lower()),
                         }
                         # Avoid duplicates (first PAT wins)
                         if not any(o["login"] == org_login for o in self._all_orgs):
@@ -111,6 +113,7 @@ class APIManager:
                                 "pat_label": pat["label"],
                                 "pat_user": user.get("login", ""),
                                 "host": host,
+                                "membership_role": (roles or {}).get(org_login.lower()),
                             })
 
                 # Discover enterprises: manual slugs take priority, then auto-discovery
@@ -184,6 +187,7 @@ class APIManager:
 
         org_logins = [o["login"] for o in orgs]
         pat_manager.update(pat_id, orgs=org_logins)
+        roles = await self._record_org_roles(api, pat_id, org_logins)
 
         for org_info in orgs:
             org_login = org_info["login"]
@@ -203,6 +207,7 @@ class APIManager:
                 "pat_label": pat["label"],
                 "pat_user": user.get("login", ""),
                 "host": host,
+                "membership_role": (roles or {}).get(org_login.lower()),
             }
             if not any(o["login"] == org_login for o in self._all_orgs):
                 self._all_orgs.append(org_entry)
@@ -234,6 +239,34 @@ class APIManager:
         )
 
         return user
+
+    @staticmethod
+    async def _record_org_roles(api: GitHubAPI, pat_id: str, org_logins: list[str]) -> dict[str, str] | None:
+        """Look up the PAT owner's role in each org and store it on the PAT.
+
+        Copilot data needs an organization owner (or a role with Copilot
+        access), so a 403 in an org where the owner is only a ``member`` is
+        expected rather than a broken PAT. Returns None when roles are unknown.
+        """
+        if not org_logins:
+            pat_manager.update(pat_id, org_roles={})
+            return {}
+        roles = await api.get_org_memberships()
+        api.consume_failure()  # a failed role lookup is not a sync problem
+        if roles is None:
+            pat_manager.update(pat_id, org_roles={})
+            return None
+        pat_manager.update(pat_id, org_roles={
+            login: roles[login.lower()] for login in org_logins if login.lower() in roles
+        })
+        return roles
+
+    def get_org_role(self, org: str) -> str | None:
+        """The PAT owner's role in an org (``admin``/``member``), or None when unknown."""
+        for o in self._all_orgs:
+            if o["login"] == org:
+                return o.get("membership_role")
+        return None
 
     async def remove_api(self, pat_id: str):
         """Remove a PAT's API instance and clean up org mappings."""

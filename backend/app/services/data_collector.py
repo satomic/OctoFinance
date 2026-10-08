@@ -25,7 +25,8 @@ LogFn = Callable[[str, str], None] | None
 _SNAPSHOT_NAME_RE = re.compile(r".*_\d{8}_\d{6}\.json$")
 
 
-def _empty_result_log(api: "GitHubAPI", scope: str, dataset: str) -> tuple[str, str]:
+def _empty_result_log(api: "GitHubAPI", scope: str, dataset: str,
+                      role: str | None = None) -> tuple[str, str]:
     """Build a level+message pair explaining why a fetch produced no data.
 
     GitHubAPI swallows HTTP errors so one inaccessible org cannot abort a sync.
@@ -38,6 +39,17 @@ def _empty_result_log(api: "GitHubAPI", scope: str, dataset: str) -> tuple[str, 
 
     status = failure.get("status")
     detail = (failure.get("detail") or "").strip()
+    # The PAT owner is only a member of this org: Copilot data needs an org
+    # owner (or a role with Copilot access), and no token scope can grant
+    # that. Expected, so report it without failing the sync.
+    if status == 403 and role == "member":
+        parts = [f"  {scope}: {dataset} skipped", "HTTP 403"]
+        if detail:
+            parts.append(detail)
+        parts.append("the PAT owner is a member, not an owner, of this organization; "
+                     "make them an organization owner (or use an owner's PAT) to sync its Copilot data")
+        return "warn", " | ".join(parts)
+
     # 401/403 mean the PAT is wrong or under-scoped; that is an operator error,
     # not the benign "this org has no Copilot" case a 404 usually signals.
     level = "error" if status in (401, 403) else "warn"
@@ -400,6 +412,7 @@ class DataCollector:
             log_fn("info", f"Syncing {org}...")
 
         api = self._get_api_for_org(org)
+        role = self._api_manager.get_org_role(org) if self._api_manager else None
         if api is None:
             msg = f"No API client available for {org}"
             summary["errors"].append(msg)
@@ -416,7 +429,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: billing synced")
             else:
-                level, msg = _empty_result_log(api, org, "billing")
+                level, msg = _empty_result_log(api, org, "billing", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:
@@ -435,7 +448,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: seats synced ({seats.get('total_seats', 0)} total)")
             else:
-                level, msg = _empty_result_log(api, org, "seats")
+                level, msg = _empty_result_log(api, org, "seats", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:
@@ -455,7 +468,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: usage report synced ({n} records)")
             else:
-                level, msg = _empty_result_log(api, org, "usage report")
+                level, msg = _empty_result_log(api, org, "usage report", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:
@@ -475,7 +488,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: usage users report synced ({n} records)")
             else:
-                level, msg = _empty_result_log(api, org, "usage users report")
+                level, msg = _empty_result_log(api, org, "usage users report", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:
@@ -494,7 +507,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: metrics synced ({len(metrics)} entries)")
             else:
-                level, msg = _empty_result_log(api, org, "metrics")
+                level, msg = _empty_result_log(api, org, "metrics", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:
@@ -514,7 +527,7 @@ class DataCollector:
                 if log_fn:
                     log_fn("info", f"  {org}: AI credit usage synced ({n} items)")
             else:
-                level, msg = _empty_result_log(api, org, "AI credit usage")
+                level, msg = _empty_result_log(api, org, "AI credit usage", role)
                 if level == "error":
                     summary["errors"].append(msg.strip())
                 if log_fn:

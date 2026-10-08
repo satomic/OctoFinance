@@ -88,6 +88,8 @@ export const ja = {
   "settings.patHint": "PAT を追加すると組織が自動検出され、データが同期されます。",
   "settings.patIncludeOrganizations": "組織を含める",
   "settings.patIncludeOrganizationsHint": "このエンタープライズに組織がなく、エンタープライズチーム経由で Copilot を付与している場合はオフにしてください。データ同期はエンタープライズレベルの Copilot データのみを使用します（組織一覧は空のままになります）。",
+  "settings.patOrgsNotAdmin": "管理者権限なし",
+  "settings.patOrgsNotAdminHint": "PAT の所有者は以下の組織でオーナーではなくメンバーのため、これらの組織の Copilot データは同期できません。トークンのスコープに関係なく GitHub は HTTP 403 を返します。PAT の所有者を組織オーナーにするか、オーナーの PAT を使用してください。組織:",
   "settings.patError": "エラー",
   "settings.syncSettings": "同期設定",
   "settings.autoSync": "起動時に自動同期",

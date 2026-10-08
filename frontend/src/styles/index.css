@@ -1488,6 +1488,16 @@ body {
   color: var(--text-secondary);
 }
 
+.pat-item-orgs-notadmin {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--warning, #d29922);
+  color: var(--warning, #d29922);
+  cursor: help;
+  white-space: nowrap;
+}
+
 .pat-item-enterprise {
   font-size: 11px;
   color: var(--accent);

@@ -1,8 +1,13 @@
 package app
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/satomic/octofinance/backend-go/internal/ghapi"
 	"github.com/satomic/octofinance/backend-go/internal/jx"
 )
 
@@ -71,5 +76,47 @@ func TestToolsRegisteredInPythonOrder(t *testing.T) {
 	}
 	if names[0] != "get_all_seats" || names[len(names)-1] != "sync_data" {
 		t.Errorf("unexpected order: first=%s last=%s", names[0], names[len(names)-1])
+	}
+}
+
+func TestEmptyResultLogExplainsMemberRole(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/user/memberships/orgs" {
+			_, _ = w.Write([]byte(`[{"organization":{"login":"CHT-IT"},"role":"member"},{"organization":{"login":"ops"},"role":"admin"}]`))
+			return
+		}
+		status := http.StatusForbidden
+		if strings.Contains(r.URL.Path, "expired") {
+			status = http.StatusUnauthorized
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"message":"Insufficient permissions. This action requires admin, or relevant organization role access."}`))
+	}))
+	defer srv.Close()
+	api := ghapi.New("t", srv.URL)
+
+	if roles := api.GetOrgMemberships(context.Background()); roles["cht-it"] != "member" || roles["ops"] != "admin" {
+		t.Fatalf("roles = %v", roles)
+	}
+	cases := []struct {
+		org, role, want string
+	}{
+		{"cht-it", "member", "warn"}, // expected: not an org owner
+		{"cht-it", "admin", "error"}, // an owner refused: a real problem
+		{"cht-it", "", "error"},      // role unknown: unchanged behaviour
+		{"expired", "member", "error"},
+	}
+	for _, c := range cases {
+		if _, err := api.GetCopilotBilling(context.Background(), c.org); err != nil {
+			t.Fatal(err)
+		}
+		level, msg := emptyResultLog(api, c.org, "billing", c.role)
+		if level != c.want {
+			t.Errorf("%s/%q: level=%s want %s (%s)", c.org, c.role, level, c.want, msg)
+		}
+		if c.want == "warn" && !strings.Contains(msg, "member, not an owner") {
+			t.Errorf("member message lacks guidance: %s", msg)
+		}
 	}
 }

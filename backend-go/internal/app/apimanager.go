@@ -77,6 +77,7 @@ func discoverPAT(ctx context.Context, pat jx.M, api *ghapi.Client, verbose bool)
 	if includeOrgs && verbose {
 		printf("[APIManager] PAT '%s' has %d orgs: %v", label, len(orgs), logins)
 	}
+	roles := recordOrgRoles(ctx, api, patID, orgs)
 
 	entries := []jx.M{}
 	for _, o := range orgs {
@@ -91,12 +92,17 @@ func discoverPAT(ctx context.Context, pat jx.M, api *ghapi.Client, verbose bool)
 		} else if verbose {
 			printf("[APIManager] Failed to get detail for %s: %v", login, derr)
 		}
+		var role any
+		if r, ok := roles[strings.ToLower(login)]; ok {
+			role = r
+		}
 		entries = append(entries, jx.Merge(o, jx.M{
-			"enterprise": enterprise,
-			"pat_id":     patID,
-			"pat_label":  label,
-			"pat_user":   jx.GetStr(user, "login"),
-			"host":       host,
+			"enterprise":      enterprise,
+			"pat_id":          patID,
+			"pat_label":       label,
+			"pat_user":        jx.GetStr(user, "login"),
+			"host":            host,
+			"membership_role": role,
 		}))
 	}
 
@@ -130,6 +136,40 @@ func discoverPAT(ctx context.Context, pat jx.M, api *ghapi.Client, verbose bool)
 	}
 	Pats.Update(patID, jx.M{"last_synced_at": jx.NowISO()})
 	return &discovery{user: user, orgs: entries, enterprises: entEntries}, nil
+}
+
+// recordOrgRoles looks up the PAT owner's role in each org and stores it on the
+// PAT as org_roles. Copilot data needs an organization owner (or a role with
+// Copilot access), so a 403 in an org where the owner is only a "member" is
+// expected rather than a broken PAT. Returns nil when the roles are unknown.
+func recordOrgRoles(ctx context.Context, api *ghapi.Client, patID string, orgs []jx.M) map[string]string {
+	if len(orgs) == 0 {
+		Pats.Update(patID, jx.M{"org_roles": jx.M{}})
+		return map[string]string{}
+	}
+	roles := api.GetOrgMemberships(ctx)
+	api.ConsumeFailure() // a failed role lookup is not a sync problem
+	known := jx.M{}
+	for _, o := range orgs {
+		login := jx.Str(o["login"])
+		if r, ok := roles[strings.ToLower(login)]; ok {
+			known[login] = r
+		}
+	}
+	Pats.Update(patID, jx.M{"org_roles": known})
+	return roles
+}
+
+// OrgRole is the PAT owner's role in an org ("admin"/"member"), or "" when unknown.
+func (a *APIManager) OrgRole(org string) string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, o := range a.allOrgs {
+		if jx.Str(o["login"]) == org {
+			return jx.Str(o["membership_role"])
+		}
+	}
+	return ""
 }
 
 // merge folds one PAT's discovery into the aggregate (first PAT wins). Caller holds mu.

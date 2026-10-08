@@ -88,6 +88,8 @@ export const hi = {
   "settings.patHint": "PAT जोड़ने पर संगठन स्वतः खोजे जाएँगे और डेटा सिंक होगा।",
   "settings.patIncludeOrganizations": "संगठन शामिल करें",
   "settings.patIncludeOrganizationsHint": "यदि इस एंटरप्राइज़ में कोई संगठन नहीं है और Copilot ऐक्सेस एंटरप्राइज़ टीमों के माध्यम से दिया जाता है तो इसे अनचेक करें। तब डेटा सिंक केवल एंटरप्राइज़-स्तरीय Copilot डेटा उपयोग करेगा (संगठनों की सूची खाली रहेगी)।",
+  "settings.patOrgsNotAdmin": "एडमिन नहीं",
+  "settings.patOrgsNotAdminHint": "PAT का मालिक इन संगठनों में ओनर नहीं बल्कि सदस्य है, इसलिए इनका Copilot डेटा सिंक नहीं हो सकता: टोकन के स्कोप चाहे जो हों, GitHub HTTP 403 लौटाता है। PAT के मालिक को संगठन का ओनर बनाएँ, या किसी ओनर का PAT उपयोग करें। संगठन:",
   "settings.patError": "त्रुटि",
   "settings.syncSettings": "सिंक सेटिंग्स",
   "settings.autoSync": "स्टार्टअप पर स्वतः सिंक",

@@ -88,6 +88,8 @@ export const vi = {
   "settings.patHint": "Thêm PAT sẽ tự động khám phá tổ chức và đồng bộ dữ liệu.",
   "settings.patIncludeOrganizations": "Bao gồm Organizations",
   "settings.patIncludeOrganizationsHint": "Bỏ chọn nếu enterprise này không có organization nào và cấp quyền Copilot qua enterprise team. Khi đó việc đồng bộ sẽ chỉ dùng dữ liệu Copilot cấp enterprise (danh sách organizations sẽ vẫn trống).",
+  "settings.patOrgsNotAdmin": "Không phải quản trị viên",
+  "settings.patOrgsNotAdminHint": "Chủ sở hữu PAT chỉ là thành viên, không phải chủ sở hữu, của các tổ chức này nên không thể đồng bộ dữ liệu Copilot của chúng: GitHub trả về HTTP 403 bất kể token có scope nào. Hãy đặt chủ sở hữu PAT làm chủ sở hữu tổ chức, hoặc dùng PAT của một chủ sở hữu. Tổ chức:",
   "settings.patError": "Lỗi",
   "settings.syncSettings": "Cài đặt đồng bộ",
   "settings.autoSync": "Tự động đồng bộ khi khởi động",

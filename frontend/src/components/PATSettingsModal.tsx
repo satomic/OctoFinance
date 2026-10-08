@@ -183,6 +183,20 @@ export function PATSettingsModal({ onClose, onPATChange }: Props) {
                     <div className="pat-item-user">
                       <strong>{pat.label || pat.user_login || "Untitled"}</strong>
                       <span className="pat-item-orgs">{pat.orgs?.length || 0} orgs</span>
+                      {(() => {
+                        // Orgs where the PAT owner is only a member: GitHub refuses their Copilot data
+                        const notAdmin = Object.entries(pat.org_roles ?? {})
+                          .filter(([, role]) => role === "member")
+                          .map(([org]) => org);
+                        return notAdmin.length > 0 ? (
+                          <span
+                            className="pat-item-orgs-notadmin"
+                            title={`${t("settings.patOrgsNotAdminHint")} ${notAdmin.join(", ")}`}
+                          >
+                            {t("settings.patOrgsNotAdmin")}: {notAdmin.length}
+                          </span>
+                        ) : null;
+                      })()}
                       {pat.host && pat.host !== "github.com" && (
                         <span className="pat-item-enterprise">{pat.host}</span>
                       )}

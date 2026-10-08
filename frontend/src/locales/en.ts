@@ -88,6 +88,8 @@ export const en = {
   "settings.patHint": "Adding a PAT will auto-discover orgs and sync data.",
   "settings.patIncludeOrganizations": "Include Organizations",
   "settings.patIncludeOrganizationsHint": "Uncheck if this enterprise has no organizations and grants Copilot access via enterprise teams instead. Data sync will then use enterprise-level Copilot data only (the organizations list will stay empty).",
+  "settings.patOrgsNotAdmin": "Not admin",
+  "settings.patOrgsNotAdminHint": "The PAT owner is a member, not an owner, of these organizations, so their Copilot data cannot be synced: GitHub answers HTTP 403 whatever scopes the token has. Make the PAT owner an organization owner, or use a PAT of an owner. Organizations:",
   "settings.patError": "Error",
   "settings.syncSettings": "Sync Settings",
   "settings.autoSync": "Auto sync on startup",

@@ -88,6 +88,8 @@ export const th = {
   "settings.patHint": "การเพิ่ม PAT จะค้นหาองค์กรอัตโนมัติและซิงค์ข้อมูล",
   "settings.patIncludeOrganizations": "รวมองค์กร",
   "settings.patIncludeOrganizationsHint": "ยกเลิกการเลือกหากองค์กรระดับ enterprise นี้ไม่มี organization และให้สิทธิ์ Copilot ผ่านทีมระดับ enterprise แทน การซิงค์จะใช้เฉพาะข้อมูล Copilot ระดับ enterprise (รายการองค์กรจะว่างเปล่า)",
+  "settings.patOrgsNotAdmin": "ไม่ใช่ผู้ดูแล",
+  "settings.patOrgsNotAdminHint": "เจ้าของ PAT เป็นเพียงสมาชิก ไม่ใช่เจ้าของ ขององค์กรเหล่านี้ จึงซิงก์ข้อมูล Copilot ขององค์กรเหล่านี้ไม่ได้ GitHub จะตอบ HTTP 403 ไม่ว่าโทเค็นจะมี scope ใด ให้ตั้งเจ้าของ PAT เป็นเจ้าของ (owner) ขององค์กร หรือใช้ PAT ของเจ้าของ องค์กร:",
   "settings.patError": "ข้อผิดพลาด",
   "settings.syncSettings": "ตั้งค่าการซิงค์",
   "settings.autoSync": "ซิงค์อัตโนมัติเมื่อเริ่มระบบ",

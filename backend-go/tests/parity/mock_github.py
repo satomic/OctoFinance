@@ -8,6 +8,8 @@ to in-memory state. Every request is recorded; GET /__calls returns them and
 POST /__reset clears the log.
 MOCK_DROP_FIRST=N closes the first N connections without a response, like a
 flaky network (connection reset / EOF), to test retry and recovery.
+MOCK_MEMBER_ORGS=a,b makes the PAT owner a plain member of those orgs: their
+Copilot endpoints answer HTTP 403 like GitHub does for non-owners.
 
 usage: mock_github.py <port> <data-dir>
 """
@@ -28,6 +30,9 @@ BASE = f"http://127.0.0.1:{PORT}"
 LOCK = threading.RLock()
 CALLS = []
 DROPS_LEFT = [int(os.environ.get("MOCK_DROP_FIRST", "0") or 0)]
+MEMBER_ORGS = {o.strip().lower() for o in os.environ.get("MOCK_MEMBER_ORGS", "").split(",") if o.strip()}
+ROLE_403 = {"message": "Insufficient permissions. This action requires admin, or relevant organization role access.",
+            "documentation_url": "https://docs.github.com/rest", "status": "403"}
 
 
 def load(path, default=None):
@@ -158,6 +163,12 @@ class H(BaseHTTPRequestHandler):
                          "avatar_url": f"https://avatars.githubusercontent.com/u/9782493?v=4"}, J
         if path == "/user/orgs":
             return 200, paginate([{"login": o, "id": i + 1, "avatar_url": ""} for i, o in enumerate(ORGS)], qs), J
+        if path == "/user/memberships/orgs":
+            return 200, paginate([{"organization": {"login": o}, "state": "active",
+                                   "role": "member" if o.lower() in MEMBER_ORGS else "admin"} for o in ORGS], qs), J
+        if r := m(r"/(orgs|organizations)/([^/]+)/(copilot|settings/billing)(/.*)?"):
+            if r[2].lower() in MEMBER_ORGS:
+                return 403, ROLE_403, J
         if path == "/user/enterprise-memberships":
             return 200, paginate([{"enterprise": {"slug": s, "name": s, "id": i + 1}, "role": "admin"}
                                   for i, s in enumerate(ENTERPRISES)], qs), J

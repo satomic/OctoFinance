@@ -129,6 +129,39 @@ class GitHubAPI:
             page += 1
         return orgs
 
+    async def get_org_memberships(self) -> dict[str, str] | None:
+        """The authenticated user's role in each organization: ``{org_lower: role}``.
+
+        API: GET /user/memberships/orgs (role is ``admin`` or ``member``).
+        Returns None when the roles cannot be read (e.g. a fine-grained token
+        without the permission), so callers can fall back to not knowing.
+        """
+        roles: dict[str, str] = {}
+        page = 1
+        try:
+            while True:
+                resp = await self.client.get(
+                    "/user/memberships/orgs",
+                    params={"state": "active", "per_page": 100, "page": page},
+                )
+                if resp.status_code != 200:
+                    self._record_response_failure("org_memberships", resp)
+                    return None
+                batch = resp.json()
+                if not batch:
+                    break
+                for m in batch:
+                    login = (m.get("organization") or {}).get("login", "")
+                    if login and m.get("role"):
+                        roles[login.lower()] = m["role"]
+                if len(batch) < 100:
+                    break
+                page += 1
+        except httpx.HTTPError as e:
+            self._record_failure("org_memberships", detail=str(e))
+            return None
+        return roles
+
     async def get_org_detail(self, org: str) -> dict:
         """Get detailed info for a specific organization."""
         resp = await self.client.get(f"/orgs/{org}")

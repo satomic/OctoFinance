@@ -27,13 +27,26 @@ func (l LogFn) log(level, msg string) {
 var snapshotNameRE = regexp.MustCompile(`.*_\d{8}_\d{6}\.json$`)
 
 // emptyResultLog explains why a fetch produced no data.
-func emptyResultLog(api *ghapi.Client, scope, dataset string) (string, string) {
+// role is the PAT owner's role in an org scope ("member", "admin" or "" when unknown).
+func emptyResultLog(api *ghapi.Client, scope, dataset, role string) (string, string) {
 	failure := api.ConsumeFailure()
 	if failure == nil {
 		return "info", fmt.Sprintf("  %s: %s returned nothing (not enabled for this scope)", scope, dataset)
 	}
 	status := jx.Int(failure["status"])
 	detail := strings.TrimSpace(jx.Str(failure["detail"]))
+	// The PAT owner is only a member of this org: Copilot data needs an org
+	// owner (or a role with Copilot access), and no token scope can grant that.
+	// Expected, so report it without failing the sync.
+	if status == 403 && role == "member" {
+		parts := []string{fmt.Sprintf("  %s: %s skipped", scope, dataset), "HTTP 403"}
+		if detail != "" {
+			parts = append(parts, detail)
+		}
+		parts = append(parts, "the PAT owner is a member, not an owner, of this organization; "+
+			"make them an organization owner (or use an owner's PAT) to sync its Copilot data")
+		return "warn", strings.Join(parts, " | ")
+	}
 	level := "warn"
 	if status == 401 || status == 403 {
 		level = "error"
@@ -509,7 +522,7 @@ func summaryList(s SyncSummary, key string) []string {
 }
 
 // fetchStep runs one dataset fetch with the standard logging/summary handling.
-func fetchStep(summary SyncSummary, api *ghapi.Client, logFn LogFn, scope, key, label string,
+func fetchStep(summary SyncSummary, api *ghapi.Client, logFn LogFn, scope, role, key, label string,
 	fetch func() (any, error), save func(any) string) {
 	data, err := fetch()
 	if err != nil {
@@ -521,7 +534,7 @@ func fetchStep(summary SyncSummary, api *ghapi.Client, logFn LogFn, scope, key, 
 		addSynced(summary, save(data))
 		return
 	}
-	level, msg := emptyResultLog(api, scope, label)
+	level, msg := emptyResultLog(api, scope, label, role)
 	if level == "error" {
 		addError(summary, strings.TrimSpace(msg))
 	}
@@ -533,6 +546,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 	summary := newSummary(org)
 	logFn.log("info", fmt.Sprintf("Syncing %s...", org))
 	api := APIs.APIForOrg(org)
+	role := APIs.OrgRole(org)
 	if api == nil {
 		msg := "No API client available for " + org
 		addError(summary, msg)
@@ -540,7 +554,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 		return summary
 	}
 
-	fetchStep(summary, api, logFn, org, "billing", "billing",
+	fetchStep(summary, api, logFn, org, role, "billing", "billing",
 		func() (any, error) { v, err := api.GetCopilotBilling(ctx, org); return nilIfEmpty(v), err },
 		func(d any) string {
 			dc.SaveJSON("billing", org, d)
@@ -548,7 +562,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 			return "billing"
 		})
 
-	fetchStep(summary, api, logFn, org, "seats", "seats",
+	fetchStep(summary, api, logFn, org, role, "seats", "seats",
 		func() (any, error) { v, err := api.GetCopilotSeats(ctx, org); return nilIfEmpty(v), err },
 		func(d any) string {
 			dc.SaveJSON("seats", org, d)
@@ -557,7 +571,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 			return fmt.Sprintf("seats (%d total)", n)
 		})
 
-	fetchStep(summary, api, logFn, org, "usage", "usage report",
+	fetchStep(summary, api, logFn, org, role, "usage", "usage report",
 		func() (any, error) { return nilIfEmpty(api.GetOrgUsageReport28Day(ctx, org)), nil },
 		func(d any) string {
 			dc.SaveJSON("usage", org, d)
@@ -566,7 +580,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 			return fmt.Sprintf("usage (%d records)", n)
 		})
 
-	fetchStep(summary, api, logFn, org, "usage_users", "usage users report",
+	fetchStep(summary, api, logFn, org, role, "usage_users", "usage users report",
 		func() (any, error) { return nilIfEmpty(api.GetOrgUsersUsageReport28Day(ctx, org)), nil },
 		func(d any) string {
 			dc.SaveJSON("usage_users", org, d)
@@ -575,7 +589,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 			return fmt.Sprintf("usage_users (%d records)", n)
 		})
 
-	fetchStep(summary, api, logFn, org, "metrics", "metrics",
+	fetchStep(summary, api, logFn, org, role, "metrics", "metrics",
 		func() (any, error) {
 			v, err := api.GetCopilotMetrics(ctx, org, "", "")
 			if len(v) == 0 {
@@ -590,7 +604,7 @@ func (dc *DataCollector) SyncOrg(ctx context.Context, org string, logFn LogFn) S
 			return fmt.Sprintf("metrics (%d entries)", n)
 		})
 
-	fetchStep(summary, api, logFn, org, "ai_credits", "AI credit usage",
+	fetchStep(summary, api, logFn, org, role, "ai_credits", "AI credit usage",
 		func() (any, error) { v, err := api.GetAICreditUsage(ctx, org, 0, 0, 0); return nilIfEmpty(v), err },
 		func(d any) string {
 			dc.SaveJSON("ai_credits", org, d)
@@ -730,7 +744,7 @@ func (dc *DataCollector) SyncEnterpriseCopilotData(ctx context.Context, enterpri
 	logFn.log("info", fmt.Sprintf("Syncing %s (enterprise-level)...", slug))
 
 	var seats jx.M
-	fetchStep(summary, api, logFn, slug, "seats", "enterprise seats",
+	fetchStep(summary, api, logFn, slug, "", "seats", "enterprise seats",
 		func() (any, error) { v, err := api.GetEnterpriseBillingSeats(ctx, slug); return nilIfEmpty(v), err },
 		func(d any) string {
 			seats = jx.Merge(jx.Map(d), jx.M{"_enterprise_slug": slug})
@@ -747,7 +761,7 @@ func (dc *DataCollector) SyncEnterpriseCopilotData(ctx context.Context, enterpri
 		return summary
 	}
 
-	fetchStep(summary, api, logFn, slug, "usage", "enterprise usage report",
+	fetchStep(summary, api, logFn, slug, "", "usage", "enterprise usage report",
 		func() (any, error) { return nilIfEmpty(api.GetEnterpriseUsageReport28Day(ctx, slug)), nil },
 		func(d any) string {
 			dc.SaveJSON("usage", pseudo, d)
@@ -755,7 +769,7 @@ func (dc *DataCollector) SyncEnterpriseCopilotData(ctx context.Context, enterpri
 			logFn.log("info", fmt.Sprintf("  %s: enterprise usage report synced (%d records)", slug, n))
 			return fmt.Sprintf("usage (%d records)", n)
 		})
-	fetchStep(summary, api, logFn, slug, "usage_users", "enterprise usage users report",
+	fetchStep(summary, api, logFn, slug, "", "usage_users", "enterprise usage users report",
 		func() (any, error) { return nilIfEmpty(api.GetEnterpriseUsersUsageReport28Day(ctx, slug)), nil },
 		func(d any) string {
 			dc.SaveJSON("usage_users", pseudo, d)
@@ -763,7 +777,7 @@ func (dc *DataCollector) SyncEnterpriseCopilotData(ctx context.Context, enterpri
 			logFn.log("info", fmt.Sprintf("  %s: enterprise usage users report synced (%d records)", slug, n))
 			return fmt.Sprintf("usage_users (%d records)", n)
 		})
-	fetchStep(summary, api, logFn, slug, "ai_credits", "enterprise AI credit usage",
+	fetchStep(summary, api, logFn, slug, "", "ai_credits", "enterprise AI credit usage",
 		func() (any, error) {
 			v, err := api.GetEnterpriseAICreditUsage(ctx, slug, 0, 0, 0)
 			return nilIfEmpty(v), err

@@ -33,6 +33,8 @@ export interface PATInfo {
   user_login: string;
   user_avatar: string;
   orgs: string[];
+  /** PAT owner's role per org ("admin" | "member"); absent when unknown */
+  org_roles?: Record<string, string>;
   enterprise_slugs: string[];
   include_organizations: boolean;
   /** "github.com" or "<subdomain>.ghe.com" */

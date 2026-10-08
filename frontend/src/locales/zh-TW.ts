@@ -88,6 +88,8 @@ export const zh_TW = {
   "settings.patHint": "新增令牌後將自動發現組織並同步資料。",
   "settings.patIncludeOrganizations": "包含組織 (Organizations)",
   "settings.patIncludeOrganizationsHint": "如果該 Enterprise 下沒有 Organization，而是透過 Enterprise Team 授權 Copilot，請取消勾選。關閉後資料同步將僅使用 Enterprise 級別的 Copilot 資料（組織列表將保持為空）。",
+  "settings.patOrgsNotAdmin": "無管理員權限",
+  "settings.patOrgsNotAdminHint": "PAT 所屬使用者在以下組織中只是成員而不是擁有者，因此無法同步這些組織的 Copilot 資料：無論權杖勾選了哪些 scope，GitHub 都會回傳 HTTP 403。請將該使用者設為組織擁有者，或改用組織擁有者的 PAT。組織：",
   "settings.patError": "錯誤",
   "settings.syncSettings": "同步設定",
   "settings.autoSync": "啟動時自動同步",
