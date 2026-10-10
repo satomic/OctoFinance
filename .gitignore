@@ -73,3 +73,5 @@ backend-go/bin/
 # test scripts only (*.py / *.sh); __pycache__ and *.pyc stay ignored
 !backend-go/tests/**/*.py
 !backend-go/tests/**/*.sh
+
+promo-video/
