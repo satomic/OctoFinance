@@ -3,10 +3,16 @@
 <!-- For an inline player: upload images/OctoFinance_promo_en.mp4 in GitHub's web editor and put the resulting
      https://github.com/user-attachments/assets/... URL on its own line here, above the cover image. -->
 
-<p align="center">
+
+
+https://github.com/user-attachments/assets/8309dde9-96fe-4093-823d-607577064013
+
+
+
+<!-- <p align="center">
   <a href="images/OctoFinance_promo_en.mp4"><img src="images/OctoFinance_promo_en_cover.jpg" alt="OctoFinance 2-minute intro video: why it exists, what it does and how to run it" width="800"></a>
 </p>
-<p align="center"><sub>▶ <a href="images/OctoFinance_promo_en.mp4">Watch the 2-minute intro</a> (English, 1080p)</sub></p>
+<p align="center"><sub>▶ <a href="images/OctoFinance_promo_en.mp4">Watch the 2-minute intro</a> (English, 1080p)</sub></p>-->
 
 > **Start here:** **[English Complete User Guide](docs/USER_GUIDE_EN.md)** | **[中文完整使用指南](docs/USER_GUIDE_CN.md)**
 >
